@@ -226,6 +226,7 @@ pre::-webkit-scrollbar{height:4px}
           <button class="prov-btn on" id="pa" onclick="setProv('anthropic')">Claude</button>
           <button class="prov-btn" id="pg" onclick="setProv('groq')">⚡ Groq</button>
           <button class="prov-btn" id="ph" onclick="setProv('hf')">🤗 HF</button>
+          <button class="prov-btn" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
         </div>
         <div class="pfields" id="pf-a"><div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off"></div></div>
         <div id="pf-g" style="display:none">
@@ -238,6 +239,14 @@ pre::-webkit-scrollbar{height:4px}
           <div class="pfields"><div><div class="flabel">HF Token</div><input class="finput" id="hft" type="password" placeholder="hf_…" autocomplete="off"></div></div>
           <div id="hf-selected" class="hf-selected" style="display:none"><span>🤗</span><span class="hf-sel-name" id="hf-sel-name">—</span><button class="hf-sel-clear" onclick="clearModel()">✕</button></div>
           <div id="hf-browser"><div class="search-wrap" style="padding:0 10px 6px"><span class="search-icon">⌕</span><input class="search-in" id="model-search" placeholder="Search HF models…" oninput="debounceSearch(this.value)"></div><div class="list-scroll" id="model-list"><div class="list-msg">Search to browse models</div></div></div>
+        </div>
+        <div id="pf-o" style="display:none">
+          <div class="prov-note">OpenAI-compatible endpoint — Ollama, LM Studio, OpenRouter, Mistral…</div>
+          <div class="pfields">
+            <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" oninput="updBadge()"></div>
+            <div><div class="flabel">Model</div><input class="finput" id="oci-model" placeholder="llama3" autocomplete="off" oninput="updBadge()"></div>
+            <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -324,8 +333,8 @@ function setTheme(t){document.documentElement.setAttribute('data-theme',t);$('ts
 function saveSession(){if(S.ghToken&&S.ghUser)localStorage.setItem('df-session',JSON.stringify({ghToken:S.ghToken,ghUser:S.ghUser}));}
 function clearSession(){localStorage.removeItem('df-session');}
 function restoreSession(){try{const raw=localStorage.getItem('df-session');if(!raw)return false;const{ghToken,ghUser}=JSON.parse(raw);if(!ghToken||!ghUser)return false;S.ghToken=ghToken;S.ghUser=ghUser;$('gh-av').src=ghUser.avatar_url||'';$('gh-nm').textContent=ghUser.name||ghUser.login;$('gh-lg').textContent='@'+ghUser.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();return true;}catch(e){return false;}}
-function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);const data={prov:S.prov,anthropicKey:$('ak').value||'',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfToken:$('hft').value||'',hfModel:S.hfModel,skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked};localStorage.setItem('df-enhance',JSON.stringify(data));}
-function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfToken)$('hft').value=d.hfToken;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=d.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent)$('multi-agent').checked=true;updBadge();}catch(e){}}
+function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);const data={prov:S.prov,anthropicKey:$('ak').value||'',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfToken:$('hft').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked};localStorage.setItem('df-enhance',JSON.stringify(data));}
+function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfToken)$('hft').value=d.hfToken;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=d.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent)$('multi-agent').checked=true;updBadge();}catch(e){}}
 function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');}
 function expSidebar(){$('sidebar').classList.remove('col');$('exp-btn').classList.remove('show');}
 marked.setOptions({breaks:true,gfm:true});
@@ -346,8 +355,8 @@ async function togF(path){if(S.selFiles.has(path)){S.selFiles.delete(path);updTF
 function updTF(path){const el=document.getElementById(tfid(path));if(!el)return;const sel=S.selFiles.has(path);el.classList.toggle('sel',sel);const cb=el.querySelector('input');if(cb)cb.checked=sel;}
 function updCtx(){const n=S.selFiles.size;const cp=$('ctx-pill');cp.style.display=n?'block':'none';cp.textContent=n+' file'+(n!==1?'s':'');const strip=$('ctx-strip');strip.innerHTML='';for(const path of S.selFiles.keys()){const p=document.createElement('div');p.className='cpill';p.innerHTML=`${ficon(path)} ${path.split('/').pop()} <span style="margin-left:3px;opacity:.5">✕</span>`;p.onclick=()=>{S.selFiles.delete(path);updTF(path);updCtx();};strip.appendChild(p);}updHint();}
 function toggleSkill(chip){const cb=chip.querySelector('input');setTimeout(()=>{chip.classList.toggle('checked',cb.checked);saveEnhance();},0);}
-function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='anthropic');$('pg').classList.toggle('on',p==='groq');$('ph').classList.toggle('on',p==='hf');$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
-function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';if(S.prov==='anthropic')$('model-pill').textContent='claude-sonnet-4';else if(S.prov==='groq')$('model-pill').textContent=$('gm').value.split('-').slice(0,3).join('-');else $('model-pill').textContent=S.hfModel.split('/').pop();}
+function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='anthropic');$('pg').classList.toggle('on',p==='groq');$('ph').classList.toggle('on',p==='hf');$('po').classList.toggle('on',p==='openai_compat');$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
+function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';if(S.prov==='anthropic')$('model-pill').textContent='claude-sonnet-4';else if(S.prov==='groq')$('model-pill').textContent=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')$('model-pill').textContent=($('oci-model')&&$('oci-model').value)||'custom';else $('model-pill').textContent=S.hfModel.split('/').pop();}
 let searchTimer=null;
 function debounceSearch(q){clearTimeout(searchTimer);searchTimer=setTimeout(()=>fetchModels(q),400);}
 async function fetchModels(q=''){$('model-list').innerHTML='<div class="list-msg">Searching…</div>';try{const models=await get(`/api/hf/models?q=${encodeURIComponent(q)}&limit=25`);if(models.error){$('model-list').innerHTML=`<div class="list-msg" style="color:var(--red)">${models.error}</div>`;return;}if(!models.length){$('model-list').innerHTML='<div class="list-msg">No models found</div>';return;}$('model-list').innerHTML=models.map(m=>`<div class="list-item${S.hfModel===m.id?' active':''}" onclick="selectModel('${m.id.replace(/'/g,"\\'")}',this)"><div class="li-name">${m.name}</div><div class="li-sub"><span style="color:var(--muted)">${m.author}</span><span>↓${fmt(m.downloads)}</span><span>❤️${fmt(m.likes)}</span>${m.gated?'<span class="li-badge">gated</span>':''}</div></div>`).join('');}catch(e){$('model-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';}}
@@ -362,6 +371,7 @@ async function send(){
   const text=$('ti').value.trim();if(!text||S.streaming)return;
   if(S.prov==='anthropic'&&!$('ak').value.trim()){toast('Enter your Anthropic key in the sidebar',true);return;}
   if(S.prov==='groq'&&!$('gk').value.trim()){toast('Enter your Groq key in sidebar (free at console.groq.com)',true);return;}
+  if(S.prov==='openai_compat'&&!$('oci-url').value.trim()){toast('Enter a base URL for your custom API endpoint',true);return;}
   $('empty').style.display='none';
   S.msgs.push({role:'user',content:text});
   const uw=document.createElement('div');uw.className='msg-wrap';
@@ -376,7 +386,7 @@ async function send(){
   const streamId='sb'+Date.now()+Math.random().toString(36).slice(2);
   let reply='';
   try{
-    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:$('hft').value,hf_model:S.hfModel,agent:S.agent,messages:S.msgs.slice(-10),file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent})});
+    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:$('hft').value,hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:S.msgs.slice(-10),file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent})});
     if(!res.ok){const err=await res.text();tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${res.status}: ${err.slice(0,300)}</span></div></div>`;S.streaming=false;$('send-btn').disabled=false;return;}
     if(multiAgent){
       tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent" style="color:var(--purple)">Multi-Agent</span><span class="msg-time">${now()}</span></div><div id="${streamId}-wrap"></div></div>`;

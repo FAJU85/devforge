@@ -123,6 +123,57 @@ def _run_hf(q, loop, system, messages, token, model):
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
 
+def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
+    """Thread target: stream completions from any OpenAI-compatible endpoint.
+
+    Args:
+        q: asyncio.Queue for (kind, value) tuples sent back to the async caller.
+        loop: Running event loop used to schedule coroutines thread-safely.
+        system: System prompt string.
+        messages: List of {role, content} message dicts.
+        api_key: Bearer token; omitted from headers when empty (e.g. Ollama).
+        base_url: Root URL of the endpoint, e.g. http://localhost:11434/v1.
+        model: Model identifier forwarded in the request body.
+
+    Returns:
+        None. Results are placed on q as ("text", chunk), ("done", None),
+        or ("error", message).
+    """
+    try:
+        url = base_url.rstrip("/") + "/chat/completions"
+        hdrs = {"Content-Type": "application/json"}
+        if api_key:
+            hdrs["Authorization"] = f"Bearer {api_key}"
+        full_msgs = [{"role": "system", "content": system}] + messages
+        r = requests.post(
+            url, headers=hdrs,
+            json={"model": model, "messages": full_msgs, "max_tokens": 4096, "stream": True},
+            stream=True, timeout=90,
+        )
+        if not r.ok:
+            asyncio.run_coroutine_threadsafe(q.put(("error", f"API {r.status_code}: {r.text[:300]}")), loop)
+            return
+        for line in r.iter_lines():
+            if not line:
+                continue
+            decoded = line.decode("utf-8") if isinstance(line, bytes) else line
+            if decoded.startswith("data: "):
+                data = decoded[6:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data)
+                    text = obj["choices"][0]["delta"].get("content") or ""
+                    if text:
+                        asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                except json.JSONDecodeError:
+                    pass
+                except (KeyError, IndexError):
+                    pass
+        asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+    except Exception as e:
+        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+
 async def stream_one(runner, system: str, messages: list):
     q: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_event_loop()
@@ -269,6 +320,9 @@ class ChatBody(BaseModel):
     groq_model: Optional[str] = "llama-3.3-70b-versatile"
     hf_token: Optional[str] = ""
     hf_model: Optional[str] = "Qwen/Qwen2.5-Coder-32B-Instruct"
+    openai_compat_key: Optional[str] = ""
+    openai_compat_base_url: Optional[str] = "http://localhost:11434/v1"
+    openai_compat_model: Optional[str] = "llama3"
     agent: str = "code"
     messages: List[Msg]
     file_context: Optional[str] = ""
@@ -292,6 +346,13 @@ def get_runner(body: ChatBody) -> Callable:
         return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key)
     elif body.provider == "groq":
         return lambda q, loop, sys, msgs: _run_groq(q, loop, sys, msgs, body.groq_key, body.groq_model or "llama-3.3-70b-versatile")
+    elif body.provider == "openai_compat":
+        return lambda q, loop, sys, msgs: _run_openai_compat(
+            q, loop, sys, msgs,
+            body.openai_compat_key or "",
+            body.openai_compat_base_url or "http://localhost:11434/v1",
+            body.openai_compat_model or "llama3",
+        )
     else:
         token = (body.hf_token or "").strip() or HF_TOKEN
         return lambda q, loop, sys, msgs: _run_hf(q, loop, sys, msgs, token, body.hf_model)
