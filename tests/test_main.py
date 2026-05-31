@@ -2238,3 +2238,67 @@ class TestPromptEnhance:
         })
         assert r.status_code == 400
         assert "error" in r.json()
+
+
+class TestWorkflowRunsEndpoint:
+    def test_workflow_runs_success(self):
+        mock_runs = {
+            "workflow_runs": [
+                {
+                    "id": 12345,
+                    "name": "CI",
+                    "display_title": "CI on push",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "head_branch": "main",
+                    "head_sha": "abcdef1234567",
+                    "updated_at": "2026-05-31T12:00:00Z",
+                    "html_url": "https://github.com/user/repo/actions/runs/12345",
+                },
+                {
+                    "id": 12344,
+                    "name": "Deploy",
+                    "display_title": "Deploy",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "head_branch": "feature/x",
+                    "head_sha": "1111111",
+                    "updated_at": "2026-05-30T10:00:00Z",
+                    "html_url": "https://github.com/user/repo/actions/runs/12344",
+                },
+            ]
+        }
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = mock_runs
+            r = client.post("/api/repo/workflow-runs", json={
+                "token": "tok", "owner": "user", "repo": "myrepo",
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data) == 2
+        assert data[0]["name"] == "CI"
+        assert data[0]["conclusion"] == "success"
+        assert data[0]["sha"] == "abcdef1"
+        assert data[1]["conclusion"] == "failure"
+
+    def test_workflow_runs_api_failure(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = False
+            r = client.post("/api/repo/workflow-runs", json={
+                "token": "tok", "owner": "user", "repo": "myrepo",
+            })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_workflow_runs_caps_per_page(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"workflow_runs": []}
+            r = client.post("/api/repo/workflow-runs", json={
+                "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 999,
+            })
+        assert r.status_code == 200
+        call_args = mock_get.call_args
+        params = call_args[1].get("params", {})
+        assert params.get("per_page", 0) <= 20

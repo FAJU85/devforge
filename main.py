@@ -830,6 +830,40 @@ async def repo_commits(body: RepoCommitsBody):
     ]
 
 
+class WorkflowRunsBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    max_results: int = 10
+
+
+@app.post("/api/repo/workflow-runs")
+async def repo_workflow_runs(body: WorkflowRunsBody):
+    """Fetch recent GitHub Actions workflow runs."""
+    r = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/actions/runs",
+        headers=gh_hdrs(body.token),
+        params={"per_page": min(body.max_results, 20)},
+        timeout=15,
+    )
+    if not r.ok:
+        return JSONResponse({"error": "Failed to fetch workflow runs"}, status_code=400)
+    runs = r.json().get("workflow_runs", [])
+    return [
+        {
+            "id": run["id"],
+            "name": (run.get("name") or run.get("display_title") or "Workflow")[:60],
+            "status": run.get("status", ""),        # queued / in_progress / completed
+            "conclusion": run.get("conclusion") or "",  # success / failure / cancelled / ...
+            "branch": (run.get("head_branch") or "")[:40],
+            "sha": (run.get("head_sha") or "")[:7],
+            "date": (run.get("updated_at") or "")[:10],
+            "url": run.get("html_url", ""),
+        }
+        for run in runs
+    ]
+
+
 class ToolDef(BaseModel):
     name: str
     description: str
