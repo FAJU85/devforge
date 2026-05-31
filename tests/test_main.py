@@ -2414,3 +2414,73 @@ class TestReleaseNotesEndpoint:
             })
         assert r.status_code == 400
         assert "error" in r.json()
+
+
+class TestPRDiffEndpoint:
+    def test_pr_diff_success(self):
+        mock_pr = {
+            "number": 42,
+            "title": "feat: add user auth",
+            "body": "Adds OAuth flow.",
+            "user": {"login": "alice"},
+            "head": {"ref": "feature/auth"},
+            "base": {"ref": "main"},
+            "changed_files": 3,
+            "additions": 120,
+            "deletions": 15,
+            "html_url": "https://github.com/user/repo/pull/42",
+        }
+        mock_diff = "diff --git a/auth.py b/auth.py\n+def login(): pass"
+        with patch("requests.get") as mock_get:
+            def side_effect(url, **kwargs):
+                resp = MagicMock()
+                if "vnd.github.diff" in str(kwargs.get("headers", {})):
+                    resp.ok = True
+                    resp.text = mock_diff
+                else:
+                    resp.ok = True
+                    resp.json.return_value = mock_pr
+                return resp
+            mock_get.side_effect = side_effect
+            r = client.post("/api/github/pr/diff", json={
+                "token": "tok", "owner": "user", "repo": "myrepo", "pr_number": 42,
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["number"] == 42
+        assert data["title"] == "feat: add user auth"
+        assert data["author"] == "alice"
+        assert data["additions"] == 120
+        assert "diff --git" in data["diff"]
+
+    def test_pr_diff_not_found(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = False
+            r = client.post("/api/github/pr/diff", json={
+                "token": "tok", "owner": "user", "repo": "myrepo", "pr_number": 9999,
+            })
+        assert r.status_code == 404
+        assert "error" in r.json()
+
+    def test_pr_diff_caps_diff_at_40k(self):
+        big_diff = "+" * 50000
+        mock_pr = {
+            "number": 1, "title": "big", "body": "", "user": {"login": "x"},
+            "head": {"ref": "a"}, "base": {"ref": "main"},
+            "changed_files": 1, "additions": 1000, "deletions": 0,
+            "html_url": "",
+        }
+        with patch("requests.get") as mock_get:
+            def side_effect(url, **kwargs):
+                resp = MagicMock()
+                if "vnd.github.diff" in str(kwargs.get("headers", {})):
+                    resp.ok = True; resp.text = big_diff
+                else:
+                    resp.ok = True; resp.json.return_value = mock_pr
+                return resp
+            mock_get.side_effect = side_effect
+            r = client.post("/api/github/pr/diff", json={
+                "token": "tok", "owner": "user", "repo": "myrepo", "pr_number": 1,
+            })
+        assert r.status_code == 200
+        assert len(r.json()["diff"]) <= 40000

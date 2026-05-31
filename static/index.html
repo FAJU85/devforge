@@ -349,6 +349,13 @@ pre::-webkit-scrollbar{height:4px}
           <button onclick="toggleWorkflows()" title="GitHub Actions workflow runs" id="workflows-btn" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:11px;transition:all .15s;flex-shrink:0" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">⚙️</button>
           <button onclick="openReleaseNotes()" title="Generate release notes with AI" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:11px;transition:all .15s;flex-shrink:0" onmouseover="this.style.color='var(--purple)'" onmouseout="this.style.color='var(--muted)'">📋</button>
         </div>
+        <div style="padding:0 10px 6px;display:none" id="pr-review-wrap">
+          <div style="display:flex;gap:5px;align-items:center">
+            <span style="font-size:11px;color:var(--muted);flex-shrink:0">PR #</span>
+            <input class="finput" id="pr-review-num" type="number" min="1" placeholder="123" style="width:70px;padding:3px 7px" onkeydown="if(event.key==='Enter')reviewPR()">
+            <button onclick="reviewPR()" style="background:var(--blue-dim);border:1px solid var(--blue-border);color:var(--blue);cursor:pointer;border-radius:6px;padding:4px 10px;font-size:11px;font-family:inherit;flex-shrink:0;transition:all .15s">🔍 Review PR</button>
+          </div>
+        </div>
         <div class="repo-panel" id="commits-panel"></div>
         <div class="repo-panel" id="workflows-panel"></div>
         <div style="padding:0 10px 4px;display:none" id="repo-search-wrap">
@@ -1118,6 +1125,32 @@ async function toggleWorkflows(){
     d.map(r=>`<div class="commit-item" onclick="window.open('${r.url}','_blank')" title="${esc(r.conclusion||r.status)}"><div><span style="margin-right:4px">${icon(r.conclusion)}</span><span class="ci-msg">${esc(r.name)}</span></div><div class="ci-meta">${esc(r.branch)} · ${r.sha} · ${r.date}</div></div>`).join('');
 }
 
+// ── PR Review ────────────────────────────────────────────────────────────────
+async function reviewPR(){
+  if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}
+  const num=parseInt($('pr-review-num')?.value||'0');
+  if(!num){toast('Enter a PR number',true);return;}
+  const btn=$('pr-review-num').nextElementSibling;if(btn){btn.disabled=true;btn.textContent='⏳ Loading…';}
+  try{
+    const d=await post('/api/github/pr/diff',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,pr_number:num});
+    if(d.error){toast('PR error: '+d.error,true);return;}
+    // Build context from diff + PR description
+    const ctx=`PR #${d.number}: ${d.title}\nAuthor: ${d.author} | ${d.head} → ${d.base}\nChanged: ${d.changed_files} files, +${d.additions}/-${d.deletions}\n\n${d.body?'Description:\n'+d.body+'\n\n':''}Diff:\n\`\`\`diff\n${d.diff}\n\`\`\``;
+    // Set as local file context named pr-diff.diff
+    S.localFiles.set(`PR#${num}.diff`,ctx);updCtx();
+    // Switch to review agent and pre-fill prompt
+    document.querySelectorAll('.atab').forEach(t=>t.classList.remove('on'));
+    const rt=document.querySelector('.atab[data-agent="review"]');if(rt)rt.classList.add('on');
+    S.agent='review';
+    $('ti').value=`Review PR #${d.number}: ${d.title}\n\nPlease provide a thorough code review of the diff above. Check for:\n- Correctness and logic bugs\n- Security vulnerabilities\n- Performance issues\n- Code quality and style\n- Missing tests or documentation`;
+    $('ti').dispatchEvent(new Event('input'));$('ti').focus();
+    toast(`✓ PR #${num} loaded — ${d.changed_files} files changed`);
+    // Open the file context panel
+    const sidebar=$('sidebar');if(sidebar&&sidebar.classList.contains('col')){expSidebar();}
+  }catch(e){toast('Error: '+e.message,true);}
+  finally{if(btn){btn.disabled=false;btn.textContent='🔍 Review PR';}}
+}
+
 // ── Release Notes ─────────────────────────────────────────────────────────────
 function openReleaseNotesModal(){return openReleaseNotes();}
 function openReleaseNotes(){
@@ -1169,6 +1202,7 @@ async function loadBranches(){
   const sel=$('branch-select');const wrap=$('branch-sel-wrap');if(!sel||!wrap)return;
   sel.innerHTML=d.map(b=>`<option value="${esc(b.name)}"${b.name===S.repo.branch?' selected':''}>${esc(b.name)} (${b.sha})</option>`).join('');
   wrap.style.display='flex';
+  const prw=$('pr-review-wrap');if(prw)prw.style.display='block';
 }
 async function switchBranch(branch){
   if(!branch||branch===S.repo?.branch)return;

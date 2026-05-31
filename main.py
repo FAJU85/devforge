@@ -753,6 +753,46 @@ async def create_pr(body: PRBody):
     return {"url": data.get("html_url", ""), "number": data.get("number")}
 
 
+class PRDiffBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    pr_number: int
+
+@app.post("/api/github/pr/diff")
+async def get_pr_diff(body: PRDiffBody):
+    """Fetch a pull request's metadata and unified diff."""
+    # Get PR metadata
+    pr_r = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls/{body.pr_number}",
+        headers=gh_hdrs(body.token),
+        timeout=15,
+    )
+    if not pr_r.ok:
+        return JSONResponse({"error": f"PR #{body.pr_number} not found"}, status_code=404)
+    pr = pr_r.json()
+    # Get diff (cap at 40KB)
+    diff_r = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls/{body.pr_number}",
+        headers={**gh_hdrs(body.token), "Accept": "application/vnd.github.diff"},
+        timeout=20,
+    )
+    diff_text = diff_r.text[:40000] if diff_r.ok else ""
+    return {
+        "number": pr.get("number"),
+        "title": pr.get("title", ""),
+        "body": (pr.get("body") or "")[:1000],
+        "author": pr.get("user", {}).get("login", ""),
+        "head": pr.get("head", {}).get("ref", ""),
+        "base": pr.get("base", {}).get("ref", ""),
+        "changed_files": pr.get("changed_files", 0),
+        "additions": pr.get("additions", 0),
+        "deletions": pr.get("deletions", 0),
+        "diff": diff_text,
+        "url": pr.get("html_url", ""),
+    }
+
+
 class RepoSearchBody(BaseModel):
     token: str
     owner: str
