@@ -43,7 +43,8 @@ devforge/
 - [x] Custom Instructions textarea
 - [x] SSE streaming responses
 - [x] Light/Dark theme
-- [x] localStorage persistence (survives page refresh) ← fixed this cycle
+- [x] localStorage persistence (survives page refresh) ← fixed Cycle 1
+- [x] OpenAI-compatible custom endpoint (Ollama, OpenRouter, LM Studio…) ← added Cycle 2
 
 ## Features NOT Yet Implemented (Target)
 - [ ] MCP (Model Context Protocol) tool support
@@ -51,8 +52,7 @@ devforge/
 - [ ] Cross-provider multi-agent (different AI for each stage)
 - [ ] Persistent memory (beyond localStorage)
 - [ ] Fine-tune instruction presets
-- [ ] OpenAI-compatible endpoint (custom API base)
-- [ ] Mistral / Cohere / Gemini providers
+- [ ] Mistral / Cohere / Gemini providers (can now use via Custom endpoint)
 - [ ] Agent output to edit/commit directly to GitHub
 
 ## Known Construction Errors
