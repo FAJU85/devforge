@@ -2484,3 +2484,48 @@ class TestPRDiffEndpoint:
             })
         assert r.status_code == 200
         assert len(r.json()["diff"]) <= 40000
+
+
+class TestGistCreate:
+    def test_gist_create_success(self):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = True
+            mock_post.return_value.json.return_value = {
+                "id": "abc123",
+                "html_url": "https://gist.github.com/user/abc123",
+            }
+            r = client.post("/api/github/gist/create", json={
+                "token": "tok",
+                "filename": "snippet.py",
+                "content": "def hello(): return 'world'",
+                "description": "Test gist",
+                "public": False,
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["url"] == "https://gist.github.com/user/abc123"
+        assert data["id"] == "abc123"
+
+    def test_gist_default_filename(self):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = True
+            mock_post.return_value.json.return_value = {
+                "id": "def456", "html_url": "https://gist.github.com/user/def456"
+            }
+            r = client.post("/api/github/gist/create", json={
+                "token": "tok", "filename": "", "content": "hello world",
+            })
+        assert r.status_code == 200
+        # Verify default filename was used
+        call_json = mock_post.call_args[1]["json"]
+        assert "snippet.txt" in call_json["files"]
+
+    def test_gist_create_failure(self):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = False
+            mock_post.return_value.json.return_value = {"message": "Bad credentials"}
+            r = client.post("/api/github/gist/create", json={
+                "token": "bad-tok", "filename": "a.py", "content": "x=1",
+            })
+        assert r.status_code == 400
+        assert "error" in r.json()

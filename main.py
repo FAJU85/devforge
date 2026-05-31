@@ -698,6 +698,37 @@ async def repo_write_batch(body: BatchWriteBody):
     return {"committed": committed, "errors": errors}
 
 
+class GistBody(BaseModel):
+    token: str
+    filename: str
+    content: str
+    description: Optional[str] = ""
+    public: Optional[bool] = False
+
+@app.post("/api/github/gist/create")
+async def create_gist(body: GistBody):
+    """Create a GitHub Gist from a code block."""
+    fname = (body.filename or "snippet.txt").strip() or "snippet.txt"
+    r = requests.post(
+        "https://api.github.com/gists",
+        headers=gh_hdrs(body.token),
+        json={
+            "description": (body.description or f"DevForge snippet: {fname}")[:255],
+            "public": bool(body.public),
+            "files": {fname: {"content": body.content}},
+        },
+        timeout=15,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Failed to create gist")
+        except Exception:
+            err = "Failed to create gist"
+        return JSONResponse({"error": err}, status_code=400)
+    data = r.json()
+    return {"url": data.get("html_url", ""), "id": data.get("id", "")}
+
+
 class IssueBody(BaseModel):
     token: str
     owner: str
