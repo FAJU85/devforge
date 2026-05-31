@@ -37,67 +37,132 @@ devforge/
 - [x] AI Provider: Anthropic Claude (haiku/sonnet/opus selector)
 - [x] AI Provider: Groq (llama, mixtral, gemma, deepseek, qwen)
 - [x] AI Provider: HuggingFace (any text-generation model)
-- [x] Multi-agent pipeline (Plan → Implement → Test → Review, same or cross-provider)
+- [x] Multi-agent pipeline (Plan → Implement → Test → Review, same provider)
 - [x] Skills: Go, Zod, Tests, Errors, Security, Docs, Perf, SOLID, React, Next.js, Docker, SQL
-- [x] Custom Rules + Custom Instructions textareas
-- [x] SSE streaming responses + AbortController stop
+- [x] Custom Rules textarea
+- [x] Custom Instructions textarea
+- [x] SSE streaming responses
 - [x] Light/Dark theme
-- [x] localStorage persistence
-- [x] OpenAI-compatible custom endpoint (Ollama, OpenRouter, LM Studio)
+- [x] localStorage persistence (survives page refresh)
+- [x] OpenAI-compatible custom endpoint (Ollama, OpenRouter, LM Studio…)
 - [x] GitHub write-back: agent commits generated code directly to repo
-- [x] File upload for context
-- [x] Cross-provider multi-agent
-- [x] Instruction Presets (7 built-in + custom)
-- [x] Endpoint quick-fill presets
-- [x] Session Memory (per-repo localStorage context)
-- [x] Chat Export (.md)
-- [x] Token stats display
-- [x] Quick Stacks (Full-Stack TS, Python API, Go Service, Secure Review)
-- [x] Agent Tabs: Code/Review/Arch/Debug/Docs/Refactor/Tests
+- [x] File upload for instructions/rules/local context
+- [x] Cross-provider multi-agent (different AI per stage: Plan/Code/Test/Review)
+- [x] Instruction Presets (7 built-in + save/load/delete custom)
+- [x] Endpoint quick-fill: Vercel AI Gateway, OpenRouter, Ollama, LM Studio
+- [x] Session Memory: per-repo localStorage context injected across sessions
+- [x] Chat Export: download conversation as .md
+- [x] Token stats: real (Anthropic) + estimated (other providers) display
+- [x] Quick Stacks: Full-Stack TS, Python API, Go Service, Secure Review
+- [x] New Agent Tabs: Refactor + Test Gen
 - [x] Code diff view in write panel
-- [x] Message copy/delete/regenerate actions
-- [x] Conversation auto-save/restore per repo
-- [x] GitHub Issue creation modal
-- [x] GitHub PR creation modal
-- [x] Repo quick-scan card
-- [x] 4-stage multi-agent pipeline (Plan→Code→Test→Review)
-- [x] Batch file commit
-- [x] POST /api/repo/write/batch
-- [x] AI file suggestions (POST /api/repo/suggest-files)
+- [x] Message actions (copy, delete, regenerate)
+- [x] Conversation auto-save/restore per repo (tab-based)
+- [x] Conversation Tabs (per-repo named threads, auto-named from first message)
+- [x] GitHub Issue creation (modal + POST /api/github/issue/create)
+- [x] GitHub PR creation (modal + POST /api/github/pr/create)
+- [x] Repo quick-scan card (language breakdown, file count)
+- [x] 4-stage multi-agent pipeline (+ Test Gen stage)
+- [x] Batch file commit (extract all code blocks, commit in one op)
+- [x] Stream cancel / AbortController (Stop button)
+- [x] POST /api/repo/write/batch endpoint
+- [x] AI file suggestions (POST /api/repo/suggest-files, haiku/llama)
 - [x] File tree search / live filter
-- [x] Streaming timer
+- [x] Streaming timer (elapsed seconds indicator)
 - [x] Keyboard shortcuts (Escape, Cmd+/, Cmd+Shift+Backspace, Ctrl+F)
-- [x] HTTP Tools (define/call custom endpoints, Anthropic tool use)
-- [x] Anthropic model selector (Haiku/Sonnet/Opus)
-- [x] Branch management + switch branch
-- [x] Code search in repo (POST /api/repo/search)
-- [x] Commit history panel
-- [x] File summarization (POST /api/repo/summarize-file)
-- [x] Conversation tabs (per-repo named threads)
-- [x] Prompt history (up/down arrow, last 50)
-- [x] Token budget bar (color-coded, 80K warning)
-- [x] Extended Thinking Mode (Opus only) ← Cycle 15
-- [x] Prompt Enhancement ✨ (POST /api/prompt/enhance) ← Cycle 16
-- [x] Response Regeneration 🔄 ← Cycle 16
-- [x] GitHub Actions Workflow Status (POST /api/repo/workflow-runs) ← Cycle 17
-- [x] File Peek Modal (👁 hover button) ← Cycle 18
-- [x] Smart Context Trimming (auto-drop oldest msgs >90K) ← Cycle 18
-- [x] Snippet Library 📌 (save/load/delete prompts) ← Cycle 19
-- [x] AI Commit Messages ✨ (POST /api/commit/suggest-message) ← Cycle 19
-- [x] Code Explain Button ? (fills prompt with explain request) ← Cycle 20
-- [x] Chat Search Ctrl+F (highlight matches, navigate ▼▲) ← Cycle 20
+- [x] HTTP Tools (define tools, proxy via /api/tools/call, Anthropic native tool use)
+- [x] File summarization (POST /api/repo/summarize-file, haiku/llama)
+- [x] Code search (POST /api/repo/search, GitHub code search API)
+- [x] Commit history viewer (POST /api/repo/commits)
+- [x] Branch selector + switcher (GET /api/repo/branches)
+- [x] Anthropic model selector (Haiku / Sonnet / Opus)
+- [x] Prompt history (up/down arrow, 50 entries)
+- [x] Token budget bar (color-coded, 80K warning, per-file token count)
+- [x] Extended Thinking Mode (Claude Opus only; collapsible thinking block in UI)
+- [x] Prompt Enhancement (POST /api/prompt/enhance; ✨ button fills textarea)
+- [x] Response Regeneration (🔄 button on AI messages)
+- [x] GitHub Actions workflow status (POST /api/repo/workflow-runs; ⚙️ panel)
+- [x] File Peek Modal (👁 button on file tree; full content view + add to context)
+- [x] Smart context trimming (auto-drop oldest messages when >90K tokens)
+- [x] Snippet Library (📌 save/load/delete prompt snippets, up to 30)
+- [x] AI Commit Message Suggestions (POST /api/commit/suggest-message; ✨ in write panel)
+- [x] Code Explain Button (? on code blocks; fills prompt with explain request)
+- [x] Chat Search (Ctrl+F; highlight all matches; ▼/▲ navigate)
 
 ## Features NOT Yet Implemented (Target)
 - [ ] MCP (Model Context Protocol) tool support
 - [ ] Persistent server-side memory (beyond localStorage)
-- [ ] Smart context window management — server-side chunking
+- [ ] Mistral / Cohere / Gemini providers (can now use via Custom endpoint)
+- [ ] Smart context window management (file chunking, token budgeting beyond current trim)
+- [ ] Release notes generator
+- [ ] Multiple named conversation tabs per repo (done — single tab auto-name)
+
+## Known Construction Errors
+> None outstanding.
 
 ## Cumulative Scope Ledger
 ```
 totalCyclesCompleted: 20
+totalFilesCreated: 3   (tests/__init__.py, tests/test_main.py, .gitignore)
 totalFilesMutated: 4   (main.py, requirements.txt, static/index.html, tests/test_main.py)
 totalPackagesAdded: 0
+scopeFreeze: false
+conservativeMode: false
 ```
+
+## Cycle 20 Summary (2026-05-31) — Code Explain + Chat Search
+| Area | Change |
+|---|---|
+| Frontend | `explainCode()` — ? button on code blocks; `toggleChatSearch()`/`runChatSearch()`/`stepChatSearch()` — Ctrl+F chat search bar with match highlighting and navigation |
+| Tests | 172 total (no new backend) |
+
+## Cycle 19 Summary (2026-05-31) — Snippets + AI Commit Messages
+| Area | Change |
+|---|---|
+| Backend | `POST /api/commit/suggest-message` (haiku/llama) |
+| Frontend | 📌 Snippets section (save/load/delete, localStorage); ✨ button in write panel for AI commit message |
+| Tests | 3 new (TestCommitSuggestMessage); 172 total |
+
+## Cycle 18 Summary (2026-05-31) — File Peek + Smart Trim
+| Area | Change |
+|---|---|
+| Frontend | 👁 peek-btn on file tree; peek modal (full view + add to context); smart context trim before send (>90K) |
+| Tests | 169 total (no new backend) |
+
+## Cycle 17 Summary (2026-05-31) — GitHub Actions Viewer
+| Area | Change |
+|---|---|
+| Backend | `POST /api/repo/workflow-runs` — Actions runs list |
+| Frontend | ⚙️ button + workflows-panel showing status icons |
+| Tests | 3 new (TestWorkflowRunsEndpoint); 169 total |
+
+## Cycle 16 Summary (2026-05-31) — Prompt Enhancement + Regenerate
+| Area | Change |
+|---|---|
+| Backend | `POST /api/prompt/enhance` (haiku/llama rewrites prompt) |
+| Frontend | ✨ button fills textarea; 🔄 regenerate on AI messages |
+| Tests | 4 new (TestPromptEnhance); 166 total |
+
+## Cycle 15 Summary (2026-05-31) — Extended Thinking Mode
+| Area | Change |
+|---|---|
+| Backend | `_run_anthropic_thinking()`, `thinking_mode`/`thinking_budget` fields, `stream_one()` passes thinking events |
+| Frontend | `.thinking-block` CSS; think-opts panel (Opus only); SSE handler for thinking events |
+| Tests | 4 new (TestExtendedThinking); 162 total |
+
+## Cycles 10-14 Summary (prior session)
+- Cycle 10: HTTP Tools (native Anthropic tool use)
+- Cycle 11: File summarization endpoint
+- Cycle 12: GitHub code search
+- Cycle 13: Commit history + branch switcher
+- Cycle 14: Anthropic model selector + prompt history
+
+## Cycle 9 Summary (2026-05-31) — AI Assist + UX Polish
+| Area | Change |
+|---|---|
+| Backend | `POST /api/repo/suggest-files`: haiku/llama picks relevant files from task |
+| Frontend | File tree search (live filter); AI Suggest button; streaming timer; keyboard shortcuts |
+| Tests | 5 new tests (TestSuggestFiles); 124 total |
 
 ## Git State
 - Branch: claude/exciting-galileo-7UDWc
