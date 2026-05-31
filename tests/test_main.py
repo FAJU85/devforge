@@ -1025,6 +1025,76 @@ class TestRepoWrite:
 # get_runner: openai_compat provider (new branch)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# get_runner: provider override (cross-provider multi-agent)
+# ---------------------------------------------------------------------------
+
+class TestGetRunnerProviderOverride:
+    def test_override_selects_groq_runner_regardless_of_body_provider(self):
+        body = _body(provider="anthropic", groq_key="k")
+        runner = main.get_runner(body, provider="groq")
+        assert callable(runner)
+
+    def test_empty_override_falls_back_to_body_provider(self):
+        body = _body(provider="groq", groq_key="k")
+        runner = main.get_runner(body, provider="")
+        assert callable(runner)
+
+    def test_override_anthropic_uses_anthropic_key_from_body(self):
+        body = _body(provider="groq", anthropic_key="sk-ant-test")
+        runner = main.get_runner(body, provider="anthropic")
+        assert callable(runner)
+
+
+# ---------------------------------------------------------------------------
+# multi-agent stream: per-stage providers
+# ---------------------------------------------------------------------------
+
+class TestMultiAgentPerStageProviders:
+    def test_multi_agent_stream_includes_provider_label_in_step_events(self):
+        call_count = 0
+
+        async def mock_stream(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            yield "text", f"stage_{call_count}"
+
+        with patch("main.stream_one", side_effect=mock_stream):
+            resp = client.post("/api/chat/stream", json={
+                "provider": "anthropic",
+                "anthropic_key": "k",
+                "messages": [{"role": "user", "content": "build it"}],
+                "multi_agent": True,
+                "ma_plan_provider": "groq",
+                "ma_code_provider": "anthropic",
+                "ma_review_provider": "hf",
+            })
+
+        assert resp.status_code == 200
+        body = resp.text
+        assert "Groq" in body
+        assert "Claude" in body
+        assert "HF" in body
+
+    def test_empty_stage_provider_falls_back_to_main_provider(self):
+        async def mock_stream(*_args, **_kwargs):
+            yield "text", "ok"
+
+        with patch("main.stream_one", side_effect=mock_stream):
+            resp = client.post("/api/chat/stream", json={
+                "provider": "groq",
+                "groq_key": "k",
+                "messages": [{"role": "user", "content": "task"}],
+                "multi_agent": True,
+                "ma_plan_provider": "",
+                "ma_code_provider": "",
+                "ma_review_provider": "",
+            })
+
+        assert resp.status_code == 200
+        assert "Groq" in resp.text
+
+
 class TestGetRunnerOpenAiCompat:
     def test_openai_compat_provider_returns_callable(self):
         body = _body(

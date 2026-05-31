@@ -383,21 +383,29 @@ class ChatBody(BaseModel):
     rules: Optional[str] = ""
     instructions: Optional[str] = ""
     multi_agent: Optional[bool] = False
+    # Per-stage provider overrides for multi-agent (empty = use body.provider)
+    ma_plan_provider: Optional[str] = ""
+    ma_code_provider: Optional[str] = ""
+    ma_review_provider: Optional[str] = ""
 
-def get_runner(body: ChatBody) -> Callable:
+_PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom"}
+
+def get_runner(body: ChatBody, provider: str = "") -> Callable:
     """Return a thread-target callable bound to the chosen provider's run function.
 
     Args:
-        body: Validated chat request with provider selection and credentials.
+        body: Validated chat request carrying all credentials.
+        provider: Provider key override; falls back to body.provider when empty.
 
     Returns:
         Callable accepting (queue, event_loop, system_prompt, messages).
     """
-    if body.provider == "anthropic":
+    p = provider if provider else body.provider
+    if p == "anthropic":
         return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key)
-    elif body.provider == "groq":
+    elif p == "groq":
         return lambda q, loop, sys, msgs: _run_groq(q, loop, sys, msgs, body.groq_key, body.groq_model or "llama-3.3-70b-versatile")
-    elif body.provider == "openai_compat":
+    elif p == "openai_compat":
         return lambda q, loop, sys, msgs: _run_openai_compat(
             q, loop, sys, msgs,
             body.openai_compat_key or "",
@@ -423,10 +431,17 @@ async def chat_stream(body: ChatBody):
         user_task = messages[-1]["content"] if messages else ""
         prior = messages[:-1]
 
-        yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': '🗺️ Planning'})}\n\n"
+        plan_prov   = body.ma_plan_provider   or body.provider
+        code_prov   = body.ma_code_provider   or body.provider
+        review_prov = body.ma_review_provider or body.provider
+        plan_runner   = get_runner(body, plan_prov)
+        code_runner   = get_runner(body, code_prov)
+        review_runner = get_runner(body, review_prov)
+
+        yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': f'🗺️ Planning · {_PROV_LABEL.get(plan_prov, plan_prov)}'})}\n\n"
         plan_text = ""
         plan_msgs = [{"role": "user", "content": f"Task: {user_task}\n\nCreate a clear step-by-step implementation plan. List files, key functions, and pitfalls. No code yet."}]
-        async for kind, val in stream_one(runner, MA_PLAN_SYSTEM, plan_msgs):
+        async for kind, val in stream_one(plan_runner, MA_PLAN_SYSTEM, plan_msgs):
             if kind == "text":
                 plan_text += val
                 yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
@@ -434,11 +449,11 @@ async def chat_stream(body: ChatBody):
                 yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
                 return
 
-        yield f"data: {json.dumps({'t': 'step', 'v': 'code', 'label': '⚙️ Implementing'})}\n\n"
+        yield f"data: {json.dumps({'t': 'step', 'v': 'code', 'label': f'⚙️ Implementing · {_PROV_LABEL.get(code_prov, code_prov)}'})}\n\n"
         code_text = ""
         code_system = build_system(body)
         code_msgs = prior + [{"role": "user", "content": f"{user_task}\n\n## Plan:\n{plan_text}"}]
-        async for kind, val in stream_one(runner, code_system, code_msgs):
+        async for kind, val in stream_one(code_runner, code_system, code_msgs):
             if kind == "text":
                 code_text += val
                 yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
@@ -446,9 +461,9 @@ async def chat_stream(body: ChatBody):
                 yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
                 return
 
-        yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': '🔍 Reviewing'})}\n\n"
+        yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': f'🔍 Reviewing · {_PROV_LABEL.get(review_prov, review_prov)}'})}\n\n"
         review_msgs = [{"role": "user", "content": f"Review this implementation for bugs, security issues, missing error handling, and quality:\n\n{code_text}"}]
-        async for kind, val in stream_one(runner, MA_REVIEW_SYSTEM, review_msgs):
+        async for kind, val in stream_one(review_runner, MA_REVIEW_SYSTEM, review_msgs):
             if kind == "text":
                 yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
             elif kind == "error":
