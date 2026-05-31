@@ -78,7 +78,7 @@ def build_system(body: "ChatBody") -> str:
         base += f"\n\n---\n**Repository context:**\n{fc}"
     return base
 
-def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools):
+def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="claude-sonnet-4-6"):
     """Run Anthropic with native tool use, executing HTTP calls and looping until done."""
     try:
         client = Anthropic(api_key=api_key)
@@ -95,7 +95,7 @@ def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools):
 
         for _ in range(5):
             with client.messages.stream(
-                model="claude-sonnet-4-6",
+                model=model or "claude-sonnet-4-6",
                 max_tokens=4096,
                 system=system,
                 messages=current_messages,
@@ -158,10 +158,10 @@ def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools):
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
 
-def _run_anthropic(q, loop, system, messages, api_key):
+def _run_anthropic(q, loop, system, messages, api_key, model="claude-sonnet-4-6"):
     try:
         client = Anthropic(api_key=api_key)
-        with client.messages.stream(model="claude-sonnet-4-6", max_tokens=4096,
+        with client.messages.stream(model=model or "claude-sonnet-4-6", max_tokens=4096,
                 system=system, messages=messages) as stream:
             for text in stream.text_stream:
                 asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
@@ -375,7 +375,22 @@ def gh_hdrs(token: str) -> dict:
     return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
 
 class RepoBody(BaseModel):
-    token: str; url: str
+    token: str
+    url: str
+    branch: Optional[str] = ""
+
+
+@app.get("/api/repo/branches")
+async def list_branches(token: str = Query(...), owner: str = Query(...), repo: str = Query(...)):
+    """List all branches for a repository."""
+    r = requests.get(
+        f"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100",
+        headers=gh_hdrs(token), timeout=15,
+    )
+    if not r.ok:
+        return JSONResponse({"error": "Failed to fetch branches"}, status_code=400)
+    return [{"name": b["name"], "sha": b["commit"]["sha"][:7]} for b in r.json()]
+
 
 @app.post("/api/repo/connect")
 async def repo_connect(body: RepoBody):
@@ -383,13 +398,14 @@ async def repo_connect(body: RepoBody):
     if not owner: return JSONResponse({"error": "Invalid repository"}, status_code=400)
     r = requests.get(f"https://api.github.com/repos/{owner}/{repo}", headers=gh_hdrs(body.token), timeout=10)
     if not r.ok: return JSONResponse({"error": r.json().get("message", "Not found")}, status_code=400)
-    branch = r.json()["default_branch"]
+    default_branch = r.json()["default_branch"]
+    branch = (body.branch or "").strip() or default_branch
     t = requests.get(f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1",
         headers=gh_hdrs(body.token), timeout=15)
     if not t.ok: return JSONResponse({"error": "Failed to fetch file tree"}, status_code=400)
     files = sorted([{"path": f["path"], "size": f.get("size", 0)} for f in t.json().get("tree", [])
         if f["type"] == "blob" and f.get("size", 999999) < 150000], key=lambda x: x["path"])
-    return {"owner": owner, "repo": repo, "branch": branch, "files": files}
+    return {"owner": owner, "repo": repo, "branch": branch, "default_branch": default_branch, "files": files}
 
 class FileBody(BaseModel):
     token: str; owner: str; repo: str; path: str
@@ -761,6 +777,7 @@ class ChatBody(BaseModel):
     ma_include_test_stage: Optional[bool] = False
     memory: Optional[str] = ""
     tools: Optional[List[ToolDef]] = []
+    anthropic_model: Optional[str] = "claude-sonnet-4-6"
 
 _PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom"}
 
@@ -777,9 +794,10 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
     p = provider if provider else body.provider
     if p == "anthropic":
         tools = getattr(body, 'tools', []) or []
+        model = (getattr(body, 'anthropic_model', '') or 'claude-sonnet-4-6').strip() or 'claude-sonnet-4-6'
         if tools:
-            return lambda q, loop, sys, msgs: _run_anthropic_with_tools(q, loop, sys, msgs, body.anthropic_key, tools)
-        return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key)
+            return lambda q, loop, sys, msgs: _run_anthropic_with_tools(q, loop, sys, msgs, body.anthropic_key, tools, model)
+        return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key, model)
     elif p == "groq":
         return lambda q, loop, sys, msgs: _run_groq(q, loop, sys, msgs, body.groq_key, body.groq_model or "llama-3.3-70b-versatile")
     elif p == "openai_compat":

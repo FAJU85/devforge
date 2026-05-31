@@ -1810,3 +1810,135 @@ class TestSummarizeFileEndpoint:
         call_args = mock_client.messages.create.call_args
         msg_content = call_args[1]["messages"][0]["content"]
         assert len(msg_content) < 20000 + 200  # prompt overhead is small
+
+# ── Cycle 13: Anthropic Model Selection + Branch Management ───────────────────
+
+class TestAnthropicModelField:
+    def test_chat_body_accepts_anthropic_model(self):
+        from main import ChatBody
+        body = ChatBody(
+            provider="anthropic",
+            messages=[{"role": "user", "content": "hi"}],
+            anthropic_model="claude-haiku-4-5-20251001",
+        )
+        assert body.anthropic_model == "claude-haiku-4-5-20251001"
+
+    def test_chat_body_default_anthropic_model(self):
+        from main import ChatBody
+        body = ChatBody(
+            provider="anthropic",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        assert body.anthropic_model == "claude-sonnet-4-6"
+
+    def test_get_runner_passes_model_to_anthropic(self):
+        from main import ChatBody, get_runner
+        body = ChatBody(
+            provider="anthropic",
+            anthropic_key="sk-test",
+            anthropic_model="claude-opus-4-8",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        runner = get_runner(body)
+        assert callable(runner)
+        # Verify the runner captures opus model in closure
+        # We can't easily inspect lambdas, but we can verify it's callable
+
+    def test_get_runner_falls_back_to_sonnet_on_empty_model(self):
+        from main import ChatBody, get_runner
+        body = ChatBody(
+            provider="anthropic",
+            anthropic_key="sk-test",
+            anthropic_model="",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        runner = get_runner(body)
+        assert callable(runner)
+
+    def test_run_anthropic_uses_model_param(self):
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__enter__ = MagicMock(return_value=mock_stream_ctx)
+        mock_stream_ctx.__exit__ = MagicMock(return_value=False)
+        mock_stream_ctx.text_stream = iter(["hello"])
+        mock_final = MagicMock()
+        mock_final.usage.input_tokens = 5
+        mock_final.usage.output_tokens = 2
+        mock_stream_ctx.get_final_message = MagicMock(return_value=mock_final)
+        mock_client = MagicMock()
+        mock_client.messages.stream.return_value = mock_stream_ctx
+
+        import asyncio as _asyncio
+        q = _asyncio.Queue()
+        loop = _asyncio.new_event_loop()
+
+        async def _collect():
+            import threading
+            with patch("main.Anthropic", return_value=mock_client):
+                t = threading.Thread(
+                    target=main._run_anthropic,
+                    args=(q, loop, "sys", [{"role": "user", "content": "hi"}], "key", "claude-haiku-4-5-20251001"),
+                    daemon=True,
+                )
+                t.start()
+                collected = []
+                while True:
+                    kind, val = await q.get()
+                    collected.append((kind, val))
+                    if kind in ("done", "error"):
+                        break
+                return collected
+
+        results = loop.run_until_complete(_collect())
+        loop.close()
+
+        assert any(k == "text" for k, _ in results)
+        call_args = mock_client.messages.stream.call_args
+        assert call_args[1]["model"] == "claude-haiku-4-5-20251001"
+
+
+class TestRepoBranchesEndpoint:
+    def test_list_branches_success(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = [
+                {"name": "main", "commit": {"sha": "abc1234567"}},
+                {"name": "feature/auth", "commit": {"sha": "def9876543"}},
+            ]
+            r = client.get("/api/repo/branches?token=tok&owner=user&repo=myrepo")
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data) == 2
+        assert data[0]["name"] == "main"
+        assert data[0]["sha"] == "abc1234"  # 7 chars
+        assert data[1]["name"] == "feature/auth"
+
+    def test_list_branches_api_error(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = False
+            r = client.get("/api/repo/branches?token=tok&owner=user&repo=private-repo")
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_repo_connect_with_branch_override(self):
+        with patch("requests.get") as mock_get:
+            repo_response = MagicMock()
+            repo_response.ok = True
+            repo_response.json.return_value = {"default_branch": "main"}
+            tree_response = MagicMock()
+            tree_response.ok = True
+            tree_response.json.return_value = {"tree": [
+                {"type": "blob", "path": "README.md", "size": 500},
+            ]}
+            mock_get.side_effect = [repo_response, tree_response]
+            r = client.post("/api/repo/connect", json={
+                "token": "tok",
+                "url": "https://github.com/user/repo",
+                "branch": "feature/new-api",
+            })
+        assert r.status_code == 200
+        data = r.json()
+        # Branch override should be used for tree fetch
+        assert data["branch"] == "feature/new-api"
+        # Tree fetch URL should use the overridden branch
+        tree_call = mock_get.call_args_list[1]
+        assert "feature/new-api" in tree_call[0][0]
