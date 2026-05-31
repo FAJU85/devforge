@@ -1121,6 +1121,117 @@ class TestGetRunnerOpenAiCompat:
 # Cycle 5 — new agents, skills, memory, token usage
 # ---------------------------------------------------------------------------
 
+class TestBatchWriteEndpoint:
+    def test_batch_write_commits_all_files(self):
+        with patch("main.requests.get") as mock_get, patch("main.requests.put") as mock_put:
+            mock_get.return_value = MagicMock(ok=False)  # no existing SHA
+            mock_put.return_value = MagicMock(
+                ok=True,
+                json=lambda: {"commit": {"sha": "abc", "html_url": "https://github.com/o/r/commit/abc"}, "content": {}},
+            )
+            resp = client.post("/api/repo/write/batch", json={
+                "token": "tok", "owner": "o", "repo": "r", "branch": "main",
+                "files": [
+                    {"path": "src/a.ts", "content": "const a = 1;", "message": "feat: a"},
+                    {"path": "src/b.ts", "content": "const b = 2;", "message": "feat: b"},
+                ],
+            })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["committed"]) == 2
+        assert data["errors"] == []
+
+    def test_batch_write_reports_per_file_errors(self):
+        with patch("main.requests.get") as mock_get, patch("main.requests.put") as mock_put:
+            mock_get.return_value = MagicMock(ok=False)
+            call_count = {"n": 0}
+            def _put(*a, **kw):
+                call_count["n"] += 1
+                if call_count["n"] == 1:
+                    return MagicMock(ok=True, json=lambda: {"commit": {"sha": "x", "html_url": ""}, "content": {}})
+                return MagicMock(ok=False, json=lambda: {"message": "conflict"})
+            mock_put.side_effect = _put
+            resp = client.post("/api/repo/write/batch", json={
+                "token": "tok", "owner": "o", "repo": "r", "branch": "main",
+                "files": [
+                    {"path": "a.ts", "content": "ok", "message": "m1"},
+                    {"path": "b.ts", "content": "fail", "message": "m2"},
+                ],
+            })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["committed"]) == 1
+        assert len(data["errors"]) == 1
+        assert data["errors"][0]["path"] == "b.ts"
+
+    def test_batch_write_uses_existing_sha(self):
+        with patch("main.requests.get") as mock_get, patch("main.requests.put") as mock_put:
+            mock_get.return_value = MagicMock(ok=True, json=lambda: {"sha": "existing-sha"})
+            mock_put.return_value = MagicMock(
+                ok=True, json=lambda: {"commit": {"sha": "new", "html_url": ""}, "content": {}},
+            )
+            client.post("/api/repo/write/batch", json={
+                "token": "tok", "owner": "o", "repo": "r", "branch": "main",
+                "files": [{"path": "f.ts", "content": "x", "message": "m"}],
+            })
+        call_json = mock_put.call_args.kwargs.get("json") or mock_put.call_args[1].get("json")
+        assert call_json["sha"] == "existing-sha"
+
+
+class TestFourStagePipeline:
+    def test_chatbody_has_test_stage_fields(self):
+        body = _body(ma_include_test_stage=True, ma_test_provider="groq")
+        assert body.ma_include_test_stage is True
+        assert body.ma_test_provider == "groq"
+
+    def test_chatbody_test_stage_defaults_false(self):
+        body = _body()
+        assert body.ma_include_test_stage is False
+        assert body.ma_test_provider == ""
+
+    def test_ma_test_system_defined(self):
+        assert hasattr(main, "MA_TEST_SYSTEM")
+        assert "test" in main.MA_TEST_SYSTEM.lower()
+
+    def test_multi_agent_stream_includes_test_step_when_enabled(self):
+        async def mock_stream(*_args, **_kwargs):
+            yield "text", "response"
+
+        with patch("main.stream_one", side_effect=mock_stream):
+            resp = client.post("/api/chat/stream", json={
+                "provider": "groq",
+                "groq_key": "k",
+                "messages": [{"role": "user", "content": "task"}],
+                "multi_agent": True,
+                "ma_include_test_stage": True,
+                "ma_plan_provider": "",
+                "ma_code_provider": "",
+                "ma_test_provider": "",
+                "ma_review_provider": "",
+            })
+        assert resp.status_code == 200
+        assert "Testing" in resp.text
+
+    def test_multi_agent_stream_skips_test_step_when_disabled(self):
+        async def mock_stream(*_args, **_kwargs):
+            yield "text", "response"
+
+        with patch("main.stream_one", side_effect=mock_stream):
+            resp = client.post("/api/chat/stream", json={
+                "provider": "groq",
+                "groq_key": "k",
+                "messages": [{"role": "user", "content": "task"}],
+                "multi_agent": True,
+                "ma_include_test_stage": False,
+                "ma_plan_provider": "",
+                "ma_code_provider": "",
+                "ma_review_provider": "",
+            })
+        assert resp.status_code == 200
+        # Testing label should NOT appear
+        assert "Testing" not in resp.text
+
+
 class TestGitHubIssueCreate:
     def test_create_issue_success(self):
         with patch("main.requests.post") as mock_post:

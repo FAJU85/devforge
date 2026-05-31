@@ -44,7 +44,8 @@ SKILL_PROMPTS = {
 
 MA_PLAN_SYSTEM   = "You are a software architect. Analyze the task and create a clear, concise step-by-step implementation plan. List files to create/modify, key functions, and potential pitfalls. Do NOT write actual code yet."
 MA_CODE_SYSTEM   = "You are an expert coding agent. Implement the task following the provided plan. Write complete, production-ready code with full file paths before every code block."
-MA_REVIEW_SYSTEM = "You are a senior code reviewer. Review the implementation for bugs, security issues, performance problems, missing error handling, and code quality. Be specific and constructive."
+MA_TEST_SYSTEM   = "You are a test engineer. Write comprehensive automated tests for the implementation provided. Include unit tests, edge cases, and error conditions. Show full file paths before every test file. Use the appropriate testing framework for the language (pytest, Jest/Vitest, Go testing, etc.)."
+MA_REVIEW_SYSTEM = "You are a senior code reviewer. Review the implementation and tests for bugs, security issues, performance problems, missing error handling, and code quality. Be specific and constructive."
 
 def build_system(body: "ChatBody") -> str:
     """Compose the system prompt from agent, skills, rules, file context, and session memory."""
@@ -369,6 +370,59 @@ async def repo_write(body: WriteFileBody):
         "commit_url": commit.get("html_url", ""),
     }
 
+class BatchWriteItem(BaseModel):
+    path: str
+    content: str
+    message: str
+
+class BatchWriteBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    branch: str
+    files: List[BatchWriteItem]
+
+@app.post("/api/repo/write/batch")
+async def repo_write_batch(body: BatchWriteBody):
+    """Commit multiple files to the repository, reporting per-file results."""
+    committed, errors = [], []
+    for item in body.files:
+        sha = None
+        existing = requests.get(
+            f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+            headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
+        )
+        if existing.ok:
+            try:
+                sha = existing.json().get("sha")
+            except Exception:
+                pass
+        payload: dict = {
+            "message": item.message,
+            "content": base64.b64encode(item.content.encode("utf-8")).decode("utf-8"),
+            "branch": body.branch,
+        }
+        if sha:
+            payload["sha"] = sha
+        w = requests.put(
+            f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+            headers=gh_hdrs(body.token), json=payload, timeout=15,
+        )
+        if w.ok:
+            data = w.json()
+            committed.append({
+                "path": item.path,
+                "commit_url": data.get("commit", {}).get("html_url", ""),
+            })
+        else:
+            try:
+                err_msg = w.json().get("message", "Write failed")
+            except Exception:
+                err_msg = "Write failed"
+            errors.append({"path": item.path, "error": err_msg})
+    return {"committed": committed, "errors": errors}
+
+
 class IssueBody(BaseModel):
     token: str
     owner: str
@@ -449,7 +503,9 @@ class ChatBody(BaseModel):
     # Per-stage provider overrides for multi-agent (empty = use body.provider)
     ma_plan_provider: Optional[str] = ""
     ma_code_provider: Optional[str] = ""
+    ma_test_provider: Optional[str] = ""
     ma_review_provider: Optional[str] = ""
+    ma_include_test_stage: Optional[bool] = False
     memory: Optional[str] = ""
 
 _PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom"}
@@ -497,9 +553,11 @@ async def chat_stream(body: ChatBody):
 
         plan_prov   = body.ma_plan_provider   or body.provider
         code_prov   = body.ma_code_provider   or body.provider
+        test_prov   = body.ma_test_provider   or body.provider
         review_prov = body.ma_review_provider or body.provider
         plan_runner   = get_runner(body, plan_prov)
         code_runner   = get_runner(body, code_prov)
+        test_runner   = get_runner(body, test_prov)
         review_runner = get_runner(body, review_prov)
 
         yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': f'🗺️ Planning · {_PROV_LABEL.get(plan_prov, plan_prov)}'})}\n\n"
@@ -524,6 +582,16 @@ async def chat_stream(body: ChatBody):
             elif kind == "error":
                 yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
                 return
+
+        if body.ma_include_test_stage:
+            yield f"data: {json.dumps({'t': 'step', 'v': 'test', 'label': f'🧪 Testing · {_PROV_LABEL.get(test_prov, test_prov)}'})}\n\n"
+            test_msgs = [{"role": "user", "content": f"Write comprehensive tests for this implementation:\n\n{code_text}"}]
+            async for kind, val in stream_one(test_runner, MA_TEST_SYSTEM, test_msgs):
+                if kind == "text":
+                    yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
+                elif kind == "error":
+                    yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+                    return
 
         yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': f'🔍 Reviewing · {_PROV_LABEL.get(review_prov, review_prov)}'})}\n\n"
         review_msgs = [{"role": "user", "content": f"Review this implementation for bugs, security issues, missing error handling, and quality:\n\n{code_text}"}]
