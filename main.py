@@ -370,6 +370,83 @@ async def repo_write(body: WriteFileBody):
         "commit_url": commit.get("html_url", ""),
     }
 
+class SuggestFilesBody(BaseModel):
+    provider: str
+    anthropic_key: Optional[str] = ""
+    groq_key: Optional[str] = ""
+    groq_model: Optional[str] = "llama-3.3-70b-versatile"
+    openai_compat_key: Optional[str] = ""
+    openai_compat_base_url: Optional[str] = ""
+    openai_compat_model: Optional[str] = ""
+    hf_token: Optional[str] = ""
+    hf_model: Optional[str] = ""
+    task: str
+    files: List[str]
+    max_suggestions: int = 6
+
+@app.post("/api/repo/suggest-files")
+async def suggest_files(body: SuggestFilesBody):
+    """Use AI to suggest the most relevant files for a given task."""
+    file_list = "\n".join(body.files[:600])
+    prompt = (
+        f'Task: "{body.task}"\n\n'
+        f"From the file list below, pick the {body.max_suggestions} most relevant files.\n"
+        "Return ONLY a JSON array of file paths. No prose, no markdown, just the array.\n"
+        "Example: [\"src/auth.ts\", \"src/middleware.ts\"]\n\n"
+        f"Files:\n{file_list}"
+    )
+    system = "You are a file relevance expert. Return only a valid JSON array of file paths."
+
+    result = ""
+    try:
+        if body.provider == "anthropic" and body.anthropic_key:
+            from anthropic import Anthropic as _Anth
+            client = _Anth(api_key=body.anthropic_key)
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=256,
+                system=system,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            result = msg.content[0].text if msg.content else "[]"
+        elif body.provider == "groq" and body.groq_key:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": body.groq_model or "llama-3.1-8b-instant", "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ], "max_tokens": 256, "stream": False},
+                timeout=20,
+            )
+            result = r.json()["choices"][0]["message"]["content"] if r.ok else "[]"
+        elif body.provider == "openai_compat" and body.openai_compat_base_url:
+            url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
+            hdrs = {"Content-Type": "application/json"}
+            if body.openai_compat_key:
+                hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
+            r = requests.post(url, headers=hdrs, json={
+                "model": body.openai_compat_model or "llama3",
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                "max_tokens": 256, "stream": False,
+            }, timeout=20)
+            result = r.json()["choices"][0]["message"]["content"] if r.ok else "[]"
+        else:
+            return JSONResponse({"error": "No usable provider configured"}, status_code=400)
+
+        # Extract JSON array from result (strip any surrounding text)
+        m = re.search(r'\[.*?\]', result, re.DOTALL)
+        if not m:
+            return JSONResponse({"error": "AI returned non-parseable response"}, status_code=400)
+        suggested = json.loads(m.group(0))
+        # Filter to only files that actually exist in the repo
+        file_set = set(body.files)
+        valid = [f for f in suggested if f in file_set]
+        return {"files": valid[:body.max_suggestions]}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 class BatchWriteItem(BaseModel):
     path: str
     content: str

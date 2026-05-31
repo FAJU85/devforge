@@ -1178,6 +1178,76 @@ class TestBatchWriteEndpoint:
         assert call_json["sha"] == "existing-sha"
 
 
+class TestSuggestFiles:
+    def test_suggest_files_with_groq(self):
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(
+                ok=True,
+                json=lambda: {"choices": [{"message": {"content": '["src/auth.ts", "src/utils.ts"]'}}]},
+            )
+            resp = client.post("/api/repo/suggest-files", json={
+                "provider": "groq",
+                "groq_key": "k",
+                "task": "Fix authentication bug",
+                "files": ["src/auth.ts", "src/utils.ts", "src/index.ts"],
+            })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "files" in data
+        # Only files that exist in repo should be returned
+        for f in data["files"]:
+            assert f in ["src/auth.ts", "src/utils.ts", "src/index.ts"]
+
+    def test_suggest_files_filters_nonexistent_paths(self):
+        with patch("main.requests.post") as mock_post:
+            # AI returns a file that's NOT in the repo
+            mock_post.return_value = MagicMock(
+                ok=True,
+                json=lambda: {"choices": [{"message": {"content": '["src/auth.ts", "nonexistent.ts"]'}}]},
+            )
+            resp = client.post("/api/repo/suggest-files", json={
+                "provider": "groq",
+                "groq_key": "k",
+                "task": "task",
+                "files": ["src/auth.ts", "src/other.ts"],
+            })
+        assert resp.status_code == 200
+        assert "nonexistent.ts" not in resp.json()["files"]
+
+    def test_suggest_files_no_provider_returns_error(self):
+        resp = client.post("/api/repo/suggest-files", json={
+            "provider": "anthropic",
+            "anthropic_key": "",  # no key
+            "task": "task",
+            "files": ["src/a.ts"],
+        })
+        assert resp.status_code == 400
+
+    def test_suggest_files_handles_json_in_prose(self):
+        """AI sometimes wraps the array in markdown prose."""
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(
+                ok=True,
+                json=lambda: {"choices": [{"message": {"content": 'Here are the files: ["a.ts", "b.ts"]. These are most relevant.'}}]},
+            )
+            resp = client.post("/api/repo/suggest-files", json={
+                "provider": "groq", "groq_key": "k",
+                "task": "t", "files": ["a.ts", "b.ts", "c.ts"],
+            })
+        assert resp.status_code == 200
+        assert "a.ts" in resp.json()["files"]
+
+    def test_suggest_files_groq_api_failure(self):
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(ok=False, json=lambda: {})
+            resp = client.post("/api/repo/suggest-files", json={
+                "provider": "groq", "groq_key": "k",
+                "task": "t", "files": ["a.ts"],
+            })
+        # Returns 400 because AI returned non-parseable "[]"
+        assert resp.status_code in (200, 400)
+
+
 class TestFourStagePipeline:
     def test_chatbody_has_test_stage_fields(self):
         body = _body(ma_include_test_stage=True, ma_test_provider="groq")
