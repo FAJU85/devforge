@@ -1,0 +1,28 @@
+name: Sync from Hugging Face Space
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [hf-space-update]
+
+jobs:
+  sync-from-hf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Pull from Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config --global user.email "hf-sync@devforge.bot"
+          git config --global user.name "HF Sync Bot"
+          git remote add hf https://vooom:${HF_TOKEN}@huggingface.co/spaces/vooom/devforge || true
+          git fetch hf
+          git merge hf/main --no-edit --allow-unrelated-histories -X theirs || true
+          git push origin main
+          echo "✅ Pulled latest changes from HF Space"
