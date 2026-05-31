@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Callable, List, Optional
 import json, os, requests, base64, re, asyncio, threading
 
 from anthropic import Anthropic
@@ -40,7 +40,15 @@ MA_PLAN_SYSTEM   = "You are a software architect. Analyze the task and create a 
 MA_CODE_SYSTEM   = "You are an expert coding agent. Implement the task following the provided plan. Write complete, production-ready code with full file paths before every code block."
 MA_REVIEW_SYSTEM = "You are a senior code reviewer. Review the implementation for bugs, security issues, performance problems, missing error handling, and code quality. Be specific and constructive."
 
-def build_system(body) -> str:
+def build_system(body: "ChatBody") -> str:
+    """Compose the system prompt from agent, skills, rules, and file context.
+
+    Args:
+        body: Validated chat request containing agent mode, skills, rules, and context.
+
+    Returns:
+        Assembled system prompt string ready to pass to any provider.
+    """
     if getattr(body, 'instructions', '') and body.instructions.strip():
         base = body.instructions.strip()
     else:
@@ -64,7 +72,7 @@ def build_system(body) -> str:
 def _run_anthropic(q, loop, system, messages, api_key):
     try:
         client = Anthropic(api_key=api_key)
-        with client.messages.stream(model="claude-sonnet-4-20250514", max_tokens=4096,
+        with client.messages.stream(model="claude-sonnet-4-6", max_tokens=4096,
                 system=system, messages=messages) as stream:
             for text in stream.text_stream:
                 asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
@@ -95,7 +103,10 @@ def _run_groq(q, loop, system, messages, api_key, model):
                     text = obj["choices"][0]["delta"].get("content") or ""
                     if text:
                         asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
-                except: pass
+                except json.JSONDecodeError:
+                    pass  # Skip malformed or partial SSE chunk
+                except (KeyError, IndexError):
+                    pass  # Skip chunk with unexpected structure
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
@@ -190,7 +201,15 @@ async def github_repos(body: TokenBody):
     return [{"full_name": r["full_name"], "name": r["name"], "description": r.get("description") or "",
              "private": r["private"], "language": r.get("language") or ""} for r in repos]
 
-def parse_gh_url(url):
+def parse_gh_url(url: str) -> "tuple[str | None, str | None]":
+    """Extract GitHub owner and repo name from a URL or 'owner/repo' shorthand.
+
+    Args:
+        url: Full GitHub URL or 'owner/repo' string.
+
+    Returns:
+        Tuple of (owner, repo), or (None, None) if no match found.
+    """
     m = re.search(r"github\.com/([^/\s]+)/([^/\s]+)", url.strip())
     if not m:
         m2 = re.match(r"^([^/\s]+)/([^/\s]+)$", url.strip())
@@ -198,7 +217,15 @@ def parse_gh_url(url):
         return None, None
     return m.group(1), m.group(2).replace(".git", "").rstrip("/")
 
-def gh_hdrs(token):
+def gh_hdrs(token: str) -> dict:
+    """Build GitHub API request headers for an authenticated token.
+
+    Args:
+        token: Personal access token or OAuth token for GitHub API calls.
+
+    Returns:
+        Dict with Authorization and Accept headers.
+    """
     return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
 
 class RepoBody(BaseModel):
@@ -252,7 +279,15 @@ class ChatBody(BaseModel):
     instructions: Optional[str] = ""
     multi_agent: Optional[bool] = False
 
-def get_runner(body: ChatBody):
+def get_runner(body: ChatBody) -> Callable:
+    """Return a thread-target callable bound to the chosen provider's run function.
+
+    Args:
+        body: Validated chat request with provider selection and credentials.
+
+    Returns:
+        Callable accepting (queue, event_loop, system_prompt, messages).
+    """
     if body.provider == "anthropic":
         return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key)
     elif body.provider == "groq":
