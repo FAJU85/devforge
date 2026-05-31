@@ -2302,3 +2302,47 @@ class TestWorkflowRunsEndpoint:
         call_args = mock_get.call_args
         params = call_args[1].get("params", {})
         assert params.get("per_page", 0) <= 20
+
+
+class TestCommitSuggestMessage:
+    def test_suggest_with_anthropic(self):
+        mock_client = MagicMock()
+        mock_msg = MagicMock()
+        mock_msg.content = [MagicMock(text="feat(auth): add email validation to login handler")]
+        mock_client.messages.create.return_value = mock_msg
+        with patch("main.Anthropic", return_value=mock_client):
+            r = client.post("/api/commit/suggest-message", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "path": "src/auth/login.py",
+                "content": "def validate_email(email): ...",
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert "message" in data
+        assert "auth" in data["message"].lower() or "feat" in data["message"].lower()
+
+    def test_suggest_with_groq(self):
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.json.return_value = {
+            "choices": [{"message": {"content": "fix(api): handle null pointer in user service"}}]
+        }
+        with patch("requests.post", return_value=mock_resp):
+            r = client.post("/api/commit/suggest-message", json={
+                "provider": "groq",
+                "groq_key": "gsk_test",
+                "path": "api/user_service.go",
+                "content": "func GetUser(id string) (*User, error) { ... }",
+            })
+        assert r.status_code == 200
+        assert "message" in r.json()
+
+    def test_suggest_no_key_returns_400(self):
+        r = client.post("/api/commit/suggest-message", json={
+            "provider": "hf",
+            "path": "src/main.py",
+            "content": "print('hello')",
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()

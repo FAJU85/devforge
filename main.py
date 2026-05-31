@@ -864,6 +864,53 @@ async def repo_workflow_runs(body: WorkflowRunsBody):
     ]
 
 
+COMMIT_MSG_SYSTEM = (
+    "You are a Git commit message expert. Given a file path and its new content (or a diff), "
+    "write a concise conventional commit message (type(scope): description). "
+    "Keep it under 72 characters. Return ONLY the commit message — no explanations, no quotes."
+)
+
+class CommitMsgBody(BaseModel):
+    provider: str = "anthropic"
+    anthropic_key: Optional[str] = ""
+    groq_key: Optional[str] = ""
+    hf_token: Optional[str] = ""
+    path: str
+    content: Optional[str] = ""
+    diff: Optional[str] = ""
+
+@app.post("/api/commit/suggest-message")
+async def suggest_commit_message(body: CommitMsgBody):
+    """Generate a conventional commit message for a file change."""
+    try:
+        snippet = (body.diff or body.content or "")[:2000]
+        user_prompt = f"File: {body.path}\n\n{snippet}"
+        if body.provider == "anthropic" and body.anthropic_key:
+            client = Anthropic(api_key=body.anthropic_key)
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001", max_tokens=80,
+                system=COMMIT_MSG_SYSTEM,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            return {"message": msg.content[0].text.strip()}
+        elif body.provider == "groq" and body.groq_key:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.1-8b-instant", "max_tokens": 80,
+                      "messages": [{"role": "system", "content": COMMIT_MSG_SYSTEM},
+                                   {"role": "user", "content": user_prompt}]},
+                timeout=15,
+            )
+            if not r.ok:
+                return JSONResponse({"error": r.text[:200]}, status_code=400)
+            return {"message": r.json()["choices"][0]["message"]["content"].strip()}
+        else:
+            return JSONResponse({"error": "no provider key"}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 class ToolDef(BaseModel):
     name: str
     description: str
