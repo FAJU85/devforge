@@ -31,7 +31,7 @@ devforge/
 - **Auth:** GitHub OAuth Device Flow (GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET env vars)
 - **HF Token:** HF_TOKEN env var (optional)
 
-## Features Implemented (v1 — Cycle 1 Complete)
+## Features Implemented (v1 — Cycles 1-3 Complete)
 - [x] GitHub OAuth one-click (Device Flow)
 - [x] Repo browser + file tree (up to 8 files in context)
 - [x] AI Provider: Anthropic Claude (current model)
@@ -43,7 +43,9 @@ devforge/
 - [x] Custom Instructions textarea
 - [x] SSE streaming responses
 - [x] Light/Dark theme
-- [x] localStorage persistence (survives page refresh) ← fixed this cycle
+- [x] localStorage persistence (survives page refresh) ← fixed Cycle 1
+- [x] OpenAI-compatible custom endpoint (Ollama, OpenRouter, LM Studio…) ← added Cycle 2
+- [x] GitHub write-back: agent commits generated code directly to repo ← added Cycle 3
 
 ## Features NOT Yet Implemented (Target)
 - [ ] MCP (Model Context Protocol) tool support
@@ -51,22 +53,34 @@ devforge/
 - [ ] Cross-provider multi-agent (different AI for each stage)
 - [ ] Persistent memory (beyond localStorage)
 - [ ] Fine-tune instruction presets
-- [ ] OpenAI-compatible endpoint (custom API base)
-- [ ] Mistral / Cohere / Gemini providers
-- [ ] Agent output to edit/commit directly to GitHub
+- [ ] Mistral / Cohere / Gemini providers (can now use via Custom endpoint)
 
 ## Known Construction Errors
 > All Cycle 1 violations resolved. No outstanding PROTOCOL violations.
 
 ## Cumulative Scope Ledger
 ```
-totalCyclesCompleted: 1
+totalCyclesCompleted: 3
 totalFilesCreated: 3   (tests/__init__.py, tests/test_main.py, .gitignore)
-totalFilesMutated: 3   (main.py, requirements.txt, static/index.html)
-totalPackagesAdded: 0  (pip-compile resolved — no new direct deps added)
+totalFilesMutated: 4   (main.py, requirements.txt, static/index.html, tests/test_main.py)
+totalPackagesAdded: 0
 scopeFreeze: false
 conservativeMode: false
 ```
+
+## Cycle 3 Summary (2026-05-31)
+| Area | Change |
+|---|---|
+| Backend | `WriteFileBody` + `POST /api/repo/write` (create/update via GitHub Contents API) |
+| Frontend | `rmd()` detects `### \`path\`` headings → injects `📤 Write` button; `showWritePanel()` + `commitFile()` |
+| Tests | 4 new cases; 82 total |
+
+## Cycle 2 Summary (2026-05-31) — SESSION_APPROVED
+| Area | Change |
+|---|---|
+| Backend | `_run_openai_compat()` + `ChatBody` fields + `get_runner` routing |
+| Frontend | Custom provider button, custom endpoint panel, provider/badge/enhance/send updated |
+| Tests | New tests covering custom endpoint paths |
 
 ## Cycle 1 Summary (2026-05-31) — SESSION_APPROVED
 | Priority | Fix | Result |
@@ -79,9 +93,9 @@ conservativeMode: false
 | LOW | `sessionStorage` → `localStorage` (5 occurrences) | ✓ |
 
 ## Active Canvas
-> Canvas ID: CANVAS-DF-2026-001 — **SESSION_APPROVED** (2026-05-31)
+> Canvas ID: CANVAS-DF-2026-003 — in progress (2026-05-31)
 
 ## Git State
 - Branch: claude/exciting-galileo-7UDWc
-- Last commit: 70946dc — Add .claude/MEMORY.md project orchestrator memory
+- Last commit: 5d5722c — Add GitHub write-back
 - Remote: origin/claude/exciting-galileo-7UDWc ✓ tracked

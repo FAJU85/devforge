@@ -123,6 +123,57 @@ def _run_hf(q, loop, system, messages, token, model):
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
 
+def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
+    """Thread target: stream completions from any OpenAI-compatible endpoint.
+
+    Args:
+        q: asyncio.Queue for (kind, value) tuples sent back to the async caller.
+        loop: Running event loop used to schedule coroutines thread-safely.
+        system: System prompt string.
+        messages: List of {role, content} message dicts.
+        api_key: Bearer token; omitted from headers when empty (e.g. Ollama).
+        base_url: Root URL of the endpoint, e.g. http://localhost:11434/v1.
+        model: Model identifier forwarded in the request body.
+
+    Returns:
+        None. Results are placed on q as ("text", chunk), ("done", None),
+        or ("error", message).
+    """
+    try:
+        url = base_url.rstrip("/") + "/chat/completions"
+        hdrs = {"Content-Type": "application/json"}
+        if api_key:
+            hdrs["Authorization"] = f"Bearer {api_key}"
+        full_msgs = [{"role": "system", "content": system}] + messages
+        r = requests.post(
+            url, headers=hdrs,
+            json={"model": model, "messages": full_msgs, "max_tokens": 4096, "stream": True},
+            stream=True, timeout=90,
+        )
+        if not r.ok:
+            asyncio.run_coroutine_threadsafe(q.put(("error", f"API {r.status_code}: {r.text[:300]}")), loop)
+            return
+        for line in r.iter_lines():
+            if not line:
+                continue
+            decoded = line.decode("utf-8") if isinstance(line, bytes) else line
+            if decoded.startswith("data: "):
+                data = decoded[6:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data)
+                    text = obj["choices"][0]["delta"].get("content") or ""
+                    if text:
+                        asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                except json.JSONDecodeError:
+                    pass
+                except (KeyError, IndexError):
+                    pass
+        asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+    except Exception as e:
+        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+
 async def stream_one(runner, system: str, messages: list):
     q: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_event_loop()
@@ -259,6 +310,57 @@ async def repo_file(body: FileBody):
         return JSONResponse({"error": "Binary file"}, status_code=400)
     return {"path": body.path, "content": content}
 
+class WriteFileBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    path: str
+    content: str
+    message: str
+    branch: str
+
+@app.post("/api/repo/write")
+async def repo_write(body: WriteFileBody):
+    """Create or update a file in the repository via the GitHub Contents API."""
+    sha = None
+    existing = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{body.path}",
+        headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
+    )
+    if existing.ok:
+        try:
+            sha = existing.json().get("sha")
+        except (KeyError, json.JSONDecodeError):
+            pass
+
+    payload: dict = {
+        "message": body.message,
+        "content": base64.b64encode(body.content.encode("utf-8")).decode("utf-8"),
+        "branch": body.branch,
+    }
+    if sha:
+        payload["sha"] = sha
+
+    w = requests.put(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{body.path}",
+        headers=gh_hdrs(body.token), json=payload, timeout=15,
+    )
+    if not w.ok:
+        try:
+            err_msg = w.json().get("message", "Write failed")
+        except Exception:
+            err_msg = "Write failed"
+        return JSONResponse({"error": err_msg}, status_code=400)
+
+    data = w.json()
+    commit = data.get("commit", {})
+    content_meta = data.get("content", {})
+    return {
+        "sha": commit.get("sha", ""),
+        "html_url": content_meta.get("html_url", ""),
+        "commit_url": commit.get("html_url", ""),
+    }
+
 class Msg(BaseModel):
     role: str; content: str
 
@@ -269,6 +371,9 @@ class ChatBody(BaseModel):
     groq_model: Optional[str] = "llama-3.3-70b-versatile"
     hf_token: Optional[str] = ""
     hf_model: Optional[str] = "Qwen/Qwen2.5-Coder-32B-Instruct"
+    openai_compat_key: Optional[str] = ""
+    openai_compat_base_url: Optional[str] = "http://localhost:11434/v1"
+    openai_compat_model: Optional[str] = "llama3"
     agent: str = "code"
     messages: List[Msg]
     file_context: Optional[str] = ""
@@ -278,20 +383,35 @@ class ChatBody(BaseModel):
     rules: Optional[str] = ""
     instructions: Optional[str] = ""
     multi_agent: Optional[bool] = False
+    # Per-stage provider overrides for multi-agent (empty = use body.provider)
+    ma_plan_provider: Optional[str] = ""
+    ma_code_provider: Optional[str] = ""
+    ma_review_provider: Optional[str] = ""
 
-def get_runner(body: ChatBody) -> Callable:
+_PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom"}
+
+def get_runner(body: ChatBody, provider: str = "") -> Callable:
     """Return a thread-target callable bound to the chosen provider's run function.
 
     Args:
-        body: Validated chat request with provider selection and credentials.
+        body: Validated chat request carrying all credentials.
+        provider: Provider key override; falls back to body.provider when empty.
 
     Returns:
         Callable accepting (queue, event_loop, system_prompt, messages).
     """
-    if body.provider == "anthropic":
+    p = provider if provider else body.provider
+    if p == "anthropic":
         return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key)
-    elif body.provider == "groq":
+    elif p == "groq":
         return lambda q, loop, sys, msgs: _run_groq(q, loop, sys, msgs, body.groq_key, body.groq_model or "llama-3.3-70b-versatile")
+    elif p == "openai_compat":
+        return lambda q, loop, sys, msgs: _run_openai_compat(
+            q, loop, sys, msgs,
+            body.openai_compat_key or "",
+            body.openai_compat_base_url or "http://localhost:11434/v1",
+            body.openai_compat_model or "llama3",
+        )
     else:
         token = (body.hf_token or "").strip() or HF_TOKEN
         return lambda q, loop, sys, msgs: _run_hf(q, loop, sys, msgs, token, body.hf_model)
@@ -311,10 +431,17 @@ async def chat_stream(body: ChatBody):
         user_task = messages[-1]["content"] if messages else ""
         prior = messages[:-1]
 
-        yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': '🗺️ Planning'})}\n\n"
+        plan_prov   = body.ma_plan_provider   or body.provider
+        code_prov   = body.ma_code_provider   or body.provider
+        review_prov = body.ma_review_provider or body.provider
+        plan_runner   = get_runner(body, plan_prov)
+        code_runner   = get_runner(body, code_prov)
+        review_runner = get_runner(body, review_prov)
+
+        yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': f'🗺️ Planning · {_PROV_LABEL.get(plan_prov, plan_prov)}'})}\n\n"
         plan_text = ""
         plan_msgs = [{"role": "user", "content": f"Task: {user_task}\n\nCreate a clear step-by-step implementation plan. List files, key functions, and pitfalls. No code yet."}]
-        async for kind, val in stream_one(runner, MA_PLAN_SYSTEM, plan_msgs):
+        async for kind, val in stream_one(plan_runner, MA_PLAN_SYSTEM, plan_msgs):
             if kind == "text":
                 plan_text += val
                 yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
@@ -322,11 +449,11 @@ async def chat_stream(body: ChatBody):
                 yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
                 return
 
-        yield f"data: {json.dumps({'t': 'step', 'v': 'code', 'label': '⚙️ Implementing'})}\n\n"
+        yield f"data: {json.dumps({'t': 'step', 'v': 'code', 'label': f'⚙️ Implementing · {_PROV_LABEL.get(code_prov, code_prov)}'})}\n\n"
         code_text = ""
         code_system = build_system(body)
         code_msgs = prior + [{"role": "user", "content": f"{user_task}\n\n## Plan:\n{plan_text}"}]
-        async for kind, val in stream_one(runner, code_system, code_msgs):
+        async for kind, val in stream_one(code_runner, code_system, code_msgs):
             if kind == "text":
                 code_text += val
                 yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
@@ -334,9 +461,9 @@ async def chat_stream(body: ChatBody):
                 yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
                 return
 
-        yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': '🔍 Reviewing'})}\n\n"
+        yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': f'🔍 Reviewing · {_PROV_LABEL.get(review_prov, review_prov)}'})}\n\n"
         review_msgs = [{"role": "user", "content": f"Review this implementation for bugs, security issues, missing error handling, and quality:\n\n{code_text}"}]
-        async for kind, val in stream_one(runner, MA_REVIEW_SYSTEM, review_msgs):
+        async for kind, val in stream_one(review_runner, MA_REVIEW_SYSTEM, review_msgs):
             if kind == "text":
                 yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
             elif kind == "error":

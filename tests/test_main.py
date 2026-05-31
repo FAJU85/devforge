@@ -38,6 +38,9 @@ def _body(**kwargs):
         groq_model="llama-3.3-70b-versatile",
         hf_token="",
         hf_model="Qwen/Qwen2.5-Coder-32B-Instruct",
+        openai_compat_key="",
+        openai_compat_base_url="http://localhost:11434/v1",
+        openai_compat_model="llama3",
         agent="code",
         messages=[],
         file_context="",
@@ -810,3 +813,305 @@ class TestStreamOne:
 
         results = asyncio.get_event_loop().run_until_complete(run())
         assert results == [("error", "boom")]
+
+
+# ---------------------------------------------------------------------------
+# _run_openai_compat
+# ---------------------------------------------------------------------------
+
+class TestRunOpenAiCompat:
+    def test_puts_text_and_done_on_success(self):
+        chunk_data = json.dumps({"choices": [{"delta": {"content": "hello"}}]})
+        mock_line = f"data: {chunk_data}".encode()
+        done_line = b"data: [DONE]"
+
+        mock_response = MagicMock()
+        mock_response.ok = True
+        mock_response.iter_lines.return_value = iter([mock_line, done_line])
+
+        with patch("main.requests.post", return_value=mock_response):
+            items = _run_runner_sync(
+                main._run_openai_compat,
+                "sys", [{"role": "user", "content": "hi"}],
+                "api_key", "http://localhost:11434/v1", "llama3",
+            )
+
+        kinds = [k for k, _ in items]
+        assert "text" in kinds
+        assert "done" in kinds
+
+    def test_omits_auth_header_when_no_key(self):
+        captured = {}
+
+        def capture_post(url, headers, **kwargs):
+            captured["headers"] = headers
+            mock = MagicMock()
+            mock.ok = False
+            mock.status_code = 200
+            mock.text = "x"
+            return mock
+
+        with patch("main.requests.post", side_effect=capture_post):
+            _run_runner_sync(
+                main._run_openai_compat,
+                "sys", [], "", "http://localhost:11434/v1", "llama3",
+            )
+
+        assert "Authorization" not in captured.get("headers", {})
+
+    def test_includes_auth_header_when_key_provided(self):
+        captured = {}
+
+        def capture_post(url, headers, **kwargs):
+            captured["headers"] = headers
+            mock = MagicMock()
+            mock.ok = False
+            mock.status_code = 200
+            mock.text = "x"
+            return mock
+
+        with patch("main.requests.post", side_effect=capture_post):
+            _run_runner_sync(
+                main._run_openai_compat,
+                "sys", [], "my-secret-key", "http://localhost:11434/v1", "llama3",
+            )
+
+        assert captured["headers"].get("Authorization") == "Bearer my-secret-key"
+
+    def test_uses_provided_base_url(self):
+        captured = {}
+
+        def capture_post(url, **kwargs):
+            captured["url"] = url
+            mock = MagicMock()
+            mock.ok = True
+            mock.iter_lines.return_value = iter([b"data: [DONE]"])
+            return mock
+
+        with patch("main.requests.post", side_effect=capture_post):
+            _run_runner_sync(
+                main._run_openai_compat,
+                "sys", [], "", "https://openrouter.ai/api/v1", "mistral-7b",
+            )
+
+        assert captured["url"] == "https://openrouter.ai/api/v1/chat/completions"
+
+    def test_strips_trailing_slash_from_base_url(self):
+        captured = {}
+
+        def capture_post(url, **kwargs):
+            captured["url"] = url
+            mock = MagicMock()
+            mock.ok = True
+            mock.iter_lines.return_value = iter([b"data: [DONE]"])
+            return mock
+
+        with patch("main.requests.post", side_effect=capture_post):
+            _run_runner_sync(
+                main._run_openai_compat,
+                "sys", [], "", "http://localhost:11434/v1/", "llama3",
+            )
+
+        assert captured["url"] == "http://localhost:11434/v1/chat/completions"
+
+    def test_puts_error_on_bad_http_status(self):
+        mock_response = MagicMock()
+        mock_response.ok = False
+        mock_response.status_code = 503
+        mock_response.text = "Service Unavailable"
+
+        with patch("main.requests.post", return_value=mock_response):
+            items = _run_runner_sync(
+                main._run_openai_compat,
+                "sys", [], "", "http://localhost:11434/v1", "llama3",
+            )
+
+        kinds = [k for k, _ in items]
+        assert "error" in kinds
+
+    def test_puts_error_on_network_exception(self):
+        with patch("main.requests.post", side_effect=ConnectionError("refused")):
+            items = _run_runner_sync(
+                main._run_openai_compat,
+                "sys", [], "", "http://localhost:11434/v1", "llama3",
+            )
+
+        kinds = [k for k, _ in items]
+        assert "error" in kinds
+
+
+# ---------------------------------------------------------------------------
+# repo_write endpoint
+# ---------------------------------------------------------------------------
+
+class TestRepoWrite:
+    def test_creates_new_file_when_not_found(self):
+        """GET returns 404 (no SHA) → PUT creates the file."""
+        get_resp = MagicMock(); get_resp.ok = False
+        put_resp = MagicMock(); put_resp.ok = True
+        put_resp.json.return_value = {
+            "commit": {"sha": "abc123", "html_url": "https://github.com/owner/repo/commit/abc123"},
+            "content": {"html_url": "https://github.com/owner/repo/blob/main/src/f.py"},
+        }
+        with patch("main.requests.get", return_value=get_resp), \
+             patch("main.requests.put", return_value=put_resp):
+            resp = client.post("/api/repo/write", json={
+                "token": "t", "owner": "FAJU85", "repo": "devforge",
+                "path": "src/f.py", "content": "print('hi')",
+                "message": "Add f.py", "branch": "main",
+            })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["sha"] == "abc123"
+        assert "commit" in data["commit_url"]
+
+    def test_updates_existing_file_with_sha(self):
+        """GET returns 200 with SHA → PUT includes sha in payload."""
+        get_resp = MagicMock(); get_resp.ok = True
+        get_resp.json.return_value = {"sha": "existingsha"}
+        put_resp = MagicMock(); put_resp.ok = True
+        put_resp.json.return_value = {
+            "commit": {"sha": "newsha", "html_url": "https://github.com/owner/repo/commit/newsha"},
+            "content": {"html_url": "https://github.com/owner/repo/blob/main/src/f.py"},
+        }
+        captured = {}
+        def capture_put(url, headers, json, **kwargs):
+            captured["payload"] = json
+            return put_resp
+        with patch("main.requests.get", return_value=get_resp), \
+             patch("main.requests.put", side_effect=capture_put):
+            resp = client.post("/api/repo/write", json={
+                "token": "t", "owner": "FAJU85", "repo": "devforge",
+                "path": "src/f.py", "content": "print('updated')",
+                "message": "Update f.py", "branch": "main",
+            })
+        assert resp.status_code == 200
+        assert captured["payload"]["sha"] == "existingsha"
+
+    def test_returns_400_on_write_failure(self):
+        get_resp = MagicMock(); get_resp.ok = False
+        put_resp = MagicMock(); put_resp.ok = False
+        put_resp.json.return_value = {"message": "Repository not found"}
+        with patch("main.requests.get", return_value=get_resp), \
+             patch("main.requests.put", return_value=put_resp):
+            resp = client.post("/api/repo/write", json={
+                "token": "bad", "owner": "FAJU85", "repo": "devforge",
+                "path": "f.py", "content": "x", "message": "m", "branch": "main",
+            })
+        assert resp.status_code == 400
+        assert "Repository not found" in resp.json()["error"]
+
+    def test_content_is_base64_encoded_in_put_payload(self):
+        import base64 as b64
+        get_resp = MagicMock(); get_resp.ok = False
+        put_resp = MagicMock(); put_resp.ok = True
+        put_resp.json.return_value = {"commit": {"sha": "", "html_url": ""}, "content": {"html_url": ""}}
+        captured = {}
+        def capture_put(url, headers, json, **kwargs):
+            captured["payload"] = json
+            return put_resp
+        with patch("main.requests.get", return_value=get_resp), \
+             patch("main.requests.put", side_effect=capture_put):
+            client.post("/api/repo/write", json={
+                "token": "t", "owner": "o", "repo": "r",
+                "path": "f.py", "content": "hello world",
+                "message": "m", "branch": "main",
+            })
+        decoded = b64.b64decode(captured["payload"]["content"]).decode()
+        assert decoded == "hello world"
+
+
+# ---------------------------------------------------------------------------
+# get_runner: openai_compat provider (new branch)
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# get_runner: provider override (cross-provider multi-agent)
+# ---------------------------------------------------------------------------
+
+class TestGetRunnerProviderOverride:
+    def test_override_selects_groq_runner_regardless_of_body_provider(self):
+        body = _body(provider="anthropic", groq_key="k")
+        runner = main.get_runner(body, provider="groq")
+        assert callable(runner)
+
+    def test_empty_override_falls_back_to_body_provider(self):
+        body = _body(provider="groq", groq_key="k")
+        runner = main.get_runner(body, provider="")
+        assert callable(runner)
+
+    def test_override_anthropic_uses_anthropic_key_from_body(self):
+        body = _body(provider="groq", anthropic_key="sk-ant-test")
+        runner = main.get_runner(body, provider="anthropic")
+        assert callable(runner)
+
+
+# ---------------------------------------------------------------------------
+# multi-agent stream: per-stage providers
+# ---------------------------------------------------------------------------
+
+class TestMultiAgentPerStageProviders:
+    def test_multi_agent_stream_includes_provider_label_in_step_events(self):
+        call_count = 0
+
+        async def mock_stream(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            yield "text", f"stage_{call_count}"
+
+        with patch("main.stream_one", side_effect=mock_stream):
+            resp = client.post("/api/chat/stream", json={
+                "provider": "anthropic",
+                "anthropic_key": "k",
+                "messages": [{"role": "user", "content": "build it"}],
+                "multi_agent": True,
+                "ma_plan_provider": "groq",
+                "ma_code_provider": "anthropic",
+                "ma_review_provider": "hf",
+            })
+
+        assert resp.status_code == 200
+        body = resp.text
+        assert "Groq" in body
+        assert "Claude" in body
+        assert "HF" in body
+
+    def test_empty_stage_provider_falls_back_to_main_provider(self):
+        async def mock_stream(*_args, **_kwargs):
+            yield "text", "ok"
+
+        with patch("main.stream_one", side_effect=mock_stream):
+            resp = client.post("/api/chat/stream", json={
+                "provider": "groq",
+                "groq_key": "k",
+                "messages": [{"role": "user", "content": "task"}],
+                "multi_agent": True,
+                "ma_plan_provider": "",
+                "ma_code_provider": "",
+                "ma_review_provider": "",
+            })
+
+        assert resp.status_code == 200
+        assert "Groq" in resp.text
+
+
+class TestGetRunnerOpenAiCompat:
+    def test_openai_compat_provider_returns_callable(self):
+        body = _body(
+            provider="openai_compat",
+            openai_compat_key="sk-test",
+            openai_compat_base_url="http://localhost:11434/v1",
+            openai_compat_model="llama3",
+        )
+        runner = main.get_runner(body)
+        assert callable(runner)
+
+    def test_openai_compat_uses_default_url_when_empty(self):
+        body = _body(
+            provider="openai_compat",
+            openai_compat_key="",
+            openai_compat_base_url="",
+            openai_compat_model="",
+        )
+        runner = main.get_runner(body)
+        assert callable(runner)
