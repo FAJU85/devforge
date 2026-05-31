@@ -60,13 +60,20 @@ devforge/
 
 ## Cumulative Scope Ledger
 ```
-totalCyclesCompleted: 1
+totalCyclesCompleted: 2
 totalFilesCreated: 3   (tests/__init__.py, tests/test_main.py, .gitignore)
-totalFilesMutated: 3   (main.py, requirements.txt, static/index.html)
-totalPackagesAdded: 0  (pip-compile resolved — no new direct deps added)
+totalFilesMutated: 4   (main.py, requirements.txt, static/index.html, tests/test_main.py)
+totalPackagesAdded: 0
 scopeFreeze: false
 conservativeMode: false
 ```
+
+## Cycle 2 Summary (2026-05-31) — SESSION_APPROVED
+| Area | Change |
+|---|---|
+| Backend | `_run_openai_compat()` + `ChatBody` fields + `get_runner` routing |
+| Frontend | Custom provider button, custom endpoint panel, provider/badge/enhance/send updated |
+| Tests | New tests covering custom endpoint paths |
 
 ## Cycle 1 Summary (2026-05-31) — SESSION_APPROVED
 | Priority | Fix | Result |
@@ -79,9 +86,9 @@ conservativeMode: false
 | LOW | `sessionStorage` → `localStorage` (5 occurrences) | ✓ |
 
 ## Active Canvas
-> Canvas ID: CANVAS-DF-2026-001 — **SESSION_APPROVED** (2026-05-31)
+> Canvas ID: CANVAS-DF-2026-002 — **SESSION_APPROVED** (2026-05-31)
 
 ## Git State
 - Branch: claude/exciting-galileo-7UDWc
-- Last commit: 70946dc — Add .claude/MEMORY.md project orchestrator memory
+- Last commit: 61ff041 — Update MEMORY.md: reflect Cycle 2 feature additions
 - Remote: origin/claude/exciting-galileo-7UDWc ✓ tracked
