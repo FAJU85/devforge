@@ -67,6 +67,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
 .tfile{display:flex;align-items:center;gap:7px;padding:3px 10px 3px 16px;cursor:pointer;font-size:12px;color:var(--muted);border-left:2px solid transparent;transition:all .1s;font-family:'JetBrains Mono',monospace;user-select:none}
 .tfile:hover{background:var(--hover);color:var(--text)}.tfile.sel{color:var(--accent);background:var(--accent-dim);border-left-color:var(--accent2)}
 .tfile input[type=checkbox]{width:12px;height:12px;accent-color:var(--accent2);flex-shrink:0}
+.peek-btn{background:none;border:none;cursor:pointer;opacity:0;font-size:11px;padding:0 2px;flex-shrink:0;transition:opacity .1s;line-height:1}
+.tfile:hover .peek-btn{opacity:.6}.peek-btn:hover{opacity:1!important}
 .tfolder{user-select:none}
 .tfolder-h{display:flex;align-items:center;gap:7px;padding:3px 10px 3px 14px;cursor:pointer;color:var(--muted2);font-size:12px;transition:background .1s}
 .tfolder-h:hover{background:var(--hover);color:var(--muted)}
@@ -595,6 +597,19 @@ pre::-webkit-scrollbar{height:4px}
   </div>
 </div>
 
+<!-- File peek modal -->
+<div class="modal-overlay" id="peek-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:700px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <span id="peek-icon">📄</span><span id="peek-path" style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></span>
+      <span id="peek-size" style="font-size:11px;color:var(--muted);flex-shrink:0"></span>
+      <button id="peek-add-btn" onclick="peekAddToCtx()" style="background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent2);cursor:pointer;border-radius:6px;padding:4px 10px;font-size:11px;font-family:inherit;flex-shrink:0">+ Add to context</button>
+      <button onclick="$('peek-modal').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0 2px;flex-shrink:0">✕</button>
+    </div>
+    <pre id="peek-body" style="margin:0;padding:14px 16px;overflow:auto;max-height:65vh;font-size:12px;font-family:'JetBrains Mono',monospace;line-height:1.6;color:var(--text);background:var(--code-bg)"></pre>
+  </div>
+</div>
+
 <script>
 const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),fileSizes:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',anthropicModel:'claude-sonnet-4-6',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[],promptHistory:[],histIdx:-1,_draftText:'',_budgetWarned:false,tabs:[],activeTabId:null};
 const $=id=>document.getElementById(id);
@@ -757,7 +772,7 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});}
+  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key==='Backspace'){e.preventDefault();if($('ti'))$('ti').value='';}
   if(e.target?.id==='ti'&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey){
@@ -897,9 +912,40 @@ function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerC
 async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};S.tabs=[];S.activeTabId=null;$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('clear-btn').style.display='none';updCtx();$('file-tree').innerHTML='';$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadBranches();loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='block';updHint();}
 function buildTree(files){const folders={};const root=[];for(const f of files){const p=f.path.split('/');if(p.length===1)root.push(f);else{if(!folders[p[0]])folders[p[0]]=[];folders[p[0]].push(f);}}let h='';for(const f of root)h+=tfn(f);for(const[k,v]of Object.entries(folders))h+=tfd(k,v);$('file-tree').innerHTML=h;}
 function tfd(name,files){const subs={};const direct=[];for(const f of files){const rest=f.path.split('/').slice(1).join('/');const p=rest.split('/');if(p.length===1)direct.push(f);else{const k=p[0];if(!subs[k])subs[k]=[];subs[k].push(f);}}let inner='';for(const[k,v]of Object.entries(subs))inner+=tfd(name+'/'+k,v);for(const f of direct)inner+=tfn(f);return`<div class="tfolder"><div class="tfolder-h" onclick="this.parentElement.classList.toggle('open')"><span class="tarr">▶</span><span>📁</span><span style="font-family:monospace;font-size:12px">${name.split('/').pop()}</span></div><div class="tfolder-c">${inner}</div></div>`;}
-function tfn(f){const sel=S.selFiles.has(f.path);const safe=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");const sz=f.size||0;const tok=tokEst(sz);const tc=sz?tokCls(tok):'';const tokHtml=sz?`<span class="tok-badge ${tc}">${tokFmt(tok)}</span>`:'';return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" onclick="togF('${safe}',${sz})"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF('${safe}',${sz})"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.path.split('/').pop()}</span>${tokHtml}</div>`;}
+function tfn(f){const sel=S.selFiles.has(f.path);const safe=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");const sz=f.size||0;const tok=tokEst(sz);const tc=sz?tokCls(tok):'';const tokHtml=sz?`<span class="tok-badge ${tc}">${tokFmt(tok)}</span>`:'';return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" onclick="togF('${safe}',${sz})"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF('${safe}',${sz})"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${f.path.split('/').pop()}</span>${tokHtml}<button class="peek-btn" onclick="event.stopPropagation();peekFile('${safe}',${sz})" title="Preview file">👁</button></div>`;}
 function tfid(p){return'tf-'+btoa(unescape(encodeURIComponent(p))).replace(/[+=\/]/g,'');}
 async function togF(path,size=0){if(S.selFiles.has(path)){S.selFiles.delete(path);S.fileSizes.delete(path);updTF(path);updCtx();return;}if(S.selFiles.size+S.localFiles.size>=8){toast('Max 8 files');return;}const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});if(d.error){toast(d.error,true);return;}S.selFiles.set(path,d.content);S.fileSizes.set(path,size||d.content.length);updTF(path);updCtx();}
+
+// ── File peek modal ───────────────────────────────────────────────────────────
+let _peekPath='',_peekSize=0;
+async function peekFile(path,size=0){
+  if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}
+  _peekPath=path;_peekSize=size;
+  $('peek-path').textContent=path;$('peek-icon').textContent=ficon(path);
+  $('peek-body').textContent='Loading…';$('peek-size').textContent='';
+  $('peek-modal').style.display='flex';
+  // Update add-to-context button label
+  const inCtx=S.selFiles.has(path);$('peek-add-btn').textContent=inCtx?'✓ In context':'+ Add to context';
+  $('peek-add-btn').disabled=inCtx;
+  // Fetch if not already in context
+  let content=S.selFiles.get(path)||null;
+  if(!content){
+    const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});
+    if(d.error){$('peek-body').textContent='Error: '+d.error;return;}
+    content=d.content;
+  }
+  $('peek-body').textContent=content;
+  const bytes=content.length;const tok=tokEst(bytes);
+  $('peek-size').textContent=`${tokFmt(tok)} tokens · ${(bytes/1024).toFixed(1)}KB`;
+}
+function peekAddToCtx(){
+  if(!_peekPath||S.selFiles.has(_peekPath))return;
+  const content=$('peek-body').textContent;
+  S.selFiles.set(_peekPath,content);S.fileSizes.set(_peekPath,_peekSize||content.length);
+  updTF(_peekPath);updCtx();
+  $('peek-add-btn').textContent='✓ In context';$('peek-add-btn').disabled=true;
+  toast('Added to context');
+}
 function updTF(path){const el=document.getElementById(tfid(path));if(!el)return;const sel=S.selFiles.has(path);el.classList.toggle('sel',sel);const cb=el.querySelector('input');if(cb)cb.checked=sel;}
 function updCtx(){
   const n=S.selFiles.size+S.localFiles.size;
@@ -1040,7 +1086,11 @@ async function send(){
   const streamId='sb'+Date.now()+Math.random().toString(36).slice(2);
   let reply='';let gotUsage=false;
   try{
-    const histMsgs=S.memory?[...S.memory.msgs,...S.msgs.slice(-8)]:S.msgs.slice(-10);
+    let histMsgs=S.memory?[...S.memory.msgs,...S.msgs.slice(-8)]:S.msgs.slice(-10);
+    // Smart trim: if total estimated tokens > 90K, drop oldest messages
+    const CTX_LIMIT=90000;let totalTok=tokEst(bCtx().length);histMsgs.forEach(m=>totalTok+=tokEst(m.content.length));
+    let trimCount=0;while(totalTok>CTX_LIMIT&&histMsgs.length>1){const dropped=histMsgs.shift();totalTok-=tokEst(dropped.content.length);trimCount++;}
+    if(trimCount>0)toast(`Context trimmed: removed ${trimCount} old message${trimCount>1?'s':''} to fit limit`);
     const includeTest=$('ma-test-stage')?.checked||false;
     const thinkToggle=$('think-toggle');const thinkBudget=$('think-budget');
     const thinkingMode=!!(thinkToggle&&thinkToggle.checked&&(S.anthropicModel||'').includes('opus'));
