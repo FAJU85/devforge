@@ -257,6 +257,16 @@ pre::-webkit-scrollbar{height:4px}
 .budget-bar{height:3px;background:var(--border2);border-radius:2px;overflow:hidden;margin-bottom:3px}
 .budget-fill{height:100%;border-radius:2px;transition:width .3s,background .3s;width:0%}
 .budget-lbl{font-size:10px;color:var(--muted);display:flex;justify-content:space-between}
+.tab-bar{border-bottom:1px solid var(--border2);background:var(--sidebar);padding:0 8px;display:none;align-items:flex-end;gap:2px;height:36px;flex-shrink:0;overflow-x:auto}
+.tabs-list{display:flex;align-items:flex-end;gap:2px;flex:1;overflow-x:auto}
+.tab-item{display:flex;align-items:center;gap:4px;padding:0 10px;height:30px;border:1px solid var(--border2);border-bottom:none;border-radius:8px 8px 0 0;background:var(--panel2);color:var(--muted);cursor:pointer;font-size:12px;white-space:nowrap;max-width:160px;transition:all .15s;user-select:none;flex-shrink:0}
+.tab-item.active{background:var(--bg);color:var(--text);border-color:var(--border);font-weight:500}
+.tab-item:not(.active):hover{background:var(--hover);color:var(--text)}
+.tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px}
+.tab-close{background:none;border:none;color:var(--muted2);cursor:pointer;padding:2px 0 2px 4px;font-size:13px;line-height:1;transition:color .15s;flex-shrink:0}
+.tab-close:hover{color:var(--red)}
+.tab-add{background:none;border:1px dashed var(--border2);border-radius:6px 6px 0 0;color:var(--muted);cursor:pointer;padding:0 10px;height:30px;font-size:18px;line-height:1;transition:all .15s;flex-shrink:0;margin-left:2px}
+.tab-add:hover{border-color:var(--accent2);color:var(--accent2)}
 .tool-item{display:flex;align-items:center;gap:6px;padding:5px 10px;border-bottom:1px solid var(--border2);font-size:11px}
 .tool-item:last-child{border-bottom:none}
 .tool-method{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--blue-dim);color:var(--blue);font-family:'JetBrains Mono',monospace;flex-shrink:0}
@@ -441,6 +451,10 @@ pre::-webkit-scrollbar{height:4px}
       <button class="export-btn" id="clear-btn" onclick="clearChat()" title="Clear conversation" style="display:none">🗑️ Clear</button>
     </div>
   </div>
+  <div id="tab-bar" class="tab-bar">
+    <div id="tabs-list" class="tabs-list"></div>
+    <button class="tab-add" onclick="newTab()" title="New conversation tab">+</button>
+  </div>
   <div class="msgs" id="msgs">
     <div class="empty" id="empty">
       <div class="empty-mark">⚡</div>
@@ -529,7 +543,7 @@ pre::-webkit-scrollbar{height:4px}
 </div>
 
 <script>
-const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),fileSizes:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[],promptHistory:[],histIdx:-1,_draftText:'',_budgetWarned:false};
+const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),fileSizes:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[],promptHistory:[],histIdx:-1,_draftText:'',_budgetWarned:false,tabs:[],activeTabId:null};
 const $=id=>document.getElementById(id);
 const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
 const get=p=>fetch(p).then(r=>r.json());
@@ -561,10 +575,99 @@ function cpMsg(btn){const body=btn.closest('.msg-inner').querySelector('.msg-bod
 function delMsg(wrapId,idx){const el=document.getElementById(wrapId);if(el)el.remove();if(idx>=0&&idx<S.msgs.length)S.msgs.splice(idx,1);autoSaveChat();}
 
 // ── Clear + auto-save conversation ────────────────────────────────────────────
-function clearChat(){if(!S.msgs.length)return;if(!confirm('Clear conversation?'))return;S.msgs=[];S.stats={tokens:0,messages:0};$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('clear-btn').style.display='none';autoSaveChat();toast('Conversation cleared');}
-function autoSaveChat(){if(!S.repo)return;try{const k=`df-chat-${S.repo.owner}/${S.repo.repo}`;if(S.msgs.length)localStorage.setItem(k,JSON.stringify({ts:Date.now(),msgs:S.msgs.slice(-40)}));else localStorage.removeItem(k);}catch(e){}}
-function restoreChat(){if(!S.repo)return;try{const k=`df-chat-${S.repo.owner}/${S.repo.repo}`;const raw=localStorage.getItem(k);if(!raw)return;const data=JSON.parse(raw);if(!data.msgs||!data.msgs.length)return;const age=Date.now()-data.ts;if(age>7*24*3600*1000)return;// don't restore chats older than 7 days
-S.msgs=data.msgs;$('empty').style.display='none';S.msgs.forEach((m,i)=>{const w=document.createElement('div');w.className='msg-wrap';const wid='mw'+Date.now()+i;w.id=wid;if(m.role==='user'){w.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av user">U</div><span class="msg-role">You</span><span class="msg-time">${new Date(data.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span><div class="msg-actions"><button class="msg-act" onclick="cpMsg(this)">copy</button><button class="msg-act del" onclick="delMsg('${wid}',${i})">✕</button></div></div><div class="msg-body">${esc(m.content)}</div></div>`;}else{w.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span><span class="msg-time"></span><div class="msg-actions"><button class="msg-act" onclick="cpMsg(this)">copy</button></div></div><div class="msg-body">${rmd(m.content)}</div></div>`;}$('msgs').appendChild(w);});$('export-btn').style.display='block';$('clear-btn').style.display='block';scrollB();toast(`Restored ${data.msgs.length} messages from previous session`);}catch(e){}}
+function clearChat(){if(!S.msgs.length)return;if(!confirm('Clear this conversation?'))return;S.msgs=[];S.stats={tokens:0,messages:0};clearChatDOM();autoSaveChat();toast('Conversation cleared');renderTabBar();}
+// ── Conversation Tabs ──────────────────────────────────────────────────────────
+function tabKey(){return S.repo?`df-tabs-${S.repo.owner}/${S.repo.repo}`:null;}
+function loadTabs(){
+  const k=tabKey();if(!k)return;
+  let migratedMsgs=[];
+  try{
+    const raw=localStorage.getItem(k);
+    if(raw){const data=JSON.parse(raw);if(data?.tabs?.length){S.tabs=data.tabs;S.activeTabId=data.activeTabId||S.tabs[0].id;if(!S.tabs.find(t=>t.id===S.activeTabId))S.activeTabId=S.tabs[0].id;}}
+    else{
+      const oldKey=`df-chat-${S.repo.owner}/${S.repo.repo}`;
+      const oldRaw=localStorage.getItem(oldKey);
+      if(oldRaw){try{const old=JSON.parse(oldRaw);if(old.msgs?.length)migratedMsgs=old.msgs;}catch(e){}}
+      const firstTab={id:'tab-1',name:'Chat',msgs:migratedMsgs,stats:{tokens:0,messages:0}};
+      S.tabs=[firstTab];S.activeTabId='tab-1';
+    }
+  }catch(e){const firstTab={id:'tab-1',name:'Chat',msgs:[],stats:{tokens:0,messages:0}};S.tabs=[firstTab];S.activeTabId='tab-1';}
+  if(!S.tabs.length){const t={id:'tab-1',name:'Chat',msgs:[],stats:{tokens:0,messages:0}};S.tabs=[t];S.activeTabId='tab-1';}
+  const tab=S.tabs.find(t=>t.id===S.activeTabId);
+  S.msgs=tab?[...tab.msgs]:[];S.stats=tab&&tab.stats?{...tab.stats}:{tokens:0,messages:0};
+  renderTabBar();
+  if(S.msgs.length){$('empty').style.display='none';restoreTabChat();if(migratedMsgs.length)toast(`Restored ${S.msgs.length} messages`);}
+}
+function saveTabs(){
+  const k=tabKey();if(!k)return;
+  const tab=S.tabs.find(t=>t.id===S.activeTabId);
+  if(tab){tab.msgs=[...S.msgs].slice(-40);tab.stats={...S.stats};}
+  try{localStorage.setItem(k,JSON.stringify({tabs:S.tabs,activeTabId:S.activeTabId,ts:Date.now()}));}catch(e){}
+}
+function renderTabBar(){
+  const bar=$('tab-bar');const list=$('tabs-list');if(!bar||!list)return;
+  if(!S.tabs.length||!S.repo){bar.style.display='none';return;}
+  bar.style.display='flex';
+  list.innerHTML=S.tabs.map(t=>{
+    const active=t.id===S.activeTabId;const n=t.name||'Chat';
+    const cnt=t.msgs?.length;
+    return`<div class="tab-item${active?' active':''}" onclick="switchTab('${t.id}')" ondblclick="promptRenameTab('${t.id}')" title="${n}${cnt?' · '+cnt+' messages':''}"><span class="tab-name">${esc(n)}</span>${S.tabs.length>1?`<button class="tab-close" onclick="closeTab('${t.id}',event)">✕</button>`:''}</div>`;
+  }).join('');
+}
+function newTab(){
+  if(S.tabs.length>=8){toast('Max 8 tabs',true);return;}
+  saveTabs();
+  const id='tab-'+Date.now();const n=S.tabs.length+1;
+  S.tabs.push({id,name:`Chat ${n}`,msgs:[],stats:{tokens:0,messages:0}});
+  S.activeTabId=id;S.msgs=[];S.stats={tokens:0,messages:0};
+  renderTabBar();clearChatDOM();saveTabs();toast(`New tab: Chat ${n}`);
+}
+function switchTab(id){
+  if(id===S.activeTabId)return;
+  saveTabs();S.activeTabId=id;
+  const tab=S.tabs.find(t=>t.id===id);
+  S.msgs=tab?[...tab.msgs]:[];S.stats=tab&&tab.stats?{...tab.stats}:{tokens:0,messages:0};
+  clearChatDOM();if(S.msgs.length){$('empty').style.display='none';restoreTabChat();}
+  renderTabBar();
+}
+function closeTab(id,evt){
+  evt.stopPropagation();if(S.tabs.length<=1)return;
+  const tab=S.tabs.find(t=>t.id===id);
+  if(tab?.msgs?.length>2&&!confirm(`Close "${tab.name}"?\n${tab.msgs.length} messages will be lost.`))return;
+  const idx=S.tabs.findIndex(t=>t.id===id);S.tabs.splice(idx,1);
+  if(S.activeTabId===id){
+    const ni=Math.max(0,idx-1);
+    S.activeTabId=S.tabs[ni]?.id||S.tabs[0]?.id;
+    const nt=S.tabs.find(t=>t.id===S.activeTabId);
+    S.msgs=nt?[...nt.msgs]:[];S.stats=nt&&nt.stats?{...nt.stats}:{tokens:0,messages:0};
+    clearChatDOM();if(S.msgs.length){$('empty').style.display='none';restoreTabChat();}
+  }
+  renderTabBar();saveTabs();
+}
+function promptRenameTab(id){
+  const tab=S.tabs.find(t=>t.id===id);if(!tab)return;
+  const name=prompt('Rename tab:',tab.name);
+  if(name&&name.trim()){tab.name=name.trim().slice(0,30);renderTabBar();saveTabs();}
+}
+function clearChatDOM(){
+  $('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';
+  $('stat-pill').style.display=S.stats.tokens>0?'flex':'none';
+  if(S.stats.tokens>0)$('stat-pill').textContent=tokFmt(S.stats.tokens)+' tok · '+S.stats.messages+' msg';
+  $('export-btn').style.display=S.msgs.length?'block':'none';$('clear-btn').style.display=S.msgs.length?'block':'none';
+}
+function restoreTabChat(){
+  S.msgs.forEach((m,i)=>{
+    const w=document.createElement('div');w.className='msg-wrap';const wid='mw'+Date.now()+i;w.id=wid;
+    if(m.role==='user'){w.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av user">U</div><span class="msg-role">You</span><div class="msg-actions"><button class="msg-act" onclick="cpMsg(this)">copy</button><button class="msg-act del" onclick="delMsg('${wid}',${i})">✕</button></div></div><div class="msg-body">${esc(m.content)}</div></div>`;}
+    else{w.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span><div class="msg-actions"><button class="msg-act" onclick="cpMsg(this)">copy</button></div></div><div class="msg-body">${rmd(m.content)}</div></div>`;}
+    $('msgs').appendChild(w);
+  });
+  $('export-btn').style.display='block';$('clear-btn').style.display='block';
+  if(S.stats.tokens>0){$('stat-pill').textContent=tokFmt(S.stats.tokens)+' tok · '+S.stats.messages+' msg';$('stat-pill').style.display='flex';}
+  scrollB();
+}
+function autoSaveChat(){if(!S.repo)return;saveTabs();}
+function restoreChat(){loadTabs();}
 
 // ── File tree search ──────────────────────────────────────────────────────────
 function filterTree(q){const tree=$('file-tree');if(!tree)return;const low=q.toLowerCase().trim();tree.querySelectorAll('.tfile').forEach(el=>{const name=el.querySelector('span:last-child')?.textContent?.toLowerCase()||'';el.style.display=(!low||name.includes(low))?'':'none';});tree.querySelectorAll('.tfolder').forEach(fd=>{const anyVis=Array.from(fd.querySelectorAll('.tfile')).some(e=>e.style.display!=='none');fd.style.display=anyVis?'':'none';if(low)fd.classList.add('open');});}
@@ -700,11 +803,11 @@ function showWritePanel(btn){
 async function commitFile(btn){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const panel=btn.closest('.write-panel');const cblock=panel.closest('.cblock');const path=panel.querySelector('.wp-path').value.trim();const branch=panel.querySelector('.wp-branch').value.trim();const message=panel.querySelector('.wp-msg').value.trim();const code=cblock.querySelector('code');if(!path||!message||!code)return;btn.textContent='⏳ Writing…';btn.disabled=true;const res=await post('/api/repo/write',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,content:code.textContent,message,branch});if(res.error){toast('Write failed: '+res.error,true);btn.textContent='📤 Commit';btn.disabled=false;return;}btn.textContent='✅ Written!';const defaultBranch=S.repo.branch||'main';if(res.commit_url){const a=document.createElement('a');a.href=res.commit_url;a.target='_blank';a.className='wp-link';a.textContent='View commit →';btn.after(a);}if(branch!==defaultBranch){const prBtn=document.createElement('button');prBtn.className='wp-commit';prBtn.style.cssText='background:var(--blue);margin-left:6px';prBtn.textContent='🔀 Create PR';prBtn.onclick=()=>openPRModal(branch);btn.after(prBtn);}toast(`✅ Committed to ${branch}: ${path}`);}
 async function startOAuth(){const d=await post('/api/github/auth/start',{});if(d.error){toast(d.error,true);return;}S.devCode=d.device_code;const uri=d.verification_uri||'https://github.com/login/device';$('oauth-box').style.display='block';$('oauth-box').innerHTML=`<div class="oauth-box"><div class="oauth-lbl">Enter this code at GitHub</div><div class="oauth-code">${d.user_code}</div><br><a href="${uri}" target="_blank" class="oauth-link"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Open github.com/login/device</a></div>`;$('oauth-check').style.display='block';}
 async function pollOAuth(){if(!S.devCode)return;const d=await post('/api/github/auth/poll',{device_code:S.devCode});if(d.access_token){S.ghToken=d.access_token;const u=await post('/api/github/user',{token:S.ghToken});S.ghUser=u;saveSession();$('gh-av').src=u.avatar_url||'';$('gh-nm').textContent=u.name||u.login;$('gh-lg').textContent='@'+u.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();}else if(d.error==='authorization_pending'){toast('Not authorized yet — approve on GitHub first');}else{toast('Error: '+(d.error_description||d.error||'Unknown'),true);}}
-function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('issue-btn').style.display='none';const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';updCtx();updHint();}
+function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.tabs=[];S.activeTabId=null;$('tab-bar').style.display='none';S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('issue-btn').style.display='none';const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';updCtx();updHint();}
 async function loadRepos(){$('repo-list').innerHTML='<div class="list-msg">Loading…</div>';const repos=await post('/api/github/repos',{token:S.ghToken});if(!Array.isArray(repos)){$('repo-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';return;}S.allRepos=repos;renderRepoList(repos);}
 function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo('${r.full_name.replace(/'/g,"\\'")}',this)"><div class="li-name">${r.name}</div><div class="li-sub"><span>${r.language||'—'}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
 function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerCase().includes(q.toLowerCase())));}
-async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('clear-btn').style.display='none';updCtx();$('file-tree').innerHTML='';$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';updHint();}
+async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};S.tabs=[];S.activeTabId=null;$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('clear-btn').style.display='none';updCtx();$('file-tree').innerHTML='';$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';updHint();}
 function buildTree(files){const folders={};const root=[];for(const f of files){const p=f.path.split('/');if(p.length===1)root.push(f);else{if(!folders[p[0]])folders[p[0]]=[];folders[p[0]].push(f);}}let h='';for(const f of root)h+=tfn(f);for(const[k,v]of Object.entries(folders))h+=tfd(k,v);$('file-tree').innerHTML=h;}
 function tfd(name,files){const subs={};const direct=[];for(const f of files){const rest=f.path.split('/').slice(1).join('/');const p=rest.split('/');if(p.length===1)direct.push(f);else{const k=p[0];if(!subs[k])subs[k]=[];subs[k].push(f);}}let inner='';for(const[k,v]of Object.entries(subs))inner+=tfd(name+'/'+k,v);for(const f of direct)inner+=tfn(f);return`<div class="tfolder"><div class="tfolder-h" onclick="this.parentElement.classList.toggle('open')"><span class="tarr">▶</span><span>📁</span><span style="font-family:monospace;font-size:12px">${name.split('/').pop()}</span></div><div class="tfolder-c">${inner}</div></div>`;}
 function tfn(f){const sel=S.selFiles.has(f.path);const safe=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");const sz=f.size||0;const tok=tokEst(sz);const tc=sz?tokCls(tok):'';const tokHtml=sz?`<span class="tok-badge ${tc}">${tokFmt(tok)}</span>`:'';return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" onclick="togF('${safe}',${sz})"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF('${safe}',${sz})"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.path.split('/').pop()}</span>${tokHtml}</div>`;}
@@ -796,7 +899,11 @@ async function send(){
       const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
       while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='text'){reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='usage'){gotUsage=true;addTokens('',ev.v.input+ev.v.output);}else if(ev.t==='tool_call'){insertToolCallCard(ev.v);}else if(ev.t==='tool_result'){updateToolResultCard(ev.v);}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
     }
-    if(reply){S.msgs.push({role:'assistant',content:reply});if(!gotUsage)addTokens(reply);saveMemory();autoSaveChat();$('export-btn').style.display='block';$('clear-btn').style.display='block';if(S.repo&&S.ghToken)$('issue-btn').style.display='block';}
+    if(reply){S.msgs.push({role:'assistant',content:reply});if(!gotUsage)addTokens(reply);
+      // Auto-name the tab from first user message
+      const tab=S.tabs.find(t=>t.id===S.activeTabId);
+      if(tab&&tab.name==='Chat'&&S.msgs.length===2){const first=S.msgs[0].content;tab.name=first.slice(0,28)+(first.length>28?'…':'');renderTabBar();}
+      saveMemory();autoSaveChat();$('export-btn').style.display='block';$('clear-btn').style.display='block';if(S.repo&&S.ghToken)$('issue-btn').style.display='block';}
     // Add copy action to the AI message we just rendered
     if(reply&&!multiAgent){const meta=tw.querySelector('.msg-meta');if(meta&&!meta.querySelector('.msg-actions')){const acts=document.createElement('div');acts.className='msg-actions';acts.innerHTML='<button class="msg-act" onclick="cpMsg(this)">copy</button>';meta.appendChild(acts);}}
   }catch(e){tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${e.message}</span></div></div>`;}
