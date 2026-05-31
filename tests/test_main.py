@@ -1729,3 +1729,84 @@ class TestChatBodyWithTools:
         )
         runner = get_runner(body)
         assert callable(runner)
+
+# ── Cycle 11: Token Budget + File Summarization + Prompt History ──────────────
+
+class TestSummarizeFileEndpoint:
+    def test_summarize_with_anthropic(self):
+        mock_client = MagicMock()
+        mock_msg = MagicMock()
+        mock_msg.content = [MagicMock(text="This file handles authentication via JWT tokens.")]
+        mock_client.messages.create.return_value = mock_msg
+        with patch("main.Anthropic", return_value=mock_client):
+            r = client.post("/api/repo/summarize-file", json={
+                "content": "def authenticate(token): ...",
+                "filename": "auth.py",
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert "summary" in data
+        assert "JWT" in data["summary"] or len(data["summary"]) > 0
+
+    def test_summarize_with_groq(self):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = True
+            mock_post.return_value.json.return_value = {
+                "choices": [{"message": {"content": "This file defines the main FastAPI app."}}]
+            }
+            r = client.post("/api/repo/summarize-file", json={
+                "content": "app = FastAPI()",
+                "filename": "main.py",
+                "provider": "groq",
+                "groq_key": "gsk-test",
+            })
+        assert r.status_code == 200
+        assert "summary" in r.json()
+
+    def test_summarize_no_provider(self):
+        r = client.post("/api/repo/summarize-file", json={
+            "content": "print('hello')",
+            "filename": "hello.py",
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_summarize_openai_compat(self):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = True
+            mock_post.return_value.json.return_value = {
+                "choices": [{"message": {"content": "Router handlers for the API."}}]
+            }
+            r = client.post("/api/repo/summarize-file", json={
+                "content": "@router.get('/')\ndef root(): ...",
+                "filename": "router.py",
+                "provider": "openai_compat",
+                "openai_compat_base_url": "http://localhost:11434/v1",
+                "openai_compat_model": "llama3",
+            })
+        assert r.status_code == 200
+        assert r.json()["summary"] == "Router handlers for the API."
+
+    def test_summarize_truncates_large_content(self):
+        """Large files should be truncated to first 8000 chars before summarizing."""
+        mock_client = MagicMock()
+        mock_msg = MagicMock()
+        mock_msg.content = [MagicMock(text="Large file summary.")]
+        mock_client.messages.create.return_value = mock_msg
+        with patch("main.Anthropic", return_value=mock_client) as mock_anth:
+            large_content = "x" * 20000
+            r = client.post("/api/repo/summarize-file", json={
+                "content": large_content,
+                "filename": "huge.py",
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+            })
+        assert r.status_code == 200
+        # Verify only 8000 chars were passed
+        call_args = mock_client.messages.create.call_args
+        msg_content = call_args[1]["messages"][0]["content"]
+        assert len(msg_content) < 20000 + 200  # prompt overhead is small

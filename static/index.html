@@ -247,6 +247,16 @@ pre::-webkit-scrollbar{height:4px}
 .rs-lang{font-size:10px;padding:2px 7px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-weight:600}
 .rs-info{font-size:11px;color:var(--muted);line-height:1.5}
 .rs-badge{display:inline-block;background:var(--panel);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-size:10px;margin-right:4px}
+.tok-badge{font-size:9px;color:var(--muted2);font-family:'JetBrains Mono',monospace;margin-left:auto;flex-shrink:0;padding-left:4px;pointer-events:none}
+.tok-badge.med{color:#f59e0b}.tok-badge.high{color:var(--red)}
+.cpill-tok{font-size:9px;padding:1px 4px;border-radius:6px;background:var(--panel2);color:var(--muted2);margin:0 2px;font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.cpill-tok.med{color:#f59e0b}.cpill-tok.high{color:var(--red)}
+.sum-btn{background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;border-radius:4px;padding:0 5px;font-size:11px;line-height:1.5;transition:all .15s;flex-shrink:0}
+.sum-btn:hover{color:var(--accent2);border-color:var(--accent2)}
+.budget-wrap{padding:0 10px 6px;display:none}
+.budget-bar{height:3px;background:var(--border2);border-radius:2px;overflow:hidden;margin-bottom:3px}
+.budget-fill{height:100%;border-radius:2px;transition:width .3s,background .3s;width:0%}
+.budget-lbl{font-size:10px;color:var(--muted);display:flex;justify-content:space-between}
 .tool-item{display:flex;align-items:center;gap:6px;padding:5px 10px;border-bottom:1px solid var(--border2);font-size:11px}
 .tool-item:last-child{border-bottom:none}
 .tool-method{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--blue-dim);color:var(--blue);font-family:'JetBrains Mono',monospace;flex-shrink:0}
@@ -293,6 +303,10 @@ pre::-webkit-scrollbar{height:4px}
         <div class="rs-card" id="rs-card"><div class="rs-langs" id="rs-langs"></div><div class="rs-info" id="rs-info"></div></div>
         <div id="tree-search-wrap" style="display:none;padding:0 10px 4px;position:relative"><span style="position:absolute;left:18px;top:50%;transform:translateY(-50%);color:var(--muted2);font-size:13px;pointer-events:none">⌕</span><input class="search-in" id="tree-search" placeholder="Filter files…" oninput="filterTree(this.value)" style="padding-left:30px"></div>
         <div class="tree" id="file-tree"></div>
+        <div class="budget-wrap" id="budget-wrap">
+          <div class="budget-bar"><div class="budget-fill" id="budget-fill"></div></div>
+          <div class="budget-lbl"><span id="budget-tok">0 tokens</span><span style="color:var(--muted2)">100K ctx</span></div>
+        </div>
       </div>
     </div>
     <div class="s-sec">
@@ -515,7 +529,7 @@ pre::-webkit-scrollbar{height:4px}
 </div>
 
 <script>
-const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[]};
+const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),fileSizes:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[],promptHistory:[],histIdx:-1,_draftText:'',_budgetWarned:false};
 const $=id=>document.getElementById(id);
 const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
 const get=p=>fetch(p).then(r=>r.json());
@@ -524,6 +538,21 @@ function ar(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,
 function now(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
 function fext(p){const e=p.split('.');return e.length>1?e.pop().toLowerCase():'';}
 function ficon(p){const e=fext(p);const m={js:'🟨',jsx:'⚛️',ts:'🔷',tsx:'⚛️',py:'🐍',go:'🐹',rs:'🦀',md:'📝',json:'📋',css:'🎨',html:'🌐',sh:'🐚',yml:'⚙️',yaml:'⚙️',toml:'⚙️',lock:'🔒',sql:'🗄️'};return m[e]||'📄';}
+function tokEst(size){return Math.max(1,Math.round((size||0)/4));}
+function tokFmt(n){return n>=1000?(n/1000).toFixed(1)+'K':String(n);}
+function tokCls(n){return n>8000?'high':n>2000?'med':'';}
+function loadPromptHistory(){try{S.promptHistory=JSON.parse(localStorage.getItem('df-prompt-history')||'[]');}catch(e){S.promptHistory=[];}}
+function pushHistory(txt){if(!txt.trim()||S.promptHistory[0]===txt)return;S.promptHistory.unshift(txt);if(S.promptHistory.length>50)S.promptHistory.length=50;localStorage.setItem('df-prompt-history',JSON.stringify(S.promptHistory));}
+async function summarizeFile(path,evt){
+  evt.stopPropagation();
+  const content=S.selFiles.get(path);if(!content)return;
+  const btn=evt.target;btn.textContent='…';btn.disabled=true;
+  try{
+    const d=await post('/api/repo/summarize-file',{content,filename:path.split('/').pop(),provider:S.prov,anthropic_key:$('ak').value||'',groq_key:$('gk').value||'',groq_model:$('gm').value||'',openai_compat_key:$('oci-key').value||'',openai_compat_base_url:$('oci-url').value||'',openai_compat_model:($('oci-model')&&$('oci-model').value)||''});
+    if(d.error){toast(d.error,true);}else{S.selFiles.set(path,`[AI Summary of ${path.split('/').pop()}]\n${d.summary}`);S.fileSizes.set(path,d.summary.length);updCtx();toast(`Summarized ${path.split('/').pop()}`);}
+  }catch(e){toast('Summarize failed',true);}
+  btn.textContent='∑';btn.disabled=false;
+}
 function fmt(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(0)+'k';return n||0;}
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
 function scrollB(){const m=$('msgs');m.scrollTop=m.scrollHeight;}
@@ -575,6 +604,17 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key==='Backspace'){e.preventDefault();if($('ti'))$('ti').value='';}
+  if(e.target?.id==='ti'&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey){
+    if(e.key==='ArrowUp'&&!$('ti').value.includes('\n')){
+      e.preventDefault();
+      if(S.histIdx===-1)S._draftText=$('ti').value;
+      if(S.histIdx<S.promptHistory.length-1){S.histIdx++;$('ti').value=S.promptHistory[S.histIdx];ar($('ti'));}
+    }else if(e.key==='ArrowDown'){
+      e.preventDefault();
+      if(S.histIdx>0){S.histIdx--;$('ti').value=S.promptHistory[S.histIdx];ar($('ti'));}
+      else if(S.histIdx===0){S.histIdx=-1;$('ti').value=S._draftText||'';ar($('ti'));}
+    }
+  }
 });
 
 // ── Endpoint quick-fill ──────────────────────────────────────────────────────
@@ -660,18 +700,50 @@ function showWritePanel(btn){
 async function commitFile(btn){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const panel=btn.closest('.write-panel');const cblock=panel.closest('.cblock');const path=panel.querySelector('.wp-path').value.trim();const branch=panel.querySelector('.wp-branch').value.trim();const message=panel.querySelector('.wp-msg').value.trim();const code=cblock.querySelector('code');if(!path||!message||!code)return;btn.textContent='⏳ Writing…';btn.disabled=true;const res=await post('/api/repo/write',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,content:code.textContent,message,branch});if(res.error){toast('Write failed: '+res.error,true);btn.textContent='📤 Commit';btn.disabled=false;return;}btn.textContent='✅ Written!';const defaultBranch=S.repo.branch||'main';if(res.commit_url){const a=document.createElement('a');a.href=res.commit_url;a.target='_blank';a.className='wp-link';a.textContent='View commit →';btn.after(a);}if(branch!==defaultBranch){const prBtn=document.createElement('button');prBtn.className='wp-commit';prBtn.style.cssText='background:var(--blue);margin-left:6px';prBtn.textContent='🔀 Create PR';prBtn.onclick=()=>openPRModal(branch);btn.after(prBtn);}toast(`✅ Committed to ${branch}: ${path}`);}
 async function startOAuth(){const d=await post('/api/github/auth/start',{});if(d.error){toast(d.error,true);return;}S.devCode=d.device_code;const uri=d.verification_uri||'https://github.com/login/device';$('oauth-box').style.display='block';$('oauth-box').innerHTML=`<div class="oauth-box"><div class="oauth-lbl">Enter this code at GitHub</div><div class="oauth-code">${d.user_code}</div><br><a href="${uri}" target="_blank" class="oauth-link"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Open github.com/login/device</a></div>`;$('oauth-check').style.display='block';}
 async function pollOAuth(){if(!S.devCode)return;const d=await post('/api/github/auth/poll',{device_code:S.devCode});if(d.access_token){S.ghToken=d.access_token;const u=await post('/api/github/user',{token:S.ghToken});S.ghUser=u;saveSession();$('gh-av').src=u.avatar_url||'';$('gh-nm').textContent=u.name||u.login;$('gh-lg').textContent='@'+u.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();}else if(d.error==='authorization_pending'){toast('Not authorized yet — approve on GitHub first');}else{toast('Error: '+(d.error_description||d.error||'Unknown'),true);}}
-function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('issue-btn').style.display='none';const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';updCtx();updHint();}
+function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('issue-btn').style.display='none';const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';updCtx();updHint();}
 async function loadRepos(){$('repo-list').innerHTML='<div class="list-msg">Loading…</div>';const repos=await post('/api/github/repos',{token:S.ghToken});if(!Array.isArray(repos)){$('repo-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';return;}S.allRepos=repos;renderRepoList(repos);}
 function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo('${r.full_name.replace(/'/g,"\\'")}',this)"><div class="li-name">${r.name}</div><div class="li-sub"><span>${r.language||'—'}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
 function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerCase().includes(q.toLowerCase())));}
-async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('clear-btn').style.display='none';updCtx();$('file-tree').innerHTML='';$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';updHint();}
+async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('clear-btn').style.display='none';updCtx();$('file-tree').innerHTML='';$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';updHint();}
 function buildTree(files){const folders={};const root=[];for(const f of files){const p=f.path.split('/');if(p.length===1)root.push(f);else{if(!folders[p[0]])folders[p[0]]=[];folders[p[0]].push(f);}}let h='';for(const f of root)h+=tfn(f);for(const[k,v]of Object.entries(folders))h+=tfd(k,v);$('file-tree').innerHTML=h;}
 function tfd(name,files){const subs={};const direct=[];for(const f of files){const rest=f.path.split('/').slice(1).join('/');const p=rest.split('/');if(p.length===1)direct.push(f);else{const k=p[0];if(!subs[k])subs[k]=[];subs[k].push(f);}}let inner='';for(const[k,v]of Object.entries(subs))inner+=tfd(name+'/'+k,v);for(const f of direct)inner+=tfn(f);return`<div class="tfolder"><div class="tfolder-h" onclick="this.parentElement.classList.toggle('open')"><span class="tarr">▶</span><span>📁</span><span style="font-family:monospace;font-size:12px">${name.split('/').pop()}</span></div><div class="tfolder-c">${inner}</div></div>`;}
-function tfn(f){const sel=S.selFiles.has(f.path);const safe=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" onclick="togF('${safe}')"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF('${safe}')"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.path.split('/').pop()}</span></div>`;}
+function tfn(f){const sel=S.selFiles.has(f.path);const safe=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");const sz=f.size||0;const tok=tokEst(sz);const tc=sz?tokCls(tok):'';const tokHtml=sz?`<span class="tok-badge ${tc}">${tokFmt(tok)}</span>`:'';return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" onclick="togF('${safe}',${sz})"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF('${safe}',${sz})"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.path.split('/').pop()}</span>${tokHtml}</div>`;}
 function tfid(p){return'tf-'+btoa(unescape(encodeURIComponent(p))).replace(/[+=\/]/g,'');}
-async function togF(path){if(S.selFiles.has(path)){S.selFiles.delete(path);updTF(path);updCtx();return;}if(S.selFiles.size+S.localFiles.size>=8){toast('Max 8 files');return;}const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});if(d.error){toast(d.error,true);return;}S.selFiles.set(path,d.content);updTF(path);updCtx();}
+async function togF(path,size=0){if(S.selFiles.has(path)){S.selFiles.delete(path);S.fileSizes.delete(path);updTF(path);updCtx();return;}if(S.selFiles.size+S.localFiles.size>=8){toast('Max 8 files');return;}const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});if(d.error){toast(d.error,true);return;}S.selFiles.set(path,d.content);S.fileSizes.set(path,size||d.content.length);updTF(path);updCtx();}
 function updTF(path){const el=document.getElementById(tfid(path));if(!el)return;const sel=S.selFiles.has(path);el.classList.toggle('sel',sel);const cb=el.querySelector('input');if(cb)cb.checked=sel;}
-function updCtx(){const n=S.selFiles.size+S.localFiles.size;const cp=$('ctx-pill');cp.style.display=n?'block':'none';cp.textContent=n+' file'+(n!==1?'s':'');const strip=$('ctx-strip');strip.innerHTML='';for(const path of S.selFiles.keys()){const p=document.createElement('div');p.className='cpill';p.innerHTML=`${ficon(path)} ${path.split('/').pop()} <span style="margin-left:3px;opacity:.5">✕</span>`;p.onclick=()=>{S.selFiles.delete(path);updTF(path);updCtx();};strip.appendChild(p);}for(const name of S.localFiles.keys()){const p=document.createElement('div');p.className='cpill local';p.innerHTML=`📎 ${name} <span style="margin-left:3px;opacity:.5">✕</span>`;p.onclick=()=>{S.localFiles.delete(name);updCtx();};strip.appendChild(p);}updHint();}
+function updCtx(){
+  const n=S.selFiles.size+S.localFiles.size;
+  const cp=$('ctx-pill');cp.style.display=n?'block':'none';cp.textContent=n+' file'+(n!==1?'s':'');
+  const strip=$('ctx-strip');strip.innerHTML='';
+  let totalTok=0;
+  for(const [path] of S.selFiles){
+    const sz=S.fileSizes.get(path)||0;const tok=tokEst(sz);totalTok+=tok;const tc=tokCls(tok);
+    const canSum=tok>4000&&((S.prov==='anthropic'&&$('ak').value)||(S.prov==='groq'&&$('gk').value)||(S.prov==='openai_compat'&&$('oci-url')?.value));
+    const p=document.createElement('div');p.className='cpill';
+    const safePath=path.replace(/'/g,"\\'");
+    p.innerHTML=`${ficon(path)} ${path.split('/').pop()} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span>${canSum?`<button class="sum-btn" onclick="summarizeFile('${safePath}',event)" title="AI Summarize">∑</button>`:''} <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
+    p.onclick=(e)=>{if(e.target.tagName==='BUTTON'||e.target.tagName==='SPAN'&&e.target.style.cursor==='pointer')return;};
+    const rmSpan=p.querySelector('span[style*="cursor"]');if(rmSpan)rmSpan.onclick=()=>{S.selFiles.delete(path);S.fileSizes.delete(path);updTF(path);updCtx();};
+    strip.appendChild(p);
+  }
+  for(const [name,content] of S.localFiles){
+    const tok=tokEst(content.length);totalTok+=tok;const tc=tokCls(tok);
+    const p=document.createElement('div');p.className='cpill local';
+    p.innerHTML=`📎 ${name} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span> <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
+    const rmSpan=p.querySelector('span[style*="cursor"]');if(rmSpan)rmSpan.onclick=()=>{S.localFiles.delete(name);updCtx();};
+    strip.appendChild(p);
+  }
+  const bw=$('budget-wrap');
+  if(bw){
+    bw.style.display=n?'block':'none';
+    const fill=$('budget-fill');const tokLbl=$('budget-tok');
+    if(fill){const pct=Math.min(100,(totalTok/100000)*100);fill.style.width=pct+'%';fill.style.background=pct>80?'var(--red)':pct>50?'#f59e0b':'var(--accent2)';}
+    if(tokLbl)tokLbl.textContent=tokFmt(totalTok)+' tokens';
+  }
+  if(totalTok>80000&&n>0){if(!S._budgetWarned){S._budgetWarned=true;toast('⚠️ Context approaching 100K token limit — consider summarizing large files',true);}}
+  else{S._budgetWarned=false;}
+  updHint();
+}
 function toggleSkill(chip){const cb=chip.querySelector('input');setTimeout(()=>{chip.classList.toggle('checked',cb.checked);saveEnhance();},0);}
 function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='anthropic');$('pg').classList.toggle('on',p==='groq');$('ph').classList.toggle('on',p==='hf');$('po').classList.toggle('on',p==='openai_compat');$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
 function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';if(S.prov==='anthropic')$('model-pill').textContent='claude-sonnet-4';else if(S.prov==='groq')$('model-pill').textContent=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')$('model-pill').textContent=($('oci-model')&&$('oci-model').value)||'custom';else $('model-pill').textContent=S.hfModel.split('/').pop();}
@@ -687,6 +759,7 @@ function hk(e){if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();se
 function bCtx(){const p=[];for(const[k,v]of S.selFiles)p.push(`### \`${k}\`\n\`\`\`${fext(k)||'text'}\n${v.slice(0,5000)}\n\`\`\``);for(const[k,v]of S.localFiles)p.push(`### \`${k}\`\n\`\`\`${fext(k)||'text'}\n${v.slice(0,5000)}\n\`\`\``);return p.join('\n\n');}
 async function send(){
   const text=$('ti').value.trim();if(!text||S.streaming)return;
+  pushHistory(text);S.histIdx=-1;S._draftText='';
   if(S.prov==='anthropic'&&!$('ak').value.trim()){toast('Enter your Anthropic key in the sidebar',true);return;}
   if(S.prov==='groq'&&!$('gk').value.trim()){toast('Enter your Groq key in sidebar (free at console.groq.com)',true);return;}
   if(S.prov==='openai_compat'&&!$('oci-url').value.trim()){toast('Enter a base URL for your custom API endpoint',true);return;}
@@ -848,7 +921,7 @@ function quickScanRepo(files){
   $('rs-info').innerHTML=`${fw}<span style="color:var(--muted2);font-size:10px">${files.length} files · ~${sizeStr}</span>`;
 }
 
-(function init(){restoreEnhance();renderSavedPresets();loadTools();if(!restoreSession())expSidebar();})();
+(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();if(!restoreSession())expSidebar();})();
 </script>
 </body>
 </html>
