@@ -2047,3 +2047,142 @@ class TestRepoCommitsEndpoint:
         call_args = mock_get.call_args
         params = call_args[1].get("params", {})
         assert params.get("per_page", 0) <= 30
+
+
+class TestExtendedThinking:
+    def test_chat_body_accepts_thinking_fields(self):
+        from main import ChatBody
+        body = ChatBody(
+            provider="anthropic",
+            messages=[{"role": "user", "content": "hi"}],
+            thinking_mode=True,
+            thinking_budget=8000,
+        )
+        assert body.thinking_mode is True
+        assert body.thinking_budget == 8000
+
+    def test_chat_body_thinking_defaults(self):
+        from main import ChatBody
+        body = ChatBody(
+            provider="anthropic",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        assert body.thinking_mode is False
+        assert body.thinking_budget == 2000
+
+    def test_get_runner_routes_to_thinking_for_opus(self):
+        from main import ChatBody, get_runner, _run_anthropic_thinking
+        body = ChatBody(
+            provider="anthropic",
+            anthropic_key="sk-test",
+            anthropic_model="claude-opus-4-8",
+            thinking_mode=True,
+            thinking_budget=4000,
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        runner = get_runner(body)
+        # The runner closure should reference _run_anthropic_thinking
+        # We verify by calling it and checking the mock is for thinking
+        import threading, asyncio as _asyncio
+
+        mock_client = MagicMock()
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__enter__ = MagicMock(return_value=mock_stream_ctx)
+        mock_stream_ctx.__exit__ = MagicMock(return_value=False)
+        # Simulate thinking then text content_block_delta events
+        think_evt = MagicMock()
+        think_evt.type = 'content_block_delta'
+        think_evt.delta = MagicMock()
+        think_evt.delta.type = 'thinking_delta'
+        think_evt.delta.thinking = 'I am thinking'
+        text_evt = MagicMock()
+        text_evt.type = 'content_block_delta'
+        text_evt.delta = MagicMock()
+        text_evt.delta.type = 'text_delta'
+        text_evt.delta.text = 'Answer'
+        mock_stream_ctx.__iter__ = MagicMock(return_value=iter([think_evt, text_evt]))
+        mock_final = MagicMock()
+        mock_final.usage.input_tokens = 10
+        mock_final.usage.output_tokens = 5
+        mock_stream_ctx.get_final_message = MagicMock(return_value=mock_final)
+        mock_client.messages.stream.return_value = mock_stream_ctx
+
+        q = _asyncio.Queue()
+        loop = _asyncio.new_event_loop()
+
+        async def _collect():
+            with patch("main.Anthropic", return_value=mock_client):
+                t = threading.Thread(
+                    target=runner,
+                    args=(q, loop, "sys", [{"role": "user", "content": "hi"}]),
+                    daemon=True,
+                )
+                t.start()
+                collected = []
+                while True:
+                    kind, val = await q.get()
+                    collected.append((kind, val))
+                    if kind in ("done", "error"):
+                        break
+                return collected
+
+        results = loop.run_until_complete(_collect())
+        loop.close()
+
+        kinds = [k for k, _ in results]
+        assert "thinking" in kinds
+        assert "text" in kinds
+        # Verify thinking={"type":"enabled",...} was passed
+        call_kwargs = mock_client.messages.stream.call_args[1]
+        assert call_kwargs.get("thinking", {}).get("type") == "enabled"
+        assert call_kwargs.get("thinking", {}).get("budget_tokens") == 4000
+
+    def test_get_runner_does_not_use_thinking_for_sonnet(self):
+        from main import ChatBody, get_runner
+        body = ChatBody(
+            provider="anthropic",
+            anthropic_key="sk-test",
+            anthropic_model="claude-sonnet-4-6",
+            thinking_mode=True,  # ignored — not opus
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        runner = get_runner(body)
+        # Should be the plain anthropic runner (not thinking)
+        # Verify by calling: no 'thinking' kwarg should be passed to Anthropic
+        import threading, asyncio as _asyncio
+
+        mock_client = MagicMock()
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__enter__ = MagicMock(return_value=mock_stream_ctx)
+        mock_stream_ctx.__exit__ = MagicMock(return_value=False)
+        mock_stream_ctx.text_stream = iter(["Hi"])
+        mock_final = MagicMock()
+        mock_final.usage.input_tokens = 5
+        mock_final.usage.output_tokens = 2
+        mock_stream_ctx.get_final_message = MagicMock(return_value=mock_final)
+        mock_client.messages.stream.return_value = mock_stream_ctx
+
+        q = _asyncio.Queue()
+        loop = _asyncio.new_event_loop()
+
+        async def _collect():
+            with patch("main.Anthropic", return_value=mock_client):
+                t = threading.Thread(
+                    target=runner,
+                    args=(q, loop, "sys", [{"role": "user", "content": "hi"}]),
+                    daemon=True,
+                )
+                t.start()
+                collected = []
+                while True:
+                    kind, val = await q.get()
+                    collected.append((kind, val))
+                    if kind in ("done", "error"):
+                        break
+                return collected
+
+        results = loop.run_until_complete(_collect())
+        loop.close()
+
+        call_kwargs = mock_client.messages.stream.call_args[1]
+        assert "thinking" not in call_kwargs

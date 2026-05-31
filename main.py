@@ -78,6 +78,44 @@ def build_system(body: "ChatBody") -> str:
         base += f"\n\n---\n**Repository context:**\n{fc}"
     return base
 
+def _run_anthropic_thinking(q, loop, system, messages, api_key, model, thinking_budget):
+    """Run Anthropic with extended thinking enabled; emits ('thinking', text) chunks."""
+    try:
+        client = Anthropic(api_key=api_key)
+        actual_model = model or "claude-opus-4-8"
+        budget = max(1024, min(int(thinking_budget or 2000), 16000))
+        max_tokens = budget + 4096
+
+        with client.messages.stream(
+            model=actual_model,
+            max_tokens=max_tokens,
+            system=system,
+            messages=messages,
+            thinking={"type": "enabled", "budget_tokens": budget},
+        ) as stream:
+            for event in stream:
+                etype = getattr(event, 'type', None)
+                if etype == 'content_block_delta':
+                    delta = getattr(event, 'delta', None)
+                    dtype = getattr(delta, 'type', None)
+                    if dtype == 'thinking_delta':
+                        asyncio.run_coroutine_threadsafe(
+                            q.put(("thinking", getattr(delta, 'thinking', ''))), loop
+                        )
+                    elif dtype == 'text_delta':
+                        asyncio.run_coroutine_threadsafe(
+                            q.put(("text", getattr(delta, 'text', ''))), loop
+                        )
+            try:
+                msg = stream.get_final_message()
+                usage = {"input": msg.usage.input_tokens, "output": msg.usage.output_tokens}
+                asyncio.run_coroutine_threadsafe(q.put(("usage", usage)), loop)
+            except Exception:
+                pass
+        asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+    except Exception as e:
+        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+
 def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="claude-sonnet-4-6"):
     """Run Anthropic with native tool use, executing HTTP calls and looping until done."""
     try:
@@ -276,7 +314,7 @@ async def stream_one(runner, system: str, messages: list):
     while True:
         try:
             kind, val = await asyncio.wait_for(q.get(), timeout=120)
-            if kind in ("text", "usage", "tool_call", "tool_result"): yield kind, val
+            if kind in ("text", "usage", "tool_call", "tool_result", "thinking"): yield kind, val
             elif kind == "done": break
             else: yield "error", val; break
         except asyncio.TimeoutError:
@@ -855,6 +893,8 @@ class ChatBody(BaseModel):
     memory: Optional[str] = ""
     tools: Optional[List[ToolDef]] = []
     anthropic_model: Optional[str] = "claude-sonnet-4-6"
+    thinking_mode: Optional[bool] = False
+    thinking_budget: Optional[int] = 2000
 
 _PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom"}
 
@@ -872,8 +912,12 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
     if p == "anthropic":
         tools = getattr(body, 'tools', []) or []
         model = (getattr(body, 'anthropic_model', '') or 'claude-sonnet-4-6').strip() or 'claude-sonnet-4-6'
+        thinking = bool(getattr(body, 'thinking_mode', False)) and 'opus' in model
+        thinking_budget = int(getattr(body, 'thinking_budget', 2000) or 2000)
         if tools:
             return lambda q, loop, sys, msgs: _run_anthropic_with_tools(q, loop, sys, msgs, body.anthropic_key, tools, model)
+        if thinking:
+            return lambda q, loop, sys, msgs: _run_anthropic_thinking(q, loop, sys, msgs, body.anthropic_key, model, thinking_budget)
         return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key, model)
     elif p == "groq":
         return lambda q, loop, sys, msgs: _run_groq(q, loop, sys, msgs, body.groq_key, body.groq_model or "llama-3.3-70b-versatile")
