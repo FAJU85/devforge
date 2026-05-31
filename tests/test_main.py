@@ -941,6 +941,87 @@ class TestRunOpenAiCompat:
 
 
 # ---------------------------------------------------------------------------
+# repo_write endpoint
+# ---------------------------------------------------------------------------
+
+class TestRepoWrite:
+    def test_creates_new_file_when_not_found(self):
+        """GET returns 404 (no SHA) → PUT creates the file."""
+        get_resp = MagicMock(); get_resp.ok = False
+        put_resp = MagicMock(); put_resp.ok = True
+        put_resp.json.return_value = {
+            "commit": {"sha": "abc123", "html_url": "https://github.com/owner/repo/commit/abc123"},
+            "content": {"html_url": "https://github.com/owner/repo/blob/main/src/f.py"},
+        }
+        with patch("main.requests.get", return_value=get_resp), \
+             patch("main.requests.put", return_value=put_resp):
+            resp = client.post("/api/repo/write", json={
+                "token": "t", "owner": "FAJU85", "repo": "devforge",
+                "path": "src/f.py", "content": "print('hi')",
+                "message": "Add f.py", "branch": "main",
+            })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["sha"] == "abc123"
+        assert "commit" in data["commit_url"]
+
+    def test_updates_existing_file_with_sha(self):
+        """GET returns 200 with SHA → PUT includes sha in payload."""
+        get_resp = MagicMock(); get_resp.ok = True
+        get_resp.json.return_value = {"sha": "existingsha"}
+        put_resp = MagicMock(); put_resp.ok = True
+        put_resp.json.return_value = {
+            "commit": {"sha": "newsha", "html_url": "https://github.com/owner/repo/commit/newsha"},
+            "content": {"html_url": "https://github.com/owner/repo/blob/main/src/f.py"},
+        }
+        captured = {}
+        def capture_put(url, headers, json, **kwargs):
+            captured["payload"] = json
+            return put_resp
+        with patch("main.requests.get", return_value=get_resp), \
+             patch("main.requests.put", side_effect=capture_put):
+            resp = client.post("/api/repo/write", json={
+                "token": "t", "owner": "FAJU85", "repo": "devforge",
+                "path": "src/f.py", "content": "print('updated')",
+                "message": "Update f.py", "branch": "main",
+            })
+        assert resp.status_code == 200
+        assert captured["payload"]["sha"] == "existingsha"
+
+    def test_returns_400_on_write_failure(self):
+        get_resp = MagicMock(); get_resp.ok = False
+        put_resp = MagicMock(); put_resp.ok = False
+        put_resp.json.return_value = {"message": "Repository not found"}
+        with patch("main.requests.get", return_value=get_resp), \
+             patch("main.requests.put", return_value=put_resp):
+            resp = client.post("/api/repo/write", json={
+                "token": "bad", "owner": "FAJU85", "repo": "devforge",
+                "path": "f.py", "content": "x", "message": "m", "branch": "main",
+            })
+        assert resp.status_code == 400
+        assert "Repository not found" in resp.json()["error"]
+
+    def test_content_is_base64_encoded_in_put_payload(self):
+        import base64 as b64
+        get_resp = MagicMock(); get_resp.ok = False
+        put_resp = MagicMock(); put_resp.ok = True
+        put_resp.json.return_value = {"commit": {"sha": "", "html_url": ""}, "content": {"html_url": ""}}
+        captured = {}
+        def capture_put(url, headers, json, **kwargs):
+            captured["payload"] = json
+            return put_resp
+        with patch("main.requests.get", return_value=get_resp), \
+             patch("main.requests.put", side_effect=capture_put):
+            client.post("/api/repo/write", json={
+                "token": "t", "owner": "o", "repo": "r",
+                "path": "f.py", "content": "hello world",
+                "message": "m", "branch": "main",
+            })
+        decoded = b64.b64decode(captured["payload"]["content"]).decode()
+        assert decoded == "hello world"
+
+
+# ---------------------------------------------------------------------------
 # get_runner: openai_compat provider (new branch)
 # ---------------------------------------------------------------------------
 

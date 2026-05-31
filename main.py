@@ -310,6 +310,57 @@ async def repo_file(body: FileBody):
         return JSONResponse({"error": "Binary file"}, status_code=400)
     return {"path": body.path, "content": content}
 
+class WriteFileBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    path: str
+    content: str
+    message: str
+    branch: str
+
+@app.post("/api/repo/write")
+async def repo_write(body: WriteFileBody):
+    """Create or update a file in the repository via the GitHub Contents API."""
+    sha = None
+    existing = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{body.path}",
+        headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
+    )
+    if existing.ok:
+        try:
+            sha = existing.json().get("sha")
+        except (KeyError, json.JSONDecodeError):
+            pass
+
+    payload: dict = {
+        "message": body.message,
+        "content": base64.b64encode(body.content.encode("utf-8")).decode("utf-8"),
+        "branch": body.branch,
+    }
+    if sha:
+        payload["sha"] = sha
+
+    w = requests.put(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{body.path}",
+        headers=gh_hdrs(body.token), json=payload, timeout=15,
+    )
+    if not w.ok:
+        try:
+            err_msg = w.json().get("message", "Write failed")
+        except Exception:
+            err_msg = "Write failed"
+        return JSONResponse({"error": err_msg}, status_code=400)
+
+    data = w.json()
+    commit = data.get("commit", {})
+    content_meta = data.get("content", {})
+    return {
+        "sha": commit.get("sha", ""),
+        "html_url": content_meta.get("html_url", ""),
+        "commit_url": commit.get("html_url", ""),
+    }
+
 class Msg(BaseModel):
     role: str; content: str
 
