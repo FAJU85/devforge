@@ -2186,3 +2186,55 @@ class TestExtendedThinking:
 
         call_kwargs = mock_client.messages.stream.call_args[1]
         assert "thinking" not in call_kwargs
+
+
+class TestPromptEnhance:
+    def test_enhance_with_anthropic(self):
+        mock_client = MagicMock()
+        mock_msg = MagicMock()
+        mock_msg.content = [MagicMock(text="Write a Python function that validates email using regex, with unit tests.")]
+        mock_client.messages.create.return_value = mock_msg
+        with patch("main.Anthropic", return_value=mock_client):
+            r = client.post("/api/prompt/enhance", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "prompt": "validate email",
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert "enhanced" in data
+        assert len(data["enhanced"]) > 5
+
+    def test_enhance_with_groq(self):
+        import requests as _req
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.json.return_value = {
+            "choices": [{"message": {"content": "Validate user email addresses using a Groq-based prompt."}}]
+        }
+        with patch("requests.post", return_value=mock_resp):
+            r = client.post("/api/prompt/enhance", json={
+                "provider": "groq",
+                "groq_key": "gsk_test",
+                "prompt": "validate email",
+            })
+        assert r.status_code == 200
+        assert "enhanced" in r.json()
+
+    def test_enhance_empty_prompt_returns_400(self):
+        r = client.post("/api/prompt/enhance", json={
+            "provider": "anthropic",
+            "anthropic_key": "sk-test",
+            "prompt": "",
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_enhance_no_key_returns_400(self):
+        r = client.post("/api/prompt/enhance", json={
+            "provider": "hf",
+            "hf_token": "",
+            "prompt": "fix this bug",
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()

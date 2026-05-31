@@ -528,6 +528,7 @@ pre::-webkit-scrollbar{height:4px}
         <button class="attach-btn" id="suggest-btn" title="AI: suggest relevant files for your task" onclick="suggestFiles()" style="display:none;font-size:11px;gap:4px">🤔 Suggest</button>
         <span class="ihint" id="hint">Open sidebar to get started</span>
         <button class="send-btn" id="stop-btn" onclick="stopStream()" style="display:none;background:var(--red)">⏹ Stop</button>
+        <button class="send-btn" id="enhance-btn" onclick="enhancePrompt()" title="AI: improve your prompt" style="background:var(--purple);padding:7px 10px">✨</button>
         <button class="send-btn" id="send-btn" onclick="send()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg> Send</button>
       </div>
     </div>
@@ -797,6 +798,40 @@ function exportChat(){if(!S.msgs.length){toast('No messages to export',true);ret
 // ── Stop stream ───────────────────────────────────────────────────────────────
 function stopStream(){if(S.abortCtrl){S.abortCtrl.abort();S.abortCtrl=null;}S.streaming=false;$('send-btn').disabled=false;$('stop-btn').style.display='none';toast('Stopped');}
 
+// ── Prompt enhancement ───────────────────────────────────────────────────────
+async function enhancePrompt(){
+  const ti=$('ti');const txt=(ti.value||'').trim();
+  if(!txt){toast('Type a prompt first',true);return;}
+  const btn=$('enhance-btn');btn.disabled=true;btn.textContent='⏳';
+  try{
+    const body={provider:S.prov,prompt:txt};
+    if(S.prov==='anthropic')body.anthropic_key=$('ak').value;
+    else if(S.prov==='groq')body.groq_key=$('gk').value;
+    else body.hf_token=$('hft').value;
+    const r=await fetch('/api/prompt/enhance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(d.error){toast('Enhance failed: '+d.error,true);}
+    else{ti.value=d.enhanced;ti.dispatchEvent(new Event('input'));toast('✨ Prompt improved!');}
+  }catch(e){toast('Enhance error: '+e.message,true);}
+  finally{btn.disabled=false;btn.textContent='✨';}
+}
+
+// ── Regenerate last response ──────────────────────────────────────────────────
+function regenerate(){
+  if(S.streaming){toast('Stop current stream first',true);return;}
+  // Find last user message
+  let lastUser=null;
+  for(let i=S.msgs.length-1;i>=0;i--){if(S.msgs[i].role==='user'){lastUser=S.msgs[i].content;break;}}
+  if(!lastUser){toast('Nothing to regenerate',true);return;}
+  // Remove last AI message from state (keep the user message)
+  if(S.msgs.length>0&&S.msgs[S.msgs.length-1].role==='assistant')S.msgs.pop();
+  // Remove last AI message bubble from DOM
+  const msgs=$('msgs');const wraps=msgs.querySelectorAll('.msg-wrap');
+  if(wraps.length>0){const last=wraps[wraps.length-1];const av=last.querySelector('.msg-av');if(av&&av.classList.contains('agent'))last.remove();}
+  // Re-send using the textarea content temporarily set to lastUser
+  const ti=$('ti');const saved=ti.value;ti.value=lastUser;send();ti.value=saved;
+}
+
 // ── Test stage toggle ─────────────────────────────────────────────────────────
 function onTestStageToggle(){const tr=$('ma-test-row');if(tr)tr.style.display=$('ma-test-stage').checked?'flex':'none';saveEnhance();}
 
@@ -1015,8 +1050,8 @@ async function send(){
       const tab=S.tabs.find(t=>t.id===S.activeTabId);
       if(tab&&tab.name==='Chat'&&S.msgs.length===2){const first=S.msgs[0].content;tab.name=first.slice(0,28)+(first.length>28?'…':'');renderTabBar();}
       saveMemory();autoSaveChat();$('export-btn').style.display='block';$('clear-btn').style.display='block';if(S.repo&&S.ghToken)$('issue-btn').style.display='block';}
-    // Add copy action to the AI message we just rendered
-    if(reply&&!multiAgent){const meta=tw.querySelector('.msg-meta');if(meta&&!meta.querySelector('.msg-actions')){const acts=document.createElement('div');acts.className='msg-actions';acts.innerHTML='<button class="msg-act" onclick="cpMsg(this)">copy</button>';meta.appendChild(acts);}}
+    // Add copy + regenerate actions to the AI message we just rendered
+    if(reply&&!multiAgent){const meta=tw.querySelector('.msg-meta');if(meta&&!meta.querySelector('.msg-actions')){const acts=document.createElement('div');acts.className='msg-actions';acts.innerHTML='<button class="msg-act" onclick="cpMsg(this)">copy</button><button class="msg-act" onclick="regenerate()" title="Regenerate this response">🔄</button>';meta.appendChild(acts);}}
   }catch(e){tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${e.message}</span></div></div>`;}
   clearInterval(timerId);
   S.streaming=false;$('send-btn').disabled=false;$('stop-btn').style.display='none';S.abortCtrl=null;

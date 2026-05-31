@@ -862,6 +862,63 @@ async def call_tool(body: ToolCallBody):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+ENHANCE_SYSTEM = (
+    "You are a prompt engineering expert. The user will give you a coding task description. "
+    "Rewrite it to be more specific, actionable, and complete. Mention relevant files, functions, "
+    "or patterns when implied. Return ONLY the improved prompt text — no preamble, no explanation."
+)
+
+class PromptEnhanceBody(BaseModel):
+    provider: str = "anthropic"
+    anthropic_key: Optional[str] = ""
+    groq_key: Optional[str] = ""
+    hf_token: Optional[str] = ""
+    prompt: str
+
+@app.post("/api/prompt/enhance")
+async def enhance_prompt(body: PromptEnhanceBody):
+    """Use a fast AI model to improve a user's coding prompt."""
+    try:
+        p = (body.prompt or "").strip()
+        if not p:
+            return JSONResponse({"error": "prompt required"}, status_code=400)
+        if body.provider == "anthropic" and body.anthropic_key:
+            client = Anthropic(api_key=body.anthropic_key)
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001", max_tokens=512,
+                system=ENHANCE_SYSTEM,
+                messages=[{"role": "user", "content": p}],
+            )
+            enhanced = msg.content[0].text.strip()
+        elif body.provider == "groq" and body.groq_key:
+            import requests as _req
+            r = _req.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.1-8b-instant", "max_tokens": 512,
+                      "messages": [{"role": "system", "content": ENHANCE_SYSTEM},
+                                   {"role": "user", "content": p}]},
+                timeout=20,
+            )
+            if not r.ok:
+                return JSONResponse({"error": r.text[:200]}, status_code=400)
+            enhanced = r.json()["choices"][0]["message"]["content"].strip()
+        else:
+            token = (body.hf_token or "").strip() or HF_TOKEN
+            if not token:
+                return JSONResponse({"error": "no provider key"}, status_code=400)
+            hf = InferenceClient(token=token)
+            result = hf.chat_completion(
+                model="meta-llama/Llama-3.1-8B-Instruct", max_tokens=512,
+                messages=[{"role": "system", "content": ENHANCE_SYSTEM},
+                           {"role": "user", "content": p}],
+            )
+            enhanced = result.choices[0].message.content.strip()
+        return {"enhanced": enhanced}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 class Msg(BaseModel):
     role: str; content: str
 
