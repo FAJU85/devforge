@@ -2346,3 +2346,71 @@ class TestCommitSuggestMessage:
         })
         assert r.status_code == 400
         assert "error" in r.json()
+
+
+class TestReleaseNotesEndpoint:
+    def test_release_notes_anthropic(self):
+        mock_commits = [
+            {
+                "sha": "abc1234567890",
+                "commit": {
+                    "message": "feat: add user authentication",
+                    "author": {"name": "Alice", "date": "2026-05-31"},
+                },
+            },
+            {
+                "sha": "def0987654321",
+                "commit": {
+                    "message": "fix: resolve login redirect bug",
+                    "author": {"name": "Bob", "date": "2026-05-30"},
+                },
+            },
+        ]
+        mock_client = MagicMock()
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__enter__ = MagicMock(return_value=mock_stream_ctx)
+        mock_stream_ctx.__exit__ = MagicMock(return_value=False)
+        mock_stream_ctx.text_stream = iter(["## Release v1.1.0\n\n✨ New Features\n- Add user authentication"])
+        mock_client.messages.stream.return_value = mock_stream_ctx
+
+        with patch("requests.get") as mock_get, \
+             patch("main.Anthropic", return_value=mock_client):
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = mock_commits
+            r = client.post("/api/repo/release-notes", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "token": "tok",
+                "owner": "user",
+                "repo": "myrepo",
+            })
+        assert r.status_code == 200
+        content = r.text
+        assert "text/event-stream" in r.headers.get("content-type", "")
+
+    def test_release_notes_no_commits_returns_400(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = []
+            r = client.post("/api/repo/release-notes", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "token": "tok",
+                "owner": "user",
+                "repo": "myrepo",
+            })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_release_notes_github_api_failure_returns_400(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = False
+            r = client.post("/api/repo/release-notes", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "token": "tok",
+                "owner": "user",
+                "repo": "myrepo",
+            })
+        assert r.status_code == 400
+        assert "error" in r.json()

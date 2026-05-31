@@ -864,6 +864,120 @@ async def repo_workflow_runs(body: WorkflowRunsBody):
     ]
 
 
+RELEASE_NOTES_SYSTEM = (
+    "You are a technical writer creating release notes for developers. "
+    "Given a list of Git commit messages, generate a concise, well-structured release notes document. "
+    "Group commits into sections: ✨ New Features, 🐛 Bug Fixes, ♻️ Improvements, 🔧 Maintenance. "
+    "Skip merge commits and bumps. Use bullet points. Start with a 1-sentence summary of the release. "
+    "Output Markdown."
+)
+
+class ReleaseNotesBody(BaseModel):
+    provider: str = "anthropic"
+    anthropic_key: Optional[str] = ""
+    groq_key: Optional[str] = ""
+    token: str
+    owner: str
+    repo: str
+    since: Optional[str] = ""   # SHA or tag (exclusive start)
+    until: Optional[str] = ""   # SHA or tag (inclusive end), default HEAD
+    max_commits: int = 50
+    anthropic_model: Optional[str] = "claude-sonnet-4-6"
+
+@app.post("/api/repo/release-notes")
+async def generate_release_notes(body: ReleaseNotesBody):
+    """Stream AI-generated release notes from recent commits."""
+    # Fetch commits
+    params: dict = {"per_page": min(body.max_commits, 50)}
+    if body.until:
+        params["sha"] = body.until
+    r = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/commits",
+        headers=gh_hdrs(body.token),
+        params=params,
+        timeout=15,
+    )
+    if not r.ok:
+        return JSONResponse({"error": "Failed to fetch commits"}, status_code=400)
+    all_commits = r.json()
+    # If since is provided, truncate at that SHA
+    if body.since:
+        since_sha = body.since
+        # Also handle tags — resolve to SHA
+        tag_r = requests.get(
+            f"https://api.github.com/repos/{body.owner}/{body.repo}/git/refs/tags/{since_sha}",
+            headers=gh_hdrs(body.token), timeout=10,
+        )
+        if tag_r.ok:
+            obj = tag_r.json().get("object", {})
+            since_sha = obj.get("sha", since_sha)[:40]
+        trimmed = []
+        for c in all_commits:
+            if c["sha"].startswith(since_sha) or since_sha.startswith(c["sha"][:len(since_sha)]):
+                break
+            trimmed.append(c)
+        all_commits = trimmed
+    if not all_commits:
+        return JSONResponse({"error": "No commits found in range"}, status_code=400)
+    commit_list = "\n".join(
+        f"- {c['sha'][:7]} {c['commit']['message'].split(chr(10))[0][:100]}"
+        for c in all_commits
+        if "Merge" not in c["commit"]["message"][:10]
+    )
+    user_prompt = (
+        f"Repository: {body.owner}/{body.repo}\n"
+        f"Commits ({len(all_commits)} total):\n{commit_list}"
+    )
+    model = (body.anthropic_model or "claude-sonnet-4-6").strip() or "claude-sonnet-4-6"
+
+    async def _stream():
+        if body.provider == "anthropic" and body.anthropic_key:
+            import threading
+            q: asyncio.Queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
+            def _run():
+                try:
+                    client = Anthropic(api_key=body.anthropic_key)
+                    with client.messages.stream(
+                        model=model, max_tokens=1024, system=RELEASE_NOTES_SYSTEM,
+                        messages=[{"role": "user", "content": user_prompt}],
+                    ) as stream:
+                        for text in stream.text_stream:
+                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+                except Exception as e:
+                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+            threading.Thread(target=_run, daemon=True).start()
+            while True:
+                kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                if kind == "text":
+                    yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
+                elif kind == "done":
+                    break
+                else:
+                    yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
+        elif body.provider == "groq" and body.groq_key:
+            r2 = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.3-70b-versatile", "max_tokens": 1024,
+                      "messages": [{"role": "system", "content": RELEASE_NOTES_SYSTEM},
+                                   {"role": "user", "content": user_prompt}]},
+                timeout=30,
+            )
+            if r2.ok:
+                text = r2.json()["choices"][0]["message"]["content"]
+                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
+                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
+            else:
+                yield f"data: {json.dumps({'t':'error','v':r2.text[:200]})}\n\n"
+        else:
+            yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"
+        yield f"data: {json.dumps({'t':'done'})}\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
 COMMIT_MSG_SYSTEM = (
     "You are a Git commit message expert. Given a file path and its new content (or a diff), "
     "write a concise conventional commit message (type(scope): description). "

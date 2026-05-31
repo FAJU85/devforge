@@ -347,6 +347,7 @@ pre::-webkit-scrollbar{height:4px}
           <select class="finput branch-sel" id="branch-select" onchange="switchBranch(this.value)"></select>
           <button onclick="toggleCommits()" title="Recent commits" id="commits-btn" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:11px;transition:all .15s;flex-shrink:0" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--muted)'">📜</button>
           <button onclick="toggleWorkflows()" title="GitHub Actions workflow runs" id="workflows-btn" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:11px;transition:all .15s;flex-shrink:0" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">⚙️</button>
+          <button onclick="openReleaseNotes()" title="Generate release notes with AI" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:11px;transition:all .15s;flex-shrink:0" onmouseover="this.style.color='var(--purple)'" onmouseout="this.style.color='var(--muted)'">📋</button>
         </div>
         <div class="repo-panel" id="commits-panel"></div>
         <div class="repo-panel" id="workflows-panel"></div>
@@ -513,6 +514,7 @@ pre::-webkit-scrollbar{height:4px}
       <div class="ma-pill" id="ma-pill" style="display:none">🤖 Multi-Agent</div>
       <div class="mem-pill" id="mem-pill" onclick="clearMemory()" title="Session memory active — click to clear">🧠 Memory</div>
       <div class="stat-pill" id="stat-pill">~0 tok</div>
+      <button class="export-btn" id="relnotes-btn" onclick="openReleaseNotesModal()" title="Generate release notes from commits" style="display:none">📋 Release Notes</button>
       <button class="export-btn" id="export-btn" onclick="exportChat()" title="Export conversation as Markdown" style="display:none">⬇️ Export</button>
       <button class="export-btn" id="issue-btn" onclick="openIssueModal()" title="Create GitHub Issue from conversation" style="display:none">📋 Issue</button>
       <button class="export-btn" id="clear-btn" onclick="clearChat()" title="Clear conversation" style="display:none">🗑️ Clear</button>
@@ -629,6 +631,29 @@ pre::-webkit-scrollbar{height:4px}
       <button onclick="$('peek-modal').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0 2px;flex-shrink:0">✕</button>
     </div>
     <pre id="peek-body" style="margin:0;padding:14px 16px;overflow:auto;max-height:65vh;font-size:12px;font-family:'JetBrains Mono',monospace;line-height:1.6;color:var(--text);background:var(--code-bg)"></pre>
+  </div>
+</div>
+
+<!-- Release Notes modal -->
+<div class="modal-overlay" id="relnotes-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:700px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <span style="font-size:15px;font-weight:600;flex:1">📋 Generate Release Notes</span>
+      <button onclick="$('relnotes-modal').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0 2px">✕</button>
+    </div>
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border2);display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:1;min-width:140px"><div class="flabel">Since (tag or SHA, optional)</div><input class="finput" id="rn-since" placeholder="v1.0.0 or abc1234" style="margin-top:3px"></div>
+      <div style="flex:1;min-width:140px"><div class="flabel">Until (tag or SHA, default HEAD)</div><input class="finput" id="rn-until" placeholder="v1.1.0 or HEAD" style="margin-top:3px"></div>
+      <div style="width:80px"><div class="flabel">Max commits</div><input class="finput" id="rn-max" value="30" type="number" min="5" max="50" style="margin-top:3px"></div>
+      <button class="modal-ok" id="rn-gen-btn" onclick="generateReleaseNotes()">✨ Generate</button>
+    </div>
+    <div id="rn-output" style="padding:14px 16px;overflow-y:auto;max-height:55vh;font-size:13px;line-height:1.75;color:var(--text);min-height:60px">
+      <span style="color:var(--muted)">Configure range above and click Generate…</span>
+    </div>
+    <div style="padding:8px 16px;border-top:1px solid var(--border2);display:flex;justify-content:flex-end;gap:8px">
+      <button class="modal-cancel" id="rn-copy-btn" onclick="copyReleaseNotes()" style="display:none">📋 Copy</button>
+      <button class="modal-cancel" onclick="$('relnotes-modal').style.display='none'">Close</button>
+    </div>
   </div>
 </div>
 
@@ -794,7 +819,7 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}}
+  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}}
   if((e.metaKey||e.ctrlKey)&&e.key==='f'&&!e.target?.matches('input,textarea')){e.preventDefault();toggleChatSearch();}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key==='Backspace'){e.preventDefault();if($('ti'))$('ti').value='';}
@@ -965,11 +990,11 @@ async function suggestCommitMsg(panel){
 }
 async function startOAuth(){const d=await post('/api/github/auth/start',{});if(d.error){toast(d.error,true);return;}S.devCode=d.device_code;const uri=d.verification_uri||'https://github.com/login/device';$('oauth-box').style.display='block';$('oauth-box').innerHTML=`<div class="oauth-box"><div class="oauth-lbl">Enter this code at GitHub</div><div class="oauth-code">${d.user_code}</div><br><a href="${uri}" target="_blank" class="oauth-link"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Open github.com/login/device</a></div>`;$('oauth-check').style.display='block';}
 async function pollOAuth(){if(!S.devCode)return;const d=await post('/api/github/auth/poll',{device_code:S.devCode});if(d.access_token){S.ghToken=d.access_token;const u=await post('/api/github/user',{token:S.ghToken});S.ghUser=u;saveSession();$('gh-av').src=u.avatar_url||'';$('gh-nm').textContent=u.name||u.login;$('gh-lg').textContent='@'+u.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();}else if(d.error==='authorization_pending'){toast('Not authorized yet — approve on GitHub first');}else{toast('Error: '+(d.error_description||d.error||'Unknown'),true);}}
-function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.tabs=[];S.activeTabId=null;$('tab-bar').style.display='none';S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('issue-btn').style.display='none';$('search-chat-btn').style.display='none';const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='none';$('commits-panel').style.display='none';$('search-results-panel').style.display='none';const wp=$('workflows-panel');if(wp)wp.style.display='none';updCtx();updHint();}
+function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.tabs=[];S.activeTabId=null;$('tab-bar').style.display='none';S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('issue-btn').style.display='none';$('relnotes-btn').style.display='none';$('search-chat-btn').style.display='none';const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='none';$('commits-panel').style.display='none';$('search-results-panel').style.display='none';const wp=$('workflows-panel');if(wp)wp.style.display='none';updCtx();updHint();}
 async function loadRepos(){$('repo-list').innerHTML='<div class="list-msg">Loading…</div>';const repos=await post('/api/github/repos',{token:S.ghToken});if(!Array.isArray(repos)){$('repo-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';return;}S.allRepos=repos;renderRepoList(repos);}
 function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo('${r.full_name.replace(/'/g,"\\'")}',this)"><div class="li-name">${r.name}</div><div class="li-sub"><span>${r.language||'—'}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
 function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerCase().includes(q.toLowerCase())));}
-async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};S.tabs=[];S.activeTabId=null;$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('clear-btn').style.display='none';updCtx();$('file-tree').innerHTML='';$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadBranches();loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='block';updHint();}
+async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};S.tabs=[];S.activeTabId=null;$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('clear-btn').style.display='none';updCtx();$('file-tree').innerHTML='';$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadBranches();loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='block';const rnb=$('relnotes-btn');if(rnb)rnb.style.display='block';updHint();}
 function buildTree(files){const folders={};const root=[];for(const f of files){const p=f.path.split('/');if(p.length===1)root.push(f);else{if(!folders[p[0]])folders[p[0]]=[];folders[p[0]].push(f);}}let h='';for(const f of root)h+=tfn(f);for(const[k,v]of Object.entries(folders))h+=tfd(k,v);$('file-tree').innerHTML=h;}
 function tfd(name,files){const subs={};const direct=[];for(const f of files){const rest=f.path.split('/').slice(1).join('/');const p=rest.split('/');if(p.length===1)direct.push(f);else{const k=p[0];if(!subs[k])subs[k]=[];subs[k].push(f);}}let inner='';for(const[k,v]of Object.entries(subs))inner+=tfd(name+'/'+k,v);for(const f of direct)inner+=tfn(f);return`<div class="tfolder"><div class="tfolder-h" onclick="this.parentElement.classList.toggle('open')"><span class="tarr">▶</span><span>📁</span><span style="font-family:monospace;font-size:12px">${name.split('/').pop()}</span></div><div class="tfolder-c">${inner}</div></div>`;}
 function tfn(f){const sel=S.selFiles.has(f.path);const safe=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");const sz=f.size||0;const tok=tokEst(sz);const tc=sz?tokCls(tok):'';const tokHtml=sz?`<span class="tok-badge ${tc}">${tokFmt(tok)}</span>`:'';return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" onclick="togF('${safe}',${sz})"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF('${safe}',${sz})"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${f.path.split('/').pop()}</span>${tokHtml}<button class="peek-btn" onclick="event.stopPropagation();peekFile('${safe}',${sz})" title="Preview file">👁</button></div>`;}
@@ -1092,6 +1117,41 @@ async function toggleWorkflows(){
   panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>GitHub Actions — ${esc(S.repo.owner+'/'+S.repo.repo)}</span><button onclick="$('workflows-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
     d.map(r=>`<div class="commit-item" onclick="window.open('${r.url}','_blank')" title="${esc(r.conclusion||r.status)}"><div><span style="margin-right:4px">${icon(r.conclusion)}</span><span class="ci-msg">${esc(r.name)}</span></div><div class="ci-meta">${esc(r.branch)} · ${r.sha} · ${r.date}</div></div>`).join('');
 }
+
+// ── Release Notes ─────────────────────────────────────────────────────────────
+function openReleaseNotesModal(){return openReleaseNotes();}
+function openReleaseNotes(){
+  if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}
+  $('rn-output').innerHTML='<span style="color:var(--muted)">Configure range above and click Generate…</span>';
+  $('rn-copy-btn').style.display='none';
+  $('relnotes-modal').style.display='flex';
+}
+let _rnAbort=null;
+async function generateReleaseNotes(){
+  if(_rnAbort){_rnAbort.abort();_rnAbort=null;}
+  const since=$('rn-since').value.trim();const until=$('rn-until').value.trim();
+  const maxC=Math.min(parseInt($('rn-max').value)||30,50);
+  const btn=$('rn-gen-btn');btn.disabled=true;btn.textContent='⏳ Generating…';
+  $('rn-copy-btn').style.display='none';
+  $('rn-output').innerHTML='<span style="color:var(--muted)">Fetching commits…</span>';
+  _rnAbort=new AbortController();
+  const body={provider:S.prov,token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,
+    since,until,max_commits:maxC,anthropic_model:S.anthropicModel||'claude-sonnet-4-6'};
+  if(S.prov==='anthropic')body.anthropic_key=$('ak').value;
+  else if(S.prov==='groq')body.groq_key=$('gk').value;
+  let raw='';
+  try{
+    const res=await fetch('/api/repo/release-notes',{method:'POST',headers:{'Content-Type':'application/json'},signal:_rnAbort.signal,body:JSON.stringify(body)});
+    if(!res.ok){$('rn-output').innerHTML=`<span style="color:var(--red)">Error: ${await res.text()}</span>`;return;}
+    $('rn-output').innerHTML='';
+    const out=$('rn-output');
+    const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;try{const ev=JSON.parse(line.slice(5).trim());if(ev.t==='text'){raw+=ev.v;out.innerHTML=marked.parse(raw);}else if(ev.t==='error'){out.innerHTML+=`<span style="color:var(--red)">Error: ${esc(ev.v)}</span>`;}else if(ev.t==='done')break;}catch{}}}
+    if(raw)$('rn-copy-btn').style.display='block';
+  }catch(e){if(e.name!=='AbortError')$('rn-output').innerHTML=`<span style="color:var(--red)">${esc(e.message)}</span>`;}
+  finally{btn.disabled=false;btn.textContent='✨ Generate';_rnAbort=null;}
+}
+function copyReleaseNotes(){const out=$('rn-output');navigator.clipboard.writeText(out.innerText||out.textContent||'');toast('Copied release notes!');}
 
 function setAnthModel(model){
   S.anthropicModel=model;
