@@ -247,6 +247,21 @@ pre::-webkit-scrollbar{height:4px}
 .rs-lang{font-size:10px;padding:2px 7px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-weight:600}
 .rs-info{font-size:11px;color:var(--muted);line-height:1.5}
 .rs-badge{display:inline-block;background:var(--panel);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-size:10px;margin-right:4px}
+.tool-item{display:flex;align-items:center;gap:6px;padding:5px 10px;border-bottom:1px solid var(--border2);font-size:11px}
+.tool-item:last-child{border-bottom:none}
+.tool-method{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--blue-dim);color:var(--blue);font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.tool-name-lbl{font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tool-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px;padding:0 2px;line-height:1;transition:color .15s;flex-shrink:0}
+.tool-del:hover{color:var(--red)}
+.tool-card{margin:8px 0;border:1px solid var(--blue-border);border-radius:10px;background:var(--blue-dim);overflow:hidden;font-size:12px}
+.tool-card-hd{display:flex;align-items:center;gap:7px;padding:7px 12px;background:rgba(0,0,0,.1);font-size:12px}
+.tc-name{font-weight:700;color:var(--blue)}
+.tc-status{margin-left:auto;font-size:13px}
+.tc-status.spin{animation:spin 1s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tool-input{margin:0;padding:6px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);overflow-x:auto;white-space:pre-wrap;word-break:break-all;border-top:1px solid var(--blue-border)}
+.tool-result{margin:0;padding:6px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);overflow-x:auto;white-space:pre-wrap;word-break:break-all;border-top:1px solid var(--blue-border);max-height:180px;overflow-y:auto}
+[data-theme="light"] .tool-card{background:var(--blue-dim);border-color:var(--blue-border)}
 </style>
 </head>
 <body>
@@ -377,6 +392,16 @@ pre::-webkit-scrollbar{height:4px}
         </div>
       </div>
     </div>
+    <div class="s-sec">
+      <div class="s-lbl" onclick="toggleSec(this)">🔧 Tools <span id="tool-count-badge" style="font-size:10px;background:var(--blue-dim);color:var(--blue);border-radius:10px;padding:1px 6px;display:none"></span> <span class="s-arr">▼</span></div>
+      <div class="s-content" style="padding-bottom:6px">
+        <div style="padding:4px 10px 6px;font-size:11px;color:var(--muted)">Define HTTP tools Claude can call autonomously (Anthropic only).</div>
+        <div id="tool-list" style="margin:0 10px 6px;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;display:none"></div>
+        <div style="padding:0 10px">
+          <button onclick="openAddTool()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+ Define Tool</button>
+        </div>
+      </div>
+    </div>
   </div>
 </aside>
 <div class="workspace">
@@ -457,8 +482,40 @@ pre::-webkit-scrollbar{height:4px}
   </div>
 </div>
 
+<!-- Tool modal -->
+<div class="modal-overlay" id="tool-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-head">🔧 Define Tool</div>
+    <input type="hidden" id="tm-edit-idx" value="-1">
+    <div class="modal-row">
+      <div class="flabel">Name <span style="color:var(--muted);font-weight:400">(no spaces, used as identifier)</span></div>
+      <input class="finput" id="tm-name" placeholder="e.g. get_weather" style="margin-top:3px;font-family:'JetBrains Mono',monospace">
+    </div>
+    <div class="modal-row">
+      <div class="flabel">Description <span style="color:var(--muted);font-weight:400">(Claude reads this to decide when to call the tool)</span></div>
+      <textarea class="side-textarea" id="tm-desc" placeholder="e.g. Get current weather for a city. Returns temperature and conditions." style="width:100%;min-height:60px;margin-top:3px;resize:vertical"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="width:80px"><div class="flabel">Method</div><select class="finput" id="tm-method" style="margin-top:3px"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></div>
+      <div style="flex:1"><div class="flabel">URL <span style="color:var(--muted);font-weight:400">(use {param} for path params)</span></div><input class="finput" id="tm-url" placeholder="https://api.example.com/v1/{endpoint}" style="margin-top:3px;font-family:'JetBrains Mono',monospace"></div>
+    </div>
+    <div class="modal-row">
+      <div class="flabel">Input Schema <span style="color:var(--muted);font-weight:400">(JSON Schema for parameters, optional)</span></div>
+      <textarea class="side-textarea" id="tm-schema" placeholder='{"type":"object","properties":{"city":{"type":"string","description":"City name"}},"required":["city"]}' style="width:100%;min-height:80px;margin-top:3px;resize:vertical;font-family:&apos;JetBrains Mono&apos;,monospace;font-size:11px"></textarea>
+    </div>
+    <div class="modal-row">
+      <div class="flabel">Custom Headers <span style="color:var(--muted);font-weight:400">(JSON object, optional)</span></div>
+      <textarea class="side-textarea" id="tm-headers" placeholder='{"Authorization":"Bearer YOUR_TOKEN"}' style="width:100%;min-height:50px;margin-top:3px;resize:vertical;font-family:&apos;JetBrains Mono&apos;,monospace;font-size:11px"></textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="modal-cancel" onclick="closeToolModal()">Cancel</button>
+      <button class="modal-ok" onclick="saveTool()">Save Tool</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null};
+const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[]};
 const $=id=>document.getElementById(id);
 const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
 const get=p=>fetch(p).then(r=>r.json());
@@ -515,7 +572,7 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){['issue-modal','pr-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});}
+  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key==='Backspace'){e.preventDefault();if($('ti'))$('ti').value='';}
 });
@@ -652,7 +709,7 @@ async function send(){
   try{
     const histMsgs=S.memory?[...S.memory.msgs,...S.msgs.slice(-8)]:S.msgs.slice(-10);
     const includeTest=$('ma-test-stage')?.checked||false;
-    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},signal:S.abortCtrl?.signal,body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:$('hft').value,hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:histMsgs,file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent,ma_plan_provider:$('ma-plan-prov').value||'',ma_code_provider:$('ma-code-prov').value||'',ma_test_provider:$('ma-test-prov')?$('ma-test-prov').value||'':'',ma_review_provider:$('ma-rev-prov').value||'',ma_include_test_stage:includeTest,memory:getMemoryContext()})});
+    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},signal:S.abortCtrl?.signal,body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:$('hft').value,hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:histMsgs,file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent,ma_plan_provider:$('ma-plan-prov').value||'',ma_code_provider:$('ma-code-prov').value||'',ma_test_provider:$('ma-test-prov')?$('ma-test-prov').value||'':'',ma_review_provider:$('ma-rev-prov').value||'',ma_include_test_stage:includeTest,memory:getMemoryContext(),tools:S.tools||[]})});
     if(!res.ok){const err=await res.text();tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${res.status}: ${err.slice(0,300)}</span></div></div>`;S.streaming=false;$('send-btn').disabled=false;return;}
     if(multiAgent){
       tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent" style="color:var(--purple)">Multi-Agent</span><span class="msg-time">${now()}</span></div><div id="${streamId}-wrap"></div></div>`;
@@ -664,7 +721,7 @@ async function send(){
       tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span><span class="msg-time">${now()}</span></div><div class="msg-body" id="${streamId}"></div></div>`;
       const be=document.getElementById(streamId);
       const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
-      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='text'){reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='usage'){gotUsage=true;addTokens('',ev.v.input+ev.v.output);}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
+      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='text'){reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='usage'){gotUsage=true;addTokens('',ev.v.input+ev.v.output);}else if(ev.t==='tool_call'){insertToolCallCard(ev.v);}else if(ev.t==='tool_result'){updateToolResultCard(ev.v);}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
     }
     if(reply){S.msgs.push({role:'assistant',content:reply});if(!gotUsage)addTokens(reply);saveMemory();autoSaveChat();$('export-btn').style.display='block';$('clear-btn').style.display='block';if(S.repo&&S.ghToken)$('issue-btn').style.display='block';}
     // Add copy action to the AI message we just rendered
@@ -719,6 +776,62 @@ function openPRModal(branch){
   $('pr-modal').style.display='flex';$('pr-title').focus();
 }
 
+// ── Tool definitions ──────────────────────────────────────────────────────────
+function loadTools(){try{S.tools=JSON.parse(localStorage.getItem('df-tools')||'[]');}catch(e){S.tools=[];}renderToolList();}
+function saveTools(){localStorage.setItem('df-tools',JSON.stringify(S.tools));}
+function renderToolList(){
+  const el=$('tool-list');const badge=$('tool-count-badge');
+  if(!S.tools.length){el.style.display='none';badge.style.display='none';return;}
+  el.style.display='block';badge.textContent=S.tools.length;badge.style.display='inline';
+  el.innerHTML=S.tools.map((t,i)=>`<div class="tool-item"><span class="tool-method">${t.method||'GET'}</span><span class="tool-name-lbl" title="${t.description}">${t.name}</span><button class="tool-del" onclick="editTool(${i})" title="Edit" style="color:var(--muted2);font-size:11px">✏️</button><button class="tool-del" onclick="deleteTool(${i})" title="Remove">✕</button></div>`).join('');
+}
+function openAddTool(){
+  $('tm-edit-idx').value='-1';$('tm-name').value='';$('tm-desc').value='';
+  $('tm-method').value='GET';$('tm-url').value='';$('tm-schema').value='';$('tm-headers').value='';
+  $('tool-modal').style.display='flex';$('tm-name').focus();
+}
+function editTool(i){
+  const t=S.tools[i];if(!t)return;
+  $('tm-edit-idx').value=i;$('tm-name').value=t.name;$('tm-desc').value=t.description;
+  $('tm-method').value=t.method||'GET';$('tm-url').value=t.url;
+  $('tm-schema').value=t.input_schema?JSON.stringify(t.input_schema,null,2):'';
+  $('tm-headers').value=t.headers&&Object.keys(t.headers).length?JSON.stringify(t.headers,null,2):'';
+  $('tool-modal').style.display='flex';$('tm-name').focus();
+}
+function saveTool(){
+  const name=($('tm-name').value||'').trim().replace(/\s+/g,'_');
+  const desc=($('tm-desc').value||'').trim();
+  const url=($('tm-url').value||'').trim();
+  if(!name||!desc||!url){toast('Name, description and URL are required',true);return;}
+  let schema=null;const rawSchema=($('tm-schema').value||'').trim();
+  if(rawSchema){try{schema=JSON.parse(rawSchema);}catch(e){toast('Input schema is not valid JSON',true);return;}}
+  let headers={};const rawHeaders=($('tm-headers').value||'').trim();
+  if(rawHeaders){try{headers=JSON.parse(rawHeaders);}catch(e){toast('Headers is not valid JSON',true);return;}}
+  const tool={name,description:desc,url,method:$('tm-method').value,headers,input_schema:schema};
+  const idx=parseInt($('tm-edit-idx').value);
+  if(idx>=0){S.tools[idx]=tool;}else{S.tools.push(tool);}
+  saveTools();renderToolList();closeToolModal();toast(`Tool "${name}" saved`);
+}
+function deleteTool(i){
+  S.tools.splice(i,1);saveTools();renderToolList();toast('Tool removed');
+}
+function closeToolModal(){$('tool-modal').style.display='none';}
+function insertToolCallCard(data){
+  const chatEl=$('msgs');
+  const card=document.createElement('div');
+  card.className='tool-card';card.id=`tool-card-${data.id}`;
+  const inputStr=data.input&&Object.keys(data.input).length?JSON.stringify(data.input,null,2):'(no parameters)';
+  card.innerHTML=`<div class="tool-card-hd"><span>🔧</span><span class="tc-name">${data.name}</span><span class="tc-status spin">⏳</span></div><pre class="tool-input">${inputStr}</pre>`;
+  chatEl.appendChild(card);chatEl.scrollTop=chatEl.scrollHeight;
+}
+function updateToolResultCard(data){
+  const card=document.getElementById(`tool-card-${data.id}`);if(!card)return;
+  const status=card.querySelector('.tc-status');if(status){status.textContent='✓';status.classList.remove('spin');}
+  const result=document.createElement('pre');result.className='tool-result';
+  const txt=data.result||'(empty response)';result.textContent=txt.length>600?txt.slice(0,600)+'…':txt;
+  card.appendChild(result);card.closest('#msgs')?.scrollTo({top:99999,behavior:'smooth'});
+}
+
 // ── Repo quick-scan ───────────────────────────────────────────────────────────
 const LANG_COLORS={js:'#f7df1e',ts:'#3178c6',jsx:'#61dafb',tsx:'#61dafb',py:'#3776ab',go:'#00add8',rs:'#ce422b',rb:'#cc342d',java:'#b07219',cs:'#239120',cpp:'#f34b7d',c:'#555',md:'#083fa1',json:'#292929',css:'#563d7c',html:'#e44b23',sh:'#89e051',sql:'#e38c00',yaml:'#cb171e',toml:'#9c4221'};
 const FRAMEWORK_HINTS={'package.json':'Node.js / JS','go.mod':'Go Module','requirements.txt':'Python','Cargo.toml':'Rust','pom.xml':'Java/Maven','build.gradle':'Java/Gradle','Dockerfile':'Docker','docker-compose.yml':'Docker Compose','next.config.js':'Next.js','next.config.ts':'Next.js','vite.config.ts':'Vite','pyproject.toml':'Python (PEP 517)','setup.py':'Python','Makefile':'Make','fastapi':'FastAPI'};
@@ -735,7 +848,7 @@ function quickScanRepo(files){
   $('rs-info').innerHTML=`${fw}<span style="color:var(--muted2);font-size:10px">${files.length} files · ~${sizeStr}</span>`;
 }
 
-(function init(){restoreEnhance();renderSavedPresets();if(!restoreSession())expSidebar();})();
+(function init(){restoreEnhance();renderSavedPresets();loadTools();if(!restoreSession())expSidebar();})();
 </script>
 </body>
 </html>

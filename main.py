@@ -67,10 +67,96 @@ def build_system(body: "ChatBody") -> str:
     memory = (getattr(body, 'memory', '') or '').strip()
     if memory:
         base += f"\n\n## Previous Session Context (from last conversation on this repo):\n{memory}"
+    tools = getattr(body, 'tools', []) or []
+    if tools and body.provider != "anthropic":
+        base += "\n\n## Available Tools:\n"
+        for t in tools:
+            base += f"- **{t.name}**: {t.description} ({t.method} {t.url})\n"
+        base += "\nDescribe needed tool calls in your response; the user will execute them and share results."
     fc = (getattr(body, 'file_context', '') or '').strip()
     if fc:
         base += f"\n\n---\n**Repository context:**\n{fc}"
     return base
+
+def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools):
+    """Run Anthropic with native tool use, executing HTTP calls and looping until done."""
+    try:
+        client = Anthropic(api_key=api_key)
+        anth_tools = [
+            {
+                "name": t.name,
+                "description": t.description,
+                "input_schema": t.input_schema or {"type": "object", "properties": {}},
+            }
+            for t in tools
+        ]
+        current_messages = list(messages)
+        total_usage = {"input": 0, "output": 0}
+
+        for _ in range(5):
+            with client.messages.stream(
+                model="claude-sonnet-4-6",
+                max_tokens=4096,
+                system=system,
+                messages=current_messages,
+                tools=anth_tools,
+            ) as stream:
+                for text in stream.text_stream:
+                    asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                msg = stream.get_final_message()
+                try:
+                    total_usage["input"] += msg.usage.input_tokens
+                    total_usage["output"] += msg.usage.output_tokens
+                except Exception:
+                    pass
+                if msg.stop_reason != "tool_use":
+                    break
+
+            # Serialize assistant content for next turn
+            assistant_content = []
+            for block in msg.content:
+                if block.type == "text":
+                    assistant_content.append({"type": "text", "text": block.text})
+                elif block.type == "tool_use":
+                    assistant_content.append({"type": "tool_use", "id": block.id, "name": block.name, "input": block.input})
+            current_messages.append({"role": "assistant", "content": assistant_content})
+
+            tool_results = []
+            for block in msg.content:
+                if block.type != "tool_use":
+                    continue
+                asyncio.run_coroutine_threadsafe(
+                    q.put(("tool_call", {"id": block.id, "name": block.name, "input": block.input})), loop
+                )
+                tool_def = next((t for t in tools if t.name == block.name), None)
+                if not tool_def:
+                    result_content = f"Error: Tool '{block.name}' not found"
+                else:
+                    try:
+                        hdrs = dict(tool_def.headers or {})
+                        url = tool_def.url
+                        inp = block.input or {}
+                        for k, v in inp.items():
+                            url = url.replace(f"{{{k}}}", str(v))
+                        if tool_def.method.upper() == "GET":
+                            params = {k: v for k, v in inp.items() if f"{{{k}}}" not in tool_def.url}
+                            r = requests.get(url, headers=hdrs, params=params, timeout=15)
+                        else:
+                            hdrs.setdefault("Content-Type", "application/json")
+                            r = requests.request(tool_def.method.upper(), url, headers=hdrs, json=inp, timeout=15)
+                        result_content = r.text[:2000]
+                    except Exception as e:
+                        result_content = f"Error: {e}"
+                asyncio.run_coroutine_threadsafe(
+                    q.put(("tool_result", {"id": block.id, "name": block.name, "result": result_content})), loop
+                )
+                tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": result_content})
+            current_messages.append({"role": "user", "content": tool_results})
+
+        asyncio.run_coroutine_threadsafe(q.put(("usage", total_usage)), loop)
+        asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+    except Exception as e:
+        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
 
 def _run_anthropic(q, loop, system, messages, api_key):
     try:
@@ -190,7 +276,7 @@ async def stream_one(runner, system: str, messages: list):
     while True:
         try:
             kind, val = await asyncio.wait_for(q.get(), timeout=120)
-            if kind in ("text", "usage"): yield kind, val
+            if kind in ("text", "usage", "tool_call", "tool_result"): yield kind, val
             elif kind == "done": break
             else: yield "error", val; break
         except asyncio.TimeoutError:
@@ -555,6 +641,38 @@ async def create_pr(body: PRBody):
     return {"url": data.get("html_url", ""), "number": data.get("number")}
 
 
+class ToolDef(BaseModel):
+    name: str
+    description: str
+    url: str
+    method: str = "GET"
+    headers: Optional[dict] = {}
+    input_schema: Optional[dict] = None
+
+
+class ToolCallBody(BaseModel):
+    url: str
+    method: str = "GET"
+    headers: Optional[dict] = {}
+    body_json: Optional[dict] = None
+
+
+@app.post("/api/tools/call")
+async def call_tool(body: ToolCallBody):
+    """Proxy a user-defined tool HTTP call to avoid CORS issues."""
+    try:
+        hdrs = dict(body.headers or {})
+        if body.method.upper() != "GET":
+            hdrs.setdefault("Content-Type", "application/json")
+        if body.method.upper() == "GET":
+            r = requests.get(body.url, headers=hdrs, timeout=15)
+        else:
+            r = requests.request(body.method.upper(), body.url, headers=hdrs, json=body.body_json, timeout=15)
+        return {"status": r.status_code, "response": r.text[:2000]}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 class Msg(BaseModel):
     role: str; content: str
 
@@ -584,6 +702,7 @@ class ChatBody(BaseModel):
     ma_review_provider: Optional[str] = ""
     ma_include_test_stage: Optional[bool] = False
     memory: Optional[str] = ""
+    tools: Optional[List[ToolDef]] = []
 
 _PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom"}
 
@@ -599,6 +718,9 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
     """
     p = provider if provider else body.provider
     if p == "anthropic":
+        tools = getattr(body, 'tools', []) or []
+        if tools:
+            return lambda q, loop, sys, msgs: _run_anthropic_with_tools(q, loop, sys, msgs, body.anthropic_key, tools)
         return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key)
     elif p == "groq":
         return lambda q, loop, sys, msgs: _run_groq(q, loop, sys, msgs, body.groq_key, body.groq_model or "llama-3.3-70b-versatile")
