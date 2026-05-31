@@ -1942,3 +1942,108 @@ class TestRepoBranchesEndpoint:
         # Tree fetch URL should use the overridden branch
         tree_call = mock_get.call_args_list[1]
         assert "feature/new-api" in tree_call[0][0]
+
+# ── Cycle 14: Code Search + Commit History ────────────────────────────────────
+
+class TestRepoSearchEndpoint:
+    def test_search_returns_results(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {
+                "total_count": 2,
+                "items": [
+                    {"path": "src/auth.ts", "sha": "abc1234567", "html_url": "https://github.com/x",
+                     "text_matches": [{"matches": [{"text": "const auth = "}]}]},
+                    {"path": "src/middleware.ts", "sha": "def9876543", "html_url": "https://github.com/y",
+                     "text_matches": []},
+                ],
+            }
+            r = client.post("/api/repo/search", json={
+                "token": "tok",
+                "owner": "user",
+                "repo": "myrepo",
+                "query": "auth function",
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total"] == 2
+        assert len(data["items"]) == 2
+        assert data["items"][0]["path"] == "src/auth.ts"
+        assert data["items"][0]["sha"] == "abc1234"
+        assert len(data["items"][0]["snippets"]) == 1
+
+    def test_search_empty_query_returns_400(self):
+        r = client.post("/api/repo/search", json={
+            "token": "tok", "owner": "user", "repo": "myrepo", "query": "   ",
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_search_github_api_error(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = False
+            mock_get.return_value.json.return_value = {"message": "API rate limit exceeded"}
+            r = client.post("/api/repo/search", json={
+                "token": "tok", "owner": "user", "repo": "myrepo", "query": "anything",
+            })
+        assert r.status_code == 400
+        assert "rate limit" in r.json()["error"].lower()
+
+    def test_search_caps_at_max_results(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"total_count": 0, "items": []}
+            r = client.post("/api/repo/search", json={
+                "token": "tok", "owner": "user", "repo": "myrepo", "query": "test", "max_results": 100,
+            })
+        assert r.status_code == 200
+        # Verify per_page was capped at 20
+        call_args = mock_get.call_args
+        params = call_args[1].get("params", {})
+        assert params.get("per_page", 0) <= 20
+
+
+class TestRepoCommitsEndpoint:
+    def test_commits_success(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = [
+                {"sha": "abc1234567890", "commit": {"message": "Fix auth bug\n\nDetails here",
+                 "author": {"name": "Alice", "date": "2026-05-31T10:00:00Z"}},
+                 "html_url": "https://github.com/x/commit/abc"},
+                {"sha": "def9876543210", "commit": {"message": "Add tests",
+                 "author": {"name": "Bob", "date": "2026-05-30T09:00:00Z"}},
+                 "html_url": "https://github.com/x/commit/def"},
+            ]
+            r = client.post("/api/repo/commits", json={
+                "token": "tok", "owner": "user", "repo": "myrepo", "branch": "main",
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data) == 2
+        assert data[0]["sha"] == "abc1234"  # 7 chars
+        assert data[0]["message"] == "Fix auth bug"  # first line only
+        assert data[0]["author"] == "Alice"
+        assert data[0]["date"] == "2026-05-31"
+        assert data[0]["url"] == "https://github.com/x/commit/abc"
+
+    def test_commits_api_failure(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = False
+            r = client.post("/api/repo/commits", json={
+                "token": "tok", "owner": "user", "repo": "myrepo",
+            })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_commits_caps_per_page(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = []
+            r = client.post("/api/repo/commits", json={
+                "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 200,
+            })
+        assert r.status_code == 200
+        call_args = mock_get.call_args
+        params = call_args[1].get("params", {})
+        assert params.get("per_page", 0) <= 30

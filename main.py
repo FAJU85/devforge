@@ -715,6 +715,83 @@ async def create_pr(body: PRBody):
     return {"url": data.get("html_url", ""), "number": data.get("number")}
 
 
+class RepoSearchBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    query: str
+    max_results: int = 10
+
+
+@app.post("/api/repo/search")
+async def repo_search(body: RepoSearchBody):
+    """Search code in a repository using GitHub code search API."""
+    if not body.query.strip():
+        return JSONResponse({"error": "Empty query"}, status_code=400)
+    hdrs = {
+        "Authorization": f"token {body.token}",
+        "Accept": "application/vnd.github.v3.text-match+json",
+    }
+    r = requests.get(
+        "https://api.github.com/search/code",
+        headers=hdrs,
+        params={"q": f"{body.query.strip()} repo:{body.owner}/{body.repo}", "per_page": min(body.max_results, 20)},
+        timeout=15,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Search failed")
+        except Exception:
+            err = "Search failed"
+        return JSONResponse({"error": err}, status_code=400)
+    items = []
+    for item in r.json().get("items", []):
+        snippets = []
+        for tm in item.get("text_matches", []):
+            for m in tm.get("matches", []):
+                t = (m.get("text") or "").strip()
+                if t:
+                    snippets.append(t[:120])
+        items.append({
+            "path": item["path"],
+            "sha": (item.get("sha") or "")[:7],
+            "url": item.get("html_url", ""),
+            "snippets": snippets[:3],
+        })
+    return {"items": items, "total": r.json().get("total_count", 0)}
+
+
+class RepoCommitsBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    branch: Optional[str] = "main"
+    max_results: int = 10
+
+
+@app.post("/api/repo/commits")
+async def repo_commits(body: RepoCommitsBody):
+    """Fetch recent commits for a branch."""
+    r = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/commits",
+        headers=gh_hdrs(body.token),
+        params={"sha": body.branch or "main", "per_page": min(body.max_results, 30)},
+        timeout=15,
+    )
+    if not r.ok:
+        return JSONResponse({"error": "Failed to fetch commits"}, status_code=400)
+    return [
+        {
+            "sha": c["sha"][:7],
+            "message": (c["commit"]["message"].split("\n")[0])[:80],
+            "author": c["commit"]["author"]["name"][:30],
+            "date": c["commit"]["author"]["date"][:10],
+            "url": c.get("html_url", ""),
+        }
+        for c in r.json()
+    ]
+
+
 class ToolDef(BaseModel):
     name: str
     description: str
