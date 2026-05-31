@@ -230,6 +230,23 @@ pre::-webkit-scrollbar{height:4px}
 [data-theme="light"] .diff-add{background:#d4edda;color:#155724}
 [data-theme="light"] .diff-del{background:#f8d7da;color:#721c24}
 [data-theme="light"] .diff-ctx{color:var(--muted)}
+.modal-overlay{position:fixed;inset:0;background:#0007;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 40px #0004}
+.modal-head{font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.modal-row{margin-bottom:10px}
+.modal-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.modal-cancel{background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;padding:7px 14px;border-radius:8px;font-size:12px;font-family:inherit;transition:all .15s}
+.modal-cancel:hover{color:var(--text);border-color:var(--border)}
+.modal-ok{background:var(--accent2);border:none;border-radius:8px;padding:7px 14px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity .15s}
+.modal-ok:hover{opacity:.9}.modal-ok:disabled{opacity:.4;cursor:not-allowed}
+.label-chips{display:flex;gap:5px;flex-wrap:wrap;padding:4px 0}
+.lchip{display:flex;align-items:center;gap:4px;padding:4px 9px;background:var(--panel2);border:1px solid var(--border2);border-radius:20px;cursor:pointer;font-size:11px;color:var(--muted);user-select:none;transition:all .15s}
+.lchip input{display:none}.lchip.on{background:var(--blue-dim);border-color:var(--blue-border);color:var(--blue)}
+.rs-card{margin:0 10px 6px;padding:9px 12px;background:var(--panel2);border:1px solid var(--border2);border-radius:10px;display:none}
+.rs-langs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px}
+.rs-lang{font-size:10px;padding:2px 7px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-weight:600}
+.rs-info{font-size:11px;color:var(--muted);line-height:1.5}
+.rs-badge{display:inline-block;background:var(--panel);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-size:10px;margin-right:4px}
 </style>
 </head>
 <body>
@@ -258,6 +275,7 @@ pre::-webkit-scrollbar{height:4px}
         <div class="search-wrap"><span class="search-icon">⌕</span><input class="search-in" id="repo-search" placeholder="Search your repos…" oninput="filterRepos(this.value)"></div>
         <div class="list-scroll" id="repo-list"><div class="list-msg">Loading…</div></div>
         <div class="sec-st" id="repo-st"></div>
+        <div class="rs-card" id="rs-card"><div class="rs-langs" id="rs-langs"></div><div class="rs-info" id="rs-info"></div></div>
         <div class="tree" id="file-tree"></div>
       </div>
     </div>
@@ -377,6 +395,7 @@ pre::-webkit-scrollbar{height:4px}
       <div class="mem-pill" id="mem-pill" onclick="clearMemory()" title="Session memory active — click to clear">🧠 Memory</div>
       <div class="stat-pill" id="stat-pill">~0 tok</div>
       <button class="export-btn" id="export-btn" onclick="exportChat()" title="Export conversation as Markdown" style="display:none">⬇️ Export</button>
+      <button class="export-btn" id="issue-btn" onclick="openIssueModal()" title="Create GitHub Issue from conversation" style="display:none">📋 Issue</button>
       <button class="export-btn" id="clear-btn" onclick="clearChat()" title="Clear conversation" style="display:none">🗑️ Clear</button>
     </div>
   </div>
@@ -407,6 +426,32 @@ pre::-webkit-scrollbar{height:4px}
   </div>
 </div>
 </div>
+
+<!-- Issue modal -->
+<div class="modal-overlay" id="issue-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-head">📋 Create GitHub Issue</div>
+    <div class="modal-row"><div class="flabel">Title</div><input class="finput" id="issue-title" placeholder="Issue title…" style="margin-top:3px"></div>
+    <div class="modal-row"><div class="flabel">Body</div><textarea class="side-textarea" id="issue-body" placeholder="Describe the issue…" style="width:100%;min-height:120px;max-height:200px;margin-top:3px;resize:vertical"></textarea></div>
+    <div class="modal-row"><div class="flabel">Labels</div><div class="label-chips"><label class="lchip" onclick="this.classList.toggle('on')"><input type="checkbox" value="bug"> 🐛 bug</label><label class="lchip" onclick="this.classList.toggle('on')"><input type="checkbox" value="enhancement"> ✨ enhancement</label><label class="lchip" onclick="this.classList.toggle('on')"><input type="checkbox" value="question"> ❓ question</label><label class="lchip" onclick="this.classList.toggle('on')"><input type="checkbox" value="documentation"> 📝 docs</label></div></div>
+    <div class="modal-foot"><button class="modal-cancel" onclick="$('issue-modal').style.display='none'">Cancel</button><button class="modal-ok" id="issue-ok" onclick="submitIssue()">Create Issue</button></div>
+  </div>
+</div>
+
+<!-- PR modal -->
+<div class="modal-overlay" id="pr-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-head">🔀 Create Pull Request</div>
+    <div class="modal-row"><div class="flabel">Title</div><input class="finput" id="pr-title" placeholder="PR title…" style="margin-top:3px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="flex:1"><div class="flabel">Head branch (with changes)</div><input class="finput" id="pr-head" placeholder="feat/my-change" style="margin-top:3px"></div>
+      <div style="flex:1"><div class="flabel">Base branch (merge into)</div><input class="finput" id="pr-base" placeholder="main" style="margin-top:3px"></div>
+    </div>
+    <div class="modal-row"><div class="flabel">Description</div><textarea class="side-textarea" id="pr-body" placeholder="Describe the changes…" style="width:100%;min-height:100px;max-height:180px;margin-top:3px;resize:vertical"></textarea></div>
+    <div class="modal-foot"><button class="modal-cancel" onclick="$('pr-modal').style.display='none'">Cancel</button><button class="modal-ok" id="pr-ok" onclick="submitPR()">Create PR</button></div>
+  </div>
+</div>
+
 <script>
 const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0}};
 const $=id=>document.getElementById(id);
@@ -498,14 +543,14 @@ function showWritePanel(btn){
   panel.innerHTML=`${diffHtml}<div class="wp-row"><div class="wp-field"><div class="flabel">Path</div><input class="finput wp-path" value="${fp.replace(/"/g,'&quot;')}" placeholder="src/file.ts"></div><div class="wp-field" style="max-width:140px"><div class="flabel">Branch</div><input class="finput wp-branch" value="${branch}" placeholder="main"></div></div><div class="wp-row"><div class="wp-field"><div class="flabel">Commit message</div><input class="finput wp-msg" value="Update ${fname}" placeholder="feat: …"></div><button class="wp-commit" onclick="commitFile(this)">📤 Commit</button></div>`;
   cblock.appendChild(panel);
 }
-async function commitFile(btn){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const panel=btn.closest('.write-panel');const cblock=panel.closest('.cblock');const path=panel.querySelector('.wp-path').value.trim();const branch=panel.querySelector('.wp-branch').value.trim();const message=panel.querySelector('.wp-msg').value.trim();const code=cblock.querySelector('code');if(!path||!message||!code)return;btn.textContent='⏳ Writing…';btn.disabled=true;const res=await post('/api/repo/write',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,content:code.textContent,message,branch});if(res.error){toast('Write failed: '+res.error,true);btn.textContent='📤 Commit';btn.disabled=false;return;}btn.textContent='✅ Written!';if(res.commit_url){const a=document.createElement('a');a.href=res.commit_url;a.target='_blank';a.className='wp-link';a.textContent='View commit →';btn.after(a);}toast(`✅ Committed to ${branch}: ${path}`);}
+async function commitFile(btn){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const panel=btn.closest('.write-panel');const cblock=panel.closest('.cblock');const path=panel.querySelector('.wp-path').value.trim();const branch=panel.querySelector('.wp-branch').value.trim();const message=panel.querySelector('.wp-msg').value.trim();const code=cblock.querySelector('code');if(!path||!message||!code)return;btn.textContent='⏳ Writing…';btn.disabled=true;const res=await post('/api/repo/write',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,content:code.textContent,message,branch});if(res.error){toast('Write failed: '+res.error,true);btn.textContent='📤 Commit';btn.disabled=false;return;}btn.textContent='✅ Written!';const defaultBranch=S.repo.branch||'main';if(res.commit_url){const a=document.createElement('a');a.href=res.commit_url;a.target='_blank';a.className='wp-link';a.textContent='View commit →';btn.after(a);}if(branch!==defaultBranch){const prBtn=document.createElement('button');prBtn.className='wp-commit';prBtn.style.cssText='background:var(--blue);margin-left:6px';prBtn.textContent='🔀 Create PR';prBtn.onclick=()=>openPRModal(branch);btn.after(prBtn);}toast(`✅ Committed to ${branch}: ${path}`);}
 async function startOAuth(){const d=await post('/api/github/auth/start',{});if(d.error){toast(d.error,true);return;}S.devCode=d.device_code;const uri=d.verification_uri||'https://github.com/login/device';$('oauth-box').style.display='block';$('oauth-box').innerHTML=`<div class="oauth-box"><div class="oauth-lbl">Enter this code at GitHub</div><div class="oauth-code">${d.user_code}</div><br><a href="${uri}" target="_blank" class="oauth-link"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Open github.com/login/device</a></div>`;$('oauth-check').style.display='block';}
 async function pollOAuth(){if(!S.devCode)return;const d=await post('/api/github/auth/poll',{device_code:S.devCode});if(d.access_token){S.ghToken=d.access_token;const u=await post('/api/github/user',{token:S.ghToken});S.ghUser=u;saveSession();$('gh-av').src=u.avatar_url||'';$('gh-nm').textContent=u.name||u.login;$('gh-lg').textContent='@'+u.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();}else if(d.error==='authorization_pending'){toast('Not authorized yet — approve on GitHub first');}else{toast('Error: '+(d.error_description||d.error||'Unknown'),true);}}
-function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';updCtx();updHint();}
+function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('issue-btn').style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';updCtx();updHint();}
 async function loadRepos(){$('repo-list').innerHTML='<div class="list-msg">Loading…</div>';const repos=await post('/api/github/repos',{token:S.ghToken});if(!Array.isArray(repos)){$('repo-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';return;}S.allRepos=repos;renderRepoList(repos);}
 function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo('${r.full_name.replace(/'/g,"\\'")}',this)"><div class="li-name">${r.name}</div><div class="li-sub"><span>${r.language||'—'}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
 function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerCase().includes(q.toLowerCase())));}
-async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('clear-btn').style.display='none';updCtx();$('file-tree').innerHTML='';$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);loadMemory();restoreChat();updHint();}
+async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('clear-btn').style.display='none';updCtx();$('file-tree').innerHTML='';$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadMemory();restoreChat();updHint();}
 function buildTree(files){const folders={};const root=[];for(const f of files){const p=f.path.split('/');if(p.length===1)root.push(f);else{if(!folders[p[0]])folders[p[0]]=[];folders[p[0]].push(f);}}let h='';for(const f of root)h+=tfn(f);for(const[k,v]of Object.entries(folders))h+=tfd(k,v);$('file-tree').innerHTML=h;}
 function tfd(name,files){const subs={};const direct=[];for(const f of files){const rest=f.path.split('/').slice(1).join('/');const p=rest.split('/');if(p.length===1)direct.push(f);else{const k=p[0];if(!subs[k])subs[k]=[];subs[k].push(f);}}let inner='';for(const[k,v]of Object.entries(subs))inner+=tfd(name+'/'+k,v);for(const f of direct)inner+=tfn(f);return`<div class="tfolder"><div class="tfolder-h" onclick="this.parentElement.classList.toggle('open')"><span class="tarr">▶</span><span>📁</span><span style="font-family:monospace;font-size:12px">${name.split('/').pop()}</span></div><div class="tfolder-c">${inner}</div></div>`;}
 function tfn(f){const sel=S.selFiles.has(f.path);const safe=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" onclick="togF('${safe}')"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF('${safe}')"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.path.split('/').pop()}</span></div>`;}
@@ -561,12 +606,71 @@ async function send(){
       const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
       while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='text'){reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='usage'){gotUsage=true;addTokens('',ev.v.input+ev.v.output);}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
     }
-    if(reply){S.msgs.push({role:'assistant',content:reply});if(!gotUsage)addTokens(reply);saveMemory();autoSaveChat();$('export-btn').style.display='block';$('clear-btn').style.display='block';}
+    if(reply){S.msgs.push({role:'assistant',content:reply});if(!gotUsage)addTokens(reply);saveMemory();autoSaveChat();$('export-btn').style.display='block';$('clear-btn').style.display='block';if(S.repo&&S.ghToken)$('issue-btn').style.display='block';}
     // Add copy action to the AI message we just rendered
     if(reply&&!multiAgent){const meta=tw.querySelector('.msg-meta');if(meta&&!meta.querySelector('.msg-actions')){const acts=document.createElement('div');acts.className='msg-actions';acts.innerHTML='<button class="msg-act" onclick="cpMsg(this)">copy</button>';meta.appendChild(acts);}}
   }catch(e){tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${e.message}</span></div></div>`;}
   S.streaming=false;$('send-btn').disabled=false;scrollB();
 }
+// ── GitHub Issue / PR modals ──────────────────────────────────────────────────
+function openIssueModal(){
+  if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}
+  const lastUser=S.msgs.slice().reverse().find(m=>m.role==='user');
+  const title=lastUser?lastUser.content.slice(0,80):'';
+  const body=S.msgs.map(m=>`**${m.role==='user'?'You':'Agent'}:** ${m.content.slice(0,500)}`).join('\n\n---\n\n');
+  $('issue-title').value=title;$('issue-body').value=body;
+  $('issue-modal').style.display='flex';$('issue-title').focus();
+}
+async function submitIssue(){
+  const title=$('issue-title').value.trim();const body=$('issue-body').value.trim();
+  if(!title){toast('Title required',true);return;}
+  const labels=Array.from(document.querySelectorAll('.lchip input:checked')).map(e=>e.value);
+  $('issue-ok').disabled=true;$('issue-ok').textContent='Creating…';
+  const res=await post('/api/github/issue/create',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,title,body,labels});
+  $('issue-ok').disabled=false;$('issue-ok').textContent='Create Issue';
+  if(res.error){toast('Issue failed: '+res.error,true);return;}
+  $('issue-modal').style.display='none';
+  toast(`✅ Issue #${res.number} created`);
+  if(res.url){const a=document.createElement('a');a.href=res.url;a.target='_blank';a.className='wp-link';a.textContent='View issue →';$('msgs').appendChild(a);}
+}
+async function submitPR(){
+  const title=$('pr-title').value.trim();const body=$('pr-body').value.trim();
+  const head=$('pr-head').value.trim();const base=$('pr-base').value.trim();
+  if(!title||!head){toast('Title and head branch required',true);return;}
+  $('pr-ok').disabled=true;$('pr-ok').textContent='Creating…';
+  const res=await post('/api/github/pr/create',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,title,body,head,base});
+  $('pr-ok').disabled=false;$('pr-ok').textContent='Create PR';
+  if(res.error){toast('PR failed: '+res.error,true);return;}
+  $('pr-modal').style.display='none';
+  toast(`✅ PR #${res.number} created`);
+  if(res.url){window.open(res.url,'_blank');}
+}
+function openPRModal(branch){
+  if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}
+  const base=S.repo.branch||'main';
+  $('pr-head').value=branch||'';$('pr-base').value=base;
+  const lastUser=S.msgs.slice().reverse().find(m=>m.role==='user');
+  $('pr-title').value=lastUser?lastUser.content.slice(0,72):'';
+  $('pr-body').value='## Summary\n\nGenerated by DevForge AI agent.\n\n'+S.msgs.slice(-4).map(m=>`**${m.role==='user'?'Request':'Implementation'}:** ${m.content.slice(0,300)}`).join('\n\n');
+  $('pr-modal').style.display='flex';$('pr-title').focus();
+}
+
+// ── Repo quick-scan ───────────────────────────────────────────────────────────
+const LANG_COLORS={js:'#f7df1e',ts:'#3178c6',jsx:'#61dafb',tsx:'#61dafb',py:'#3776ab',go:'#00add8',rs:'#ce422b',rb:'#cc342d',java:'#b07219',cs:'#239120',cpp:'#f34b7d',c:'#555',md:'#083fa1',json:'#292929',css:'#563d7c',html:'#e44b23',sh:'#89e051',sql:'#e38c00',yaml:'#cb171e',toml:'#9c4221'};
+const FRAMEWORK_HINTS={'package.json':'Node.js / JS','go.mod':'Go Module','requirements.txt':'Python','Cargo.toml':'Rust','pom.xml':'Java/Maven','build.gradle':'Java/Gradle','Dockerfile':'Docker','docker-compose.yml':'Docker Compose','next.config.js':'Next.js','next.config.ts':'Next.js','vite.config.ts':'Vite','pyproject.toml':'Python (PEP 517)','setup.py':'Python','Makefile':'Make','fastapi':'FastAPI'};
+function quickScanRepo(files){
+  const exts={};let totalSize=0;const rootFiles=new Set(files.filter(f=>!f.path.includes('/')).map(f=>f.path));
+  files.forEach(f=>{const e=f.path.split('.').pop()?.toLowerCase()||'other';exts[e]=(exts[e]||0)+1;totalSize+=(f.size||0);});
+  const sorted=Object.entries(exts).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const frameworks=[];Object.keys(FRAMEWORK_HINTS).forEach(k=>{if(rootFiles.has(k)||Array.from(rootFiles).some(f=>f.includes(k)))frameworks.push(FRAMEWORK_HINTS[k]);});
+  const langsHtml=sorted.map(([ext,cnt])=>{const col=LANG_COLORS[ext]||'var(--border)';return`<span class="rs-lang" style="background:${col}22;color:${col};border:1px solid ${col}44">.${ext} ${cnt}</span>`;}).join('');
+  const fw=frameworks.slice(0,3).map(f=>`<span class="rs-badge">${f}</span>`).join('');
+  const sizeStr=totalSize>1e6?(totalSize/1e6).toFixed(1)+'MB':totalSize>1e3?(totalSize/1e3).toFixed(0)+'KB':totalSize+'B';
+  const rs=$('rs-card');if(!rs)return;rs.style.display='block';
+  $('rs-langs').innerHTML=langsHtml;
+  $('rs-info').innerHTML=`${fw}<span style="color:var(--muted2);font-size:10px">${files.length} files · ~${sizeStr}</span>`;
+}
+
 (function init(){restoreEnhance();renderSavedPresets();if(!restoreSession())expSidebar();})();
 </script>
 </body>

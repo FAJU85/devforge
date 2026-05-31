@@ -1121,6 +1121,95 @@ class TestGetRunnerOpenAiCompat:
 # Cycle 5 — new agents, skills, memory, token usage
 # ---------------------------------------------------------------------------
 
+class TestGitHubIssueCreate:
+    def test_create_issue_success(self):
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(
+                ok=True,
+                json=lambda: {"html_url": "https://github.com/o/r/issues/1", "number": 1},
+            )
+            resp = client.post("/api/github/issue/create", json={
+                "token": "tok", "owner": "o", "repo": "r",
+                "title": "Bug found", "body": "Description", "labels": ["bug"],
+            })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["number"] == 1
+        assert "issues/1" in data["url"]
+
+    def test_create_issue_failure(self):
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(
+                ok=False,
+                json=lambda: {"message": "Not Found"},
+            )
+            resp = client.post("/api/github/issue/create", json={
+                "token": "tok", "owner": "o", "repo": "r",
+                "title": "t", "body": "b",
+            })
+        assert resp.status_code == 400
+        assert "error" in resp.json()
+
+    def test_create_issue_no_labels_default(self):
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(
+                ok=True,
+                json=lambda: {"html_url": "https://github.com/o/r/issues/2", "number": 2},
+            )
+            resp = client.post("/api/github/issue/create", json={
+                "token": "tok", "owner": "o", "repo": "r",
+                "title": "t", "body": "b",
+            })
+        assert resp.status_code == 200
+        # verify labels was passed as empty list
+        call_json = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get("json")
+        assert call_json["labels"] == []
+
+
+class TestGitHubPRCreate:
+    def test_create_pr_success(self):
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(
+                ok=True,
+                json=lambda: {"html_url": "https://github.com/o/r/pull/5", "number": 5},
+            )
+            resp = client.post("/api/github/pr/create", json={
+                "token": "tok", "owner": "o", "repo": "r",
+                "title": "Add feature", "body": "PR body",
+                "head": "feat/my-branch", "base": "main",
+            })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["number"] == 5
+        assert "pull/5" in data["url"]
+
+    def test_create_pr_failure(self):
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(
+                ok=False,
+                json=lambda: {"message": "Unprocessable Entity"},
+            )
+            resp = client.post("/api/github/pr/create", json={
+                "token": "tok", "owner": "o", "repo": "r",
+                "title": "t", "body": "b", "head": "h", "base": "main",
+            })
+        assert resp.status_code == 400
+
+    def test_create_pr_passes_head_and_base(self):
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(
+                ok=True,
+                json=lambda: {"html_url": "https://github.com/o/r/pull/6", "number": 6},
+            )
+            client.post("/api/github/pr/create", json={
+                "token": "tok", "owner": "o", "repo": "r",
+                "title": "t", "body": "b", "head": "feat/x", "base": "develop",
+            })
+        call_json = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get("json")
+        assert call_json["head"] == "feat/x"
+        assert call_json["base"] == "develop"
+
+
 class TestNewAgentPrompts:
     def test_refactor_agent_in_prompts(self):
         assert "refactor" in main.AGENT_PROMPTS

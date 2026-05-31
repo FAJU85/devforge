@@ -369,6 +369,61 @@ async def repo_write(body: WriteFileBody):
         "commit_url": commit.get("html_url", ""),
     }
 
+class IssueBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    title: str
+    body: str
+    labels: Optional[List[str]] = []
+
+@app.post("/api/github/issue/create")
+async def create_issue(body: IssueBody):
+    """Create a GitHub issue in the connected repository."""
+    r = requests.post(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/issues",
+        headers=gh_hdrs(body.token),
+        json={"title": body.title, "body": body.body, "labels": body.labels},
+        timeout=15,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Failed to create issue")
+        except Exception:
+            err = "Failed to create issue"
+        return JSONResponse({"error": err}, status_code=400)
+    data = r.json()
+    return {"url": data.get("html_url", ""), "number": data.get("number")}
+
+
+class PRBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    title: str
+    body: str
+    head: str
+    base: str
+
+@app.post("/api/github/pr/create")
+async def create_pr(body: PRBody):
+    """Create a GitHub pull request from head branch into base branch."""
+    r = requests.post(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls",
+        headers=gh_hdrs(body.token),
+        json={"title": body.title, "body": body.body, "head": body.head, "base": body.base},
+        timeout=15,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Failed to create PR")
+        except Exception:
+            err = "Failed to create PR"
+        return JSONResponse({"error": err}, status_code=400)
+    data = r.json()
+    return {"url": data.get("html_url", ""), "number": data.get("number")}
+
+
 class Msg(BaseModel):
     role: str; content: str
 
