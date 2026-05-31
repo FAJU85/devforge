@@ -23,6 +23,8 @@ AGENT_PROMPTS = {
     "architect": "You are a software architect. Design scalable, maintainable systems. Provide folder structures, interfaces, and tech decisions with clear reasoning.",
     "debug":     "You are a debugging specialist. Find root causes of errors. Provide complete, tested fixes with clear explanations.",
     "docs":      "You are a technical writer. Write clear, comprehensive documentation with usage examples, parameter descriptions, return values, and edge cases.",
+    "refactor":  "You are a refactoring expert. Restructure code to improve readability, maintainability, and performance without changing behavior. Identify code smells, apply SOLID principles, extract methods, reduce complexity, and eliminate duplication. Always show the full file path before code blocks and explain each refactoring decision.",
+    "testgen":   "You are a test generation expert. Write comprehensive test suites that cover all code paths. Include unit tests, integration tests, edge cases, and error conditions. Use the appropriate testing framework for the language. Show full file paths before every test file. Aim for high coverage and clear test names that document behavior.",
 }
 
 SKILL_PROMPTS = {
@@ -34,6 +36,10 @@ SKILL_PROMPTS = {
     "docs":     "SKILL - Documentation: Add complete inline docs. JSDoc for TS/JS, GoDoc for Go, docstrings for Python. Document params, return values, errors, and include usage examples.",
     "perf":     "SKILL - Performance: Choose efficient data structures, minimize allocations, implement caching where beneficial, consider time/space complexity.",
     "solid":    "SKILL - SOLID + Clean Code: Apply SOLID principles. Keep functions small and focused. Prefer composition over inheritance. Use dependency injection.",
+    "react":    "SKILL - React: Write modern functional React components with hooks. Use TypeScript strictly. Prefer named exports. Use React.memo / useMemo / useCallback only when profiling shows a need. Prefer controlled components. Separate concerns: keep UI, state, and side-effects in distinct layers.",
+    "nextjs":   "SKILL - Next.js App Router: Use React Server Components by default. Add 'use client' only when you need interactivity or browser APIs. Use route handlers (app/api/) for API endpoints. Leverage Suspense and streaming. Use next/image, next/link, and next/font. Follow Vercel deployment best practices.",
+    "docker":   "SKILL - Docker: Write minimal, layered Dockerfiles. Use multi-stage builds to keep images small. Pin base image versions. Run as non-root user. Use .dockerignore. Prefer COPY over ADD. Set explicit WORKDIR. Use health checks.",
+    "sql":      "SKILL - SQL / Database: Write efficient, readable SQL. Use indexes on JOIN and WHERE columns. Avoid N+1 queries — use JOINs or batch loads. Use transactions for multi-step writes. Prefer parameterized queries. Add EXPLAIN ANALYZE comments for complex queries.",
 }
 
 MA_PLAN_SYSTEM   = "You are a software architect. Analyze the task and create a clear, concise step-by-step implementation plan. List files to create/modify, key functions, and potential pitfalls. Do NOT write actual code yet."
@@ -41,14 +47,7 @@ MA_CODE_SYSTEM   = "You are an expert coding agent. Implement the task following
 MA_REVIEW_SYSTEM = "You are a senior code reviewer. Review the implementation for bugs, security issues, performance problems, missing error handling, and code quality. Be specific and constructive."
 
 def build_system(body: "ChatBody") -> str:
-    """Compose the system prompt from agent, skills, rules, and file context.
-
-    Args:
-        body: Validated chat request containing agent mode, skills, rules, and context.
-
-    Returns:
-        Assembled system prompt string ready to pass to any provider.
-    """
+    """Compose the system prompt from agent, skills, rules, file context, and session memory."""
     if getattr(body, 'instructions', '') and body.instructions.strip():
         base = body.instructions.strip()
     else:
@@ -64,6 +63,9 @@ def build_system(body: "ChatBody") -> str:
     rules = (getattr(body, 'rules', '') or '').strip()
     if rules:
         base += f"\n\n## Rules (must follow):\n{rules}"
+    memory = (getattr(body, 'memory', '') or '').strip()
+    if memory:
+        base += f"\n\n## Previous Session Context (from last conversation on this repo):\n{memory}"
     fc = (getattr(body, 'file_context', '') or '').strip()
     if fc:
         base += f"\n\n---\n**Repository context:**\n{fc}"
@@ -76,6 +78,12 @@ def _run_anthropic(q, loop, system, messages, api_key):
                 system=system, messages=messages) as stream:
             for text in stream.text_stream:
                 asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+            try:
+                msg = stream.get_final_message()
+                usage = {"input": msg.usage.input_tokens, "output": msg.usage.output_tokens}
+                asyncio.run_coroutine_threadsafe(q.put(("usage", usage)), loop)
+            except Exception:
+                pass
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
@@ -181,7 +189,7 @@ async def stream_one(runner, system: str, messages: list):
     while True:
         try:
             kind, val = await asyncio.wait_for(q.get(), timeout=120)
-            if kind == "text": yield kind, val
+            if kind in ("text", "usage"): yield kind, val
             elif kind == "done": break
             else: yield "error", val; break
         except asyncio.TimeoutError:
@@ -387,6 +395,7 @@ class ChatBody(BaseModel):
     ma_plan_provider: Optional[str] = ""
     ma_code_provider: Optional[str] = ""
     ma_review_provider: Optional[str] = ""
+    memory: Optional[str] = ""
 
 _PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom"}
 

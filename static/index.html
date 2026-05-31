@@ -205,6 +205,15 @@ pre::-webkit-scrollbar{height:4px}
 .send-btn:hover{opacity:.9;transform:translateY(-1px)}.send-btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 18px;color:var(--text);font-size:13px;z-index:999;animation:fadein .2s ease;max-width:90vw;box-shadow:var(--shadow);text-align:center}
 .toast.err{color:var(--red);border-color:var(--red)}
+.qfill-btn{background:var(--panel);border:1px solid var(--border2);border-radius:7px;padding:5px 9px;color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.qfill-btn:hover{border-color:var(--accent-border);color:var(--accent2)}
+.stack-chip{display:flex;align-items:center;gap:4px;padding:4px 9px;background:var(--panel);border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-size:11px;color:var(--muted);transition:all .15s;font-family:inherit;white-space:nowrap}
+.stack-chip:hover{border-color:var(--blue-border);color:var(--blue);background:var(--blue-dim)}
+.mem-pill{background:var(--purple-dim);border:1px solid var(--purple-border);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--purple);white-space:nowrap;cursor:pointer;display:none}
+.mem-pill:hover{opacity:.8}
+.stat-pill{background:var(--panel2);border:1px solid var(--border2);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--muted2);font-family:'JetBrains Mono',monospace;white-space:nowrap;display:none}
+.export-btn{background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;padding:5px 9px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.export-btn:hover{border-color:var(--accent-border);color:var(--accent2)}
 </style>
 </head>
 <body>
@@ -258,7 +267,13 @@ pre::-webkit-scrollbar{height:4px}
           <div id="hf-browser"><div class="search-wrap" style="padding:0 10px 6px"><span class="search-icon">⌕</span><input class="search-in" id="model-search" placeholder="Search HF models…" oninput="debounceSearch(this.value)"></div><div class="list-scroll" id="model-list"><div class="list-msg">Search to browse models</div></div></div>
         </div>
         <div id="pf-o" style="display:none">
-          <div class="prov-note">OpenAI-compatible endpoint — Ollama, LM Studio, OpenRouter, Mistral…</div>
+          <div class="prov-note">OpenAI-compatible endpoint — quick-fill or enter manually:</div>
+          <div style="padding:0 10px 8px;display:flex;gap:5px;flex-wrap:wrap">
+            <button class="qfill-btn" onclick="fillEndpoint('vercel')">🌐 Vercel Gateway</button>
+            <button class="qfill-btn" onclick="fillEndpoint('openrouter')">🔄 OpenRouter</button>
+            <button class="qfill-btn" onclick="fillEndpoint('ollama')">🦙 Ollama</button>
+            <button class="qfill-btn" onclick="fillEndpoint('lmstudio')">🖥 LM Studio</button>
+          </div>
           <div class="pfields">
             <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" oninput="updBadge()"></div>
             <div><div class="flabel">Model</div><input class="finput" id="oci-model" placeholder="llama3" autocomplete="off" oninput="updBadge()"></div>
@@ -277,9 +292,11 @@ pre::-webkit-scrollbar{height:4px}
           <div class="ma-stage-row"><div class="ma-stage-lbl">⚙️ Code</div><select class="finput" id="ma-code-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
           <div class="ma-stage-row"><div class="ma-stage-lbl">🔍 Review</div><select class="finput" id="ma-rev-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
         </div>
-        <div style="padding:0 16px 6px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Skills</div>
+        <div style="padding:0 16px 4px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between"><span>Skills</span><span style="font-weight:400;color:var(--muted2);font-size:10px">Stacks ↓</span></div>
         <div class="skills-grid">
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="go" class="skill-check"> 🐹 Go</label>
+          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="react" class="skill-check"> ⚛️ React</label>
+          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="nextjs" class="skill-check"> 🚀 Next.js</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="zod" class="skill-check"> 🔷 Zod</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="tests" class="skill-check"> 🧪 Tests</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="errors" class="skill-check"> 🛡️ Errors</label>
@@ -287,11 +304,40 @@ pre::-webkit-scrollbar{height:4px}
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="docs" class="skill-check"> 📝 Docs</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="perf" class="skill-check"> ⚡ Perf</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="solid" class="skill-check"> 🎯 SOLID</label>
+          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="docker" class="skill-check"> 🐳 Docker</label>
+          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="sql" class="skill-check"> 🗄️ SQL</label>
+        </div>
+        <div style="padding:2px 16px 4px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Quick Stacks</div>
+        <div style="padding:0 10px 6px;display:flex;gap:5px;flex-wrap:wrap">
+          <button class="stack-chip" onclick="activateStack('fullstack_ts')">⚛️ Full-Stack TS</button>
+          <button class="stack-chip" onclick="activateStack('python_api')">🐍 Python API</button>
+          <button class="stack-chip" onclick="activateStack('go_service')">🐹 Go Service</button>
+          <button class="stack-chip" onclick="activateStack('secure_review')">🔒 Secure Review</button>
         </div>
         <div style="padding:6px 16px 4px;display:flex;align-items:center;justify-content:space-between"><span style="font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Rules</span><label class="ul-lbl" for="rules-upload" title="Load from file">📎 Upload</label><input type="file" id="rules-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'rules-input')"></div>
         <textarea class="side-textarea" id="rules-input" placeholder="e.g. Never use var. Always return errors." oninput="saveEnhance()"></textarea>
         <div style="padding:8px 16px 4px;display:flex;align-items:center;justify-content:space-between"><span style="font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Custom Instructions</span><label class="ul-lbl" for="instr-upload" title="Load from file">📎 Upload</label><input type="file" id="instr-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'instr-input')"></div>
         <textarea class="side-textarea" id="instr-input" placeholder="Override the default agent behavior…" oninput="saveEnhance()" style="margin-bottom:4px"></textarea>
+        <div style="padding:8px 16px 4px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Presets</div>
+        <div style="padding:0 10px 8px;display:flex;flex-direction:column;gap:5px">
+          <select class="finput" id="preset-sel" onchange="loadPreset(this.value)">
+            <option value="">— Load a preset —</option>
+            <optgroup label="Built-in">
+              <option value="__react_ts">⚛️ React + TypeScript</option>
+              <option value="__python">🐍 Python Backend</option>
+              <option value="__go">🐹 Go Microservice</option>
+              <option value="__security">🔒 Security Auditor</option>
+              <option value="__docs">📝 Tech Writer</option>
+              <option value="__nextjs">🚀 Next.js + Vercel</option>
+              <option value="__fastapi">⚡ FastAPI + Python</option>
+            </optgroup>
+            <optgroup label="Saved" id="preset-saved-group"></optgroup>
+          </select>
+          <div style="display:flex;gap:5px">
+            <input class="finput" id="preset-name" placeholder="Name to save current…" style="flex:1">
+            <button onclick="savePreset()" style="background:var(--accent2);border:none;border-radius:8px;padding:7px 10px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;transition:opacity .15s">Save</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -305,11 +351,16 @@ pre::-webkit-scrollbar{height:4px}
       <button class="atab" data-agent="architect" onclick="setAgent(this)">🏗️ Arch</button>
       <button class="atab" data-agent="debug" onclick="setAgent(this)">🐛 Debug</button>
       <button class="atab" data-agent="docs" onclick="setAgent(this)">📝 Docs</button>
+      <button class="atab" data-agent="refactor" onclick="setAgent(this)">🔀 Refactor</button>
+      <button class="atab" data-agent="testgen" onclick="setAgent(this)">🧪 Tests</button>
     </div>
     <div class="tbr">
       <div class="model-pill" id="model-pill">claude-sonnet-4</div>
       <div class="ctx-pill" id="ctx-pill" style="display:none">0 files</div>
       <div class="ma-pill" id="ma-pill" style="display:none">🤖 Multi-Agent</div>
+      <div class="mem-pill" id="mem-pill" onclick="clearMemory()" title="Session memory active — click to clear">🧠 Memory</div>
+      <div class="stat-pill" id="stat-pill">~0 tok</div>
+      <button class="export-btn" id="export-btn" onclick="exportChat()" title="Export conversation as Markdown" style="display:none">⬇️ Export</button>
     </div>
   </div>
   <div class="msgs" id="msgs">
@@ -340,7 +391,7 @@ pre::-webkit-scrollbar{height:4px}
 </div>
 </div>
 <script>
-const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',agent:'code',streaming:false};
+const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0}};
 const $=id=>document.getElementById(id);
 const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
 const get=p=>fetch(p).then(r=>r.json());
@@ -352,6 +403,33 @@ function ficon(p){const e=fext(p);const m={js:'🟨',jsx:'⚛️',ts:'🔷',tsx:
 function fmt(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(0)+'k';return n||0;}
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
 function scrollB(){const m=$('msgs');m.scrollTop=m.scrollHeight;}
+// ── Endpoint quick-fill ──────────────────────────────────────────────────────
+const ENDPOINT_PRESETS={vercel:{url:'https://ai-gateway.vercel.sh/v1',model:'openai/gpt-4o',key:''},openrouter:{url:'https://openrouter.ai/api/v1',model:'anthropic/claude-3.5-sonnet',key:''},ollama:{url:'http://localhost:11434/v1',model:'llama3',key:''},lmstudio:{url:'http://localhost:1234/v1',model:'local-model',key:''}};
+function fillEndpoint(key){const ep=ENDPOINT_PRESETS[key];if(!ep)return;$('oci-url').value=ep.url;$('oci-model').value=ep.model;if(ep.key)$('oci-key').value=ep.key;saveEnhance();updBadge();toast('Filled: '+key);}
+
+// ── Instruction Presets ──────────────────────────────────────────────────────
+const BUILTIN_PRESETS={react_ts:{instructions:'You are an expert React + TypeScript developer. Write modern functional components with hooks. Use TypeScript strictly (no any). Prefer named exports. Use Tailwind CSS for styling. Follow React best practices.',rules:'Never use class components. Always use const arrow functions. Export types separately. Use React.FC sparingly.',skills:['react','zod','tests','errors']},python:{instructions:'You are an expert Python backend developer. Write clean, idiomatic Python 3.11+. Use type hints everywhere. Prefer FastAPI for APIs, SQLAlchemy for ORM, Pydantic for validation.',rules:'No bare except. Use specific exception types. Add type annotations to all functions.',skills:['tests','errors','security']},go:{instructions:'You are an expert Go developer. Write idiomatic Go. Use explicit error returns, never panic for business logic. Use interfaces for abstraction.',rules:'Always handle errors. No global state. Use context.Context for cancellation. Prefer stdlib.',skills:['go','errors','tests']},security:{instructions:'You are a security expert. Identify vulnerabilities, insecure patterns, and attack surfaces. Reference OWASP Top 10. Provide remediation code with severity labels.',rules:'Flag all hardcoded credentials, injection risks, missing auth checks. Be specific about severity.',skills:['security','errors']},docs:{instructions:'You are a technical writer. Write clear, comprehensive documentation. Include usage examples, parameter descriptions, return values, and edge cases.',rules:'Always include a quick-start example. Use consistent formatting. Explain the why, not just the what.',skills:['docs']},nextjs:{instructions:'You are an expert Next.js + Vercel developer. Use App Router with React Server Components. Deploy to Vercel. Use Tailwind CSS, TypeScript, and modern tooling.',rules:"Prefer Server Components. Add 'use client' only when needed. Use route handlers for APIs. Follow Vercel deployment best practices.",skills:['react','nextjs','zod','perf']},fastapi:{instructions:'You are an expert FastAPI developer. Build async Python APIs with FastAPI, SQLAlchemy 2.0 async, Pydantic v2, and Alembic for migrations.',rules:'Use async/await everywhere. Use Depends() for dependency injection. Write Pydantic models for all request/response bodies. Include proper HTTP status codes.',skills:['tests','errors','security','sql']}};
+function loadPreset(key){if(!key)return;let p;if(key.startsWith('__')){p=BUILTIN_PRESETS[key.slice(2)];}else{try{const s=JSON.parse(localStorage.getItem('df-presets')||'{}');p=s[key];}catch(e){}}if(!p)return;if(p.instructions!==undefined)$('instr-input').value=p.instructions;if(p.rules!==undefined)$('rules-input').value=p.rules;if(p.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=p.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});saveEnhance();toast('Loaded: '+key.replace('__','').replace(/_/g,' '));setTimeout(()=>{$('preset-sel').value='';},0);}
+function savePreset(){const name=$('preset-name').value.trim();if(!name){toast('Enter a preset name',true);return;}const saved=JSON.parse(localStorage.getItem('df-presets')||'{}');saved[name]={instructions:$('instr-input').value,rules:$('rules-input').value,skills:Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value)};localStorage.setItem('df-presets',JSON.stringify(saved));$('preset-name').value='';renderSavedPresets();toast('Saved: '+name);}
+function renderSavedPresets(){try{const saved=JSON.parse(localStorage.getItem('df-presets')||'{}');const g=$('preset-saved-group');if(!g)return;g.innerHTML='';Object.keys(saved).forEach(name=>{const o=document.createElement('option');o.value=name;o.textContent='★ '+name;g.appendChild(o);});}catch(e){}}
+
+// ── Quick Stacks ─────────────────────────────────────────────────────────────
+const STACKS={fullstack_ts:{skills:['react','nextjs','zod','tests','errors','perf'],label:'Full-Stack TS'},python_api:{skills:['tests','errors','security','sql','docs'],label:'Python API'},go_service:{skills:['go','errors','tests','perf','docker'],label:'Go Service'},secure_review:{skills:['security','errors','docs'],label:'Secure Review'}};
+function activateStack(key){const s=STACKS[key];if(!s)return;document.querySelectorAll('.skill-check').forEach(el=>{el.checked=s.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});saveEnhance();toast('Stack: '+s.label);}
+
+// ── Session Memory ────────────────────────────────────────────────────────────
+function memKey(){return S.repo?`df-mem-${S.repo.owner}/${S.repo.repo}`:null;}
+function loadMemory(){const k=memKey();if(!k)return;try{const raw=localStorage.getItem(k);if(!raw)return;const data=JSON.parse(raw);S.memory=data;$('mem-pill').style.display='flex';$('mem-pill').title=`Memory from ${new Date(data.ts).toLocaleDateString()} — click to clear`;}catch(e){S.memory=null;}}
+function saveMemory(){const k=memKey();if(!k||!S.msgs.length)return;const recent=S.msgs.slice(-6);const summary=recent.map(m=>`[${m.role}]: ${m.content.slice(0,400)}`).join('\n\n');localStorage.setItem(k,JSON.stringify({ts:Date.now(),summary,msgs:recent,repo:`${S.repo.owner}/${S.repo.repo}`}));}
+function clearMemory(){const k=memKey();if(k)localStorage.removeItem(k);S.memory=null;$('mem-pill').style.display='none';toast('Session memory cleared');}
+function getMemoryContext(){if(!S.memory)return'';return S.memory.summary||'';}
+
+// ── Chat Export ───────────────────────────────────────────────────────────────
+function exportChat(){if(!S.msgs.length){toast('No messages to export',true);return;}const lines=[`# DevForge Session — ${new Date().toLocaleString()}`,S.repo?`**Repo:** ${S.repo.owner}/${S.repo.repo}`:'','---',''];S.msgs.forEach(m=>{lines.push(`## ${m.role==='user'?'You':'Agent'}`);lines.push(m.content);lines.push('');});const blob=new Blob([lines.join('\n')],{type:'text/markdown'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`devforge-${Date.now()}.md`;a.click();URL.revokeObjectURL(a.href);toast('Exported chat');}
+
+// ── Token stats ───────────────────────────────────────────────────────────────
+function addTokens(text,precise){const est=precise||(text.split(/\s+/).filter(Boolean).length*1.3|0);S.stats.tokens+=est;S.stats.messages++;const p=$('stat-pill');p.style.display='block';p.textContent=`~${S.stats.tokens>=1000?(S.stats.tokens/1000).toFixed(1)+'k':S.stats.tokens} tok`;}
+
 function toggleSec(lbl){lbl.closest('.s-sec').classList.toggle('closed');}
 function setTheme(t){document.documentElement.setAttribute('data-theme',t);$('ts-light').classList.toggle('on',t==='light');$('ts-dark').classList.toggle('on',t==='dark');$('hljs-theme').href=t==='dark'?'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css':'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';localStorage.setItem('df-theme',t);}
 (()=>{setTheme(localStorage.getItem('df-theme')||'dark');})();
@@ -371,11 +449,11 @@ function showWritePanel(btn){const cblock=btn.closest('.cblock');const fp=btn.ge
 async function commitFile(btn){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const panel=btn.closest('.write-panel');const cblock=panel.closest('.cblock');const path=panel.querySelector('.wp-path').value.trim();const branch=panel.querySelector('.wp-branch').value.trim();const message=panel.querySelector('.wp-msg').value.trim();const code=cblock.querySelector('code');if(!path||!message||!code)return;btn.textContent='⏳ Writing…';btn.disabled=true;const res=await post('/api/repo/write',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,content:code.textContent,message,branch});if(res.error){toast('Write failed: '+res.error,true);btn.textContent='📤 Commit';btn.disabled=false;return;}btn.textContent='✅ Written!';if(res.commit_url){const a=document.createElement('a');a.href=res.commit_url;a.target='_blank';a.className='wp-link';a.textContent='View commit →';btn.after(a);}toast(`✅ Committed to ${branch}: ${path}`);}
 async function startOAuth(){const d=await post('/api/github/auth/start',{});if(d.error){toast(d.error,true);return;}S.devCode=d.device_code;const uri=d.verification_uri||'https://github.com/login/device';$('oauth-box').style.display='block';$('oauth-box').innerHTML=`<div class="oauth-box"><div class="oauth-lbl">Enter this code at GitHub</div><div class="oauth-code">${d.user_code}</div><br><a href="${uri}" target="_blank" class="oauth-link"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Open github.com/login/device</a></div>`;$('oauth-check').style.display='block';}
 async function pollOAuth(){if(!S.devCode)return;const d=await post('/api/github/auth/poll',{device_code:S.devCode});if(d.access_token){S.ghToken=d.access_token;const u=await post('/api/github/user',{token:S.ghToken});S.ghUser=u;saveSession();$('gh-av').src=u.avatar_url||'';$('gh-nm').textContent=u.name||u.login;$('gh-lg').textContent='@'+u.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();}else if(d.error==='authorization_pending'){toast('Not authorized yet — approve on GitHub first');}else{toast('Error: '+(d.error_description||d.error||'Unknown'),true);}}
-function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';updCtx();updHint();}
+function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';updCtx();updHint();}
 async function loadRepos(){$('repo-list').innerHTML='<div class="list-msg">Loading…</div>';const repos=await post('/api/github/repos',{token:S.ghToken});if(!Array.isArray(repos)){$('repo-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';return;}S.allRepos=repos;renderRepoList(repos);}
 function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo('${r.full_name.replace(/'/g,"\\'")}',this)"><div class="li-name">${r.name}</div><div class="li-sub"><span>${r.language||'—'}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
 function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerCase().includes(q.toLowerCase())));}
-async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();updCtx();$('file-tree').innerHTML='';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);updHint();}
+async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.memory=null;$('mem-pill').style.display='none';updCtx();$('file-tree').innerHTML='';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);loadMemory();updHint();}
 function buildTree(files){const folders={};const root=[];for(const f of files){const p=f.path.split('/');if(p.length===1)root.push(f);else{if(!folders[p[0]])folders[p[0]]=[];folders[p[0]].push(f);}}let h='';for(const f of root)h+=tfn(f);for(const[k,v]of Object.entries(folders))h+=tfd(k,v);$('file-tree').innerHTML=h;}
 function tfd(name,files){const subs={};const direct=[];for(const f of files){const rest=f.path.split('/').slice(1).join('/');const p=rest.split('/');if(p.length===1)direct.push(f);else{const k=p[0];if(!subs[k])subs[k]=[];subs[k].push(f);}}let inner='';for(const[k,v]of Object.entries(subs))inner+=tfd(name+'/'+k,v);for(const f of direct)inner+=tfn(f);return`<div class="tfolder"><div class="tfolder-h" onclick="this.parentElement.classList.toggle('open')"><span class="tarr">▶</span><span>📁</span><span style="font-family:monospace;font-size:12px">${name.split('/').pop()}</span></div><div class="tfolder-c">${inner}</div></div>`;}
 function tfn(f){const sel=S.selFiles.has(f.path);const safe=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" onclick="togF('${safe}')"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF('${safe}')"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.path.split('/').pop()}</span></div>`;}
@@ -413,9 +491,10 @@ async function send(){
   S.streaming=true;$('send-btn').disabled=true;
   const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);
   const streamId='sb'+Date.now()+Math.random().toString(36).slice(2);
-  let reply='';
+  let reply='';let gotUsage=false;
   try{
-    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:$('hft').value,hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:S.msgs.slice(-10),file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent,ma_plan_provider:$('ma-plan-prov').value||'',ma_code_provider:$('ma-code-prov').value||'',ma_review_provider:$('ma-rev-prov').value||''})});
+    const histMsgs=S.memory?[...S.memory.msgs,...S.msgs.slice(-8)]:S.msgs.slice(-10);
+    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:$('hft').value,hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:histMsgs,file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent,ma_plan_provider:$('ma-plan-prov').value||'',ma_code_provider:$('ma-code-prov').value||'',ma_review_provider:$('ma-rev-prov').value||'',memory:getMemoryContext()})});
     if(!res.ok){const err=await res.text();tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${res.status}: ${err.slice(0,300)}</span></div></div>`;S.streaming=false;$('send-btn').disabled=false;return;}
     if(multiAgent){
       tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent" style="color:var(--purple)">Multi-Agent</span><span class="msg-time">${now()}</span></div><div id="${streamId}-wrap"></div></div>`;
@@ -427,13 +506,13 @@ async function send(){
       tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span><span class="msg-time">${now()}</span></div><div class="msg-body" id="${streamId}"></div></div>`;
       const be=document.getElementById(streamId);
       const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
-      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='text'){reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
+      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='text'){reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='usage'){gotUsage=true;addTokens('',ev.v.input+ev.v.output);}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
     }
-    if(reply)S.msgs.push({role:'assistant',content:reply});
+    if(reply){S.msgs.push({role:'assistant',content:reply});if(!gotUsage)addTokens(reply);saveMemory();$('export-btn').style.display='block';}
   }catch(e){tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${e.message}</span></div></div>`;}
   S.streaming=false;$('send-btn').disabled=false;scrollB();
 }
-(function init(){restoreEnhance();if(!restoreSession())expSidebar();})();
+(function init(){restoreEnhance();renderSavedPresets();if(!restoreSession())expSidebar();})();
 </script>
 </body>
 </html>

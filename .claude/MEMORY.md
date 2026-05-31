@@ -31,14 +31,14 @@ devforge/
 - **Auth:** GitHub OAuth Device Flow (GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET env vars)
 - **HF Token:** HF_TOKEN env var (optional)
 
-## Features Implemented (v1 — Cycles 1-3 Complete)
+## Features Implemented (v1 — Cycles 1-5 Complete)
 - [x] GitHub OAuth one-click (Device Flow)
 - [x] Repo browser + file tree (up to 8 files in context)
 - [x] AI Provider: Anthropic Claude (current model)
 - [x] AI Provider: Groq (llama, mixtral, gemma, deepseek, qwen)
 - [x] AI Provider: HuggingFace (any text-generation model)
 - [x] Multi-agent pipeline (Plan → Implement → Review, same provider)
-- [x] Skills: Go, Zod, Tests, Errors, Security, Docs, Perf, SOLID
+- [x] Skills: Go, Zod, Tests, Errors, Security, Docs, Perf, SOLID ← Cycles 1-3
 - [x] Custom Rules textarea
 - [x] Custom Instructions textarea
 - [x] SSE streaming responses
@@ -46,13 +46,20 @@ devforge/
 - [x] localStorage persistence (survives page refresh) ← fixed Cycle 1
 - [x] OpenAI-compatible custom endpoint (Ollama, OpenRouter, LM Studio…) ← added Cycle 2
 - [x] GitHub write-back: agent commits generated code directly to repo ← added Cycle 3
+- [x] File upload for instructions/rules/local context ← added Cycle 4
+- [x] Cross-provider multi-agent (different AI per stage: Plan/Code/Review) ← added Cycle 4
+- [x] Instruction Presets (7 built-in + save/load/delete custom) ← added Cycle 5
+- [x] Endpoint quick-fill: Vercel AI Gateway, OpenRouter, Ollama, LM Studio ← added Cycle 5
+- [x] Session Memory: per-repo localStorage context injected across sessions ← added Cycle 5
+- [x] Chat Export: download conversation as .md ← added Cycle 5
+- [x] Token stats: real (Anthropic) + estimated (other providers) display ← added Cycle 5
+- [x] Expanded Skills: React, Next.js, Docker, SQL ← added Cycle 5
+- [x] Quick Stacks: Full-Stack TS, Python API, Go Service, Secure Review ← added Cycle 5
+- [x] New Agent Tabs: Refactor + Test Gen ← added Cycle 5
 
 ## Features NOT Yet Implemented (Target)
 - [ ] MCP (Model Context Protocol) tool support
-- [ ] File upload for instructions/context
-- [ ] Cross-provider multi-agent (different AI for each stage)
-- [ ] Persistent memory (beyond localStorage)
-- [ ] Fine-tune instruction presets
+- [ ] Persistent server-side memory (beyond localStorage)
 - [ ] Mistral / Cohere / Gemini providers (can now use via Custom endpoint)
 
 ## Known Construction Errors
@@ -60,13 +67,20 @@ devforge/
 
 ## Cumulative Scope Ledger
 ```
-totalCyclesCompleted: 3
+totalCyclesCompleted: 5
 totalFilesCreated: 3   (tests/__init__.py, tests/test_main.py, .gitignore)
 totalFilesMutated: 4   (main.py, requirements.txt, static/index.html, tests/test_main.py)
 totalPackagesAdded: 0
 scopeFreeze: false
 conservativeMode: false
 ```
+
+## Cycle 5 Summary (2026-05-31) — Vercel Ecosystem Upgrades
+| Area | Change |
+|---|---|
+| Backend | `refactor` + `testgen` agent prompts; `react`/`nextjs`/`docker`/`sql` skills; `memory` field in `ChatBody`; `build_system` injects memory; `_run_anthropic` emits `("usage",{input,output})`; `stream_one` passes through usage |
+| Frontend | Endpoint quick-fills (Vercel AI Gateway, OpenRouter, Ollama, LM Studio); 7 built-in instruction presets + save/load/delete custom; 4 Quick Stacks; session memory (per-repo localStorage, injected as context); chat export (.md); token stats pill; 🔀 Refactor + 🧪 Tests agent tabs; 4 new skill chips |
+| Tests | 18 new tests; 105 total |
 
 ## Cycle 3 Summary (2026-05-31)
 | Area | Change |
@@ -97,5 +111,5 @@ conservativeMode: false
 
 ## Git State
 - Branch: claude/exciting-galileo-7UDWc
-- Last commit: 5d5722c — Add GitHub write-back
+- Last commit: 21ae09d — Add cross-provider multi-agent and file upload for instructions/context
 - Remote: origin/claude/exciting-galileo-7UDWc ✓ tracked
