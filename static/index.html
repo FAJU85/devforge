@@ -301,6 +301,9 @@ pre::-webkit-scrollbar{height:4px}
 .tool-name-lbl{font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tool-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px;padding:0 2px;line-height:1;transition:color .15s;flex-shrink:0}
 .tool-del:hover{color:var(--red)}
+.search-hi{background:#ff0;color:#000;border-radius:2px;padding:0 1px}
+[data-theme="dark"] .search-hi{background:#b5851b;color:#ffe}
+.search-hi.current{background:var(--accent2);color:#fff}
 .tool-card{margin:8px 0;border:1px solid var(--blue-border);border-radius:10px;background:var(--blue-dim);overflow:hidden;font-size:12px}
 .tool-card-hd{display:flex;align-items:center;gap:7px;padding:7px 12px;background:rgba(0,0,0,.1);font-size:12px}
 .tc-name{font-weight:700;color:var(--blue)}
@@ -513,7 +516,16 @@ pre::-webkit-scrollbar{height:4px}
       <button class="export-btn" id="export-btn" onclick="exportChat()" title="Export conversation as Markdown" style="display:none">⬇️ Export</button>
       <button class="export-btn" id="issue-btn" onclick="openIssueModal()" title="Create GitHub Issue from conversation" style="display:none">📋 Issue</button>
       <button class="export-btn" id="clear-btn" onclick="clearChat()" title="Clear conversation" style="display:none">🗑️ Clear</button>
+      <button class="export-btn" id="search-chat-btn" onclick="toggleChatSearch()" title="Search chat (Ctrl+F)" style="display:none">🔍</button>
     </div>
+  </div>
+  <div id="chat-search-bar" style="display:none;padding:4px 12px;border-bottom:1px solid var(--border2);background:var(--panel2);display:none;align-items:center;gap:8px">
+    <span style="font-size:12px;color:var(--muted)">Find:</span>
+    <input id="chat-search-in" class="finput" placeholder="Search messages…" style="flex:1;padding:4px 8px;font-size:12px" oninput="runChatSearch(this.value)">
+    <span id="chat-search-count" style="font-size:11px;color:var(--muted);white-space:nowrap"></span>
+    <button onclick="stepChatSearch(1)" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:4px;padding:2px 7px;font-size:11px">▼</button>
+    <button onclick="stepChatSearch(-1)" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:4px;padding:2px 7px;font-size:11px">▲</button>
+    <button onclick="toggleChatSearch()" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:14px;padding:0 2px">✕</button>
   </div>
   <div id="tab-bar" class="tab-bar">
     <div id="tabs-list" class="tabs-list"></div>
@@ -782,7 +794,8 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});}
+  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}}
+  if((e.metaKey||e.ctrlKey)&&e.key==='f'&&!e.target?.matches('input,textarea')){e.preventDefault();toggleChatSearch();}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key==='Backspace'){e.preventDefault();if($('ti'))$('ti').value='';}
   if(e.target?.id==='ti'&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey){
@@ -824,6 +837,29 @@ function exportChat(){if(!S.msgs.length){toast('No messages to export',true);ret
 
 // ── Stop stream ───────────────────────────────────────────────────────────────
 function stopStream(){if(S.abortCtrl){S.abortCtrl.abort();S.abortCtrl=null;}S.streaming=false;$('send-btn').disabled=false;$('stop-btn').style.display='none';toast('Stopped');}
+
+// ── Chat search ───────────────────────────────────────────────────────────────
+let _searchHits=[],_searchIdx=0;
+function toggleChatSearch(){
+  const bar=$('chat-search-bar');
+  if(!bar)return;
+  const shown=bar.style.display==='flex';
+  bar.style.display=shown?'none':'flex';
+  if(!shown){$('chat-search-in').value='';$('chat-search-in').focus();clearChatHighlights();}
+}
+function clearChatHighlights(){$('msgs').querySelectorAll('.search-hi').forEach(el=>{const t=document.createTextNode(el.textContent);el.parentNode.replaceChild(t,el);});_searchHits=[];_searchIdx=0;$('chat-search-count').textContent='';}
+function runChatSearch(q){
+  clearChatHighlights();if(!q.trim())return;
+  const re=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
+  $('msgs').querySelectorAll('.msg-body').forEach(body=>{
+    const walker=document.createTreeWalker(body,NodeFilter.SHOW_TEXT);
+    const nodes=[];let node;while(node=walker.nextNode()){if(node.parentElement?.classList.contains('search-hi'))continue;nodes.push(node);}
+    nodes.forEach(tn=>{const txt=tn.textContent;if(!re.test(txt))return;re.lastIndex=0;const frag=document.createDocumentFragment();let last=0,m;while(m=re.exec(txt)){if(m.index>last)frag.appendChild(document.createTextNode(txt.slice(last,m.index)));const hi=document.createElement('mark');hi.className='search-hi';hi.textContent=m[0];frag.appendChild(hi);_searchHits.push(hi);last=m.index+m[0].length;}if(last<txt.length)frag.appendChild(document.createTextNode(txt.slice(last)));tn.parentNode.replaceChild(frag,tn);re.lastIndex=0;});
+  });
+  $('chat-search-count').textContent=_searchHits.length?`${_searchHits.length} match${_searchHits.length!==1?'es':''}`:'No matches';
+  if(_searchHits.length){_searchIdx=0;_searchHits[0].classList.add('current');_searchHits[0].scrollIntoView({block:'center',behavior:'smooth'});}
+}
+function stepChatSearch(dir){if(!_searchHits.length)return;_searchHits[_searchIdx].classList.remove('current');_searchIdx=(_searchIdx+dir+_searchHits.length)%_searchHits.length;_searchHits[_searchIdx].classList.add('current');_searchHits[_searchIdx].scrollIntoView({block:'center',behavior:'smooth'});}
 
 // ── Prompt enhancement ───────────────────────────────────────────────────────
 async function enhancePrompt(){
@@ -882,7 +918,8 @@ function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!r
 function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');}
 function expSidebar(){$('sidebar').classList.remove('col');$('exp-btn').classList.remove('show');}
 marked.setOptions({breaks:true,gfm:true});
-function rmd(text){const d=document.createElement('div');d.innerHTML=marked.parse(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase();const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" onclick="cp(this)">copy</button>`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{const ce=h.querySelector('code');if(!ce)return;const fp=ce.textContent.trim();if(!/[./]/.test(fp))return;const nx=h.nextElementSibling;if(nx&&nx.classList.contains('cblock')){const hd=nx.querySelector('.cblock-head');if(hd){const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);}}});}return d.innerHTML;}
+function explainCode(btn){const code=btn.closest('.cblock').querySelector('code');if(!code)return;const snippet=code.textContent.slice(0,800);const ti=$('ti');ti.value=`Explain what this code does, step by step:\n\`\`\`\n${snippet}\n\`\`\``;ti.focus();ti.dispatchEvent(new Event('input'));$('msgs').scrollTo(0,$('msgs').scrollHeight);}
+function rmd(text){const d=document.createElement('div');d.innerHTML=marked.parse(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase();const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" onclick="cp(this)">copy</button><button class="ccopy" onclick="explainCode(this)" title="Explain this code">?</button>`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{const ce=h.querySelector('code');if(!ce)return;const fp=ce.textContent.trim();if(!/[./]/.test(fp))return;const nx=h.nextElementSibling;if(nx&&nx.classList.contains('cblock')){const hd=nx.querySelector('.cblock-head');if(hd){const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);}}});}return d.innerHTML;}
 function cp(btn){const c=btn.closest('.cblock').querySelector('code');navigator.clipboard.writeText(c.textContent);btn.textContent='copied!';btn.classList.add('ok');setTimeout(()=>{btn.textContent='copy';btn.classList.remove('ok');},2000);}
 function uploadToArea(input,targetId){const file=input.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{$(targetId).value=e.target.result;saveEnhance();toast(`Loaded ${file.name}`);};r.readAsText(file);input.value='';}
 function uploadContext(input){const files=Array.from(input.files);if(!files.length)return;let done=0;const max=8-S.selFiles.size-S.localFiles.size;if(max<=0){toast('Max 8 files',true);input.value='';return;}const toLoad=files.slice(0,max);if(files.length>max)toast(`Max 8 files — loaded first ${max}`,true);toLoad.forEach(file=>{const r=new FileReader();r.onload=e=>{S.localFiles.set(file.name,e.target.result);done++;if(done===toLoad.length){updCtx();if(!S.streaming)toast(`Added ${done} file${done>1?'s':''}`);}};r.readAsText(file);});input.value='';}
@@ -928,7 +965,7 @@ async function suggestCommitMsg(panel){
 }
 async function startOAuth(){const d=await post('/api/github/auth/start',{});if(d.error){toast(d.error,true);return;}S.devCode=d.device_code;const uri=d.verification_uri||'https://github.com/login/device';$('oauth-box').style.display='block';$('oauth-box').innerHTML=`<div class="oauth-box"><div class="oauth-lbl">Enter this code at GitHub</div><div class="oauth-code">${d.user_code}</div><br><a href="${uri}" target="_blank" class="oauth-link"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Open github.com/login/device</a></div>`;$('oauth-check').style.display='block';}
 async function pollOAuth(){if(!S.devCode)return;const d=await post('/api/github/auth/poll',{device_code:S.devCode});if(d.access_token){S.ghToken=d.access_token;const u=await post('/api/github/user',{token:S.ghToken});S.ghUser=u;saveSession();$('gh-av').src=u.avatar_url||'';$('gh-nm').textContent=u.name||u.login;$('gh-lg').textContent='@'+u.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();}else if(d.error==='authorization_pending'){toast('Not authorized yet — approve on GitHub first');}else{toast('Error: '+(d.error_description||d.error||'Unknown'),true);}}
-function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.tabs=[];S.activeTabId=null;$('tab-bar').style.display='none';S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('issue-btn').style.display='none';const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='none';$('commits-panel').style.display='none';$('search-results-panel').style.display='none';const wp=$('workflows-panel');if(wp)wp.style.display='none';updCtx();updHint();}
+function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.tabs=[];S.activeTabId=null;$('tab-bar').style.display='none';S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';$('export-btn').style.display='none';$('issue-btn').style.display='none';$('search-chat-btn').style.display='none';const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='none';$('commits-panel').style.display='none';$('search-results-panel').style.display='none';const wp=$('workflows-panel');if(wp)wp.style.display='none';updCtx();updHint();}
 async function loadRepos(){$('repo-list').innerHTML='<div class="list-msg">Loading…</div>';const repos=await post('/api/github/repos',{token:S.ghToken});if(!Array.isArray(repos)){$('repo-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';return;}S.allRepos=repos;renderRepoList(repos);}
 function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo('${r.full_name.replace(/'/g,"\\'")}',this)"><div class="li-name">${r.name}</div><div class="li-sub"><span>${r.language||'—'}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
 function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerCase().includes(q.toLowerCase())));}
@@ -1146,7 +1183,7 @@ async function send(){
       // Auto-name the tab from first user message
       const tab=S.tabs.find(t=>t.id===S.activeTabId);
       if(tab&&tab.name==='Chat'&&S.msgs.length===2){const first=S.msgs[0].content;tab.name=first.slice(0,28)+(first.length>28?'…':'');renderTabBar();}
-      saveMemory();autoSaveChat();$('export-btn').style.display='block';$('clear-btn').style.display='block';if(S.repo&&S.ghToken)$('issue-btn').style.display='block';}
+      saveMemory();autoSaveChat();$('export-btn').style.display='block';$('clear-btn').style.display='block';$('search-chat-btn').style.display='block';if(S.repo&&S.ghToken)$('issue-btn').style.display='block';}
     // Add copy + regenerate actions to the AI message we just rendered
     if(reply&&!multiAgent){const meta=tw.querySelector('.msg-meta');if(meta&&!meta.querySelector('.msg-actions')){const acts=document.createElement('div');acts.className='msg-actions';acts.innerHTML='<button class="msg-act" onclick="cpMsg(this)">copy</button><button class="msg-act" onclick="regenerate()" title="Regenerate this response">🔄</button>';meta.appendChild(acts);}}
   }catch(e){tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${e.message}</span></div></div>`;}
