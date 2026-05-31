@@ -553,7 +553,7 @@ pre::-webkit-scrollbar{height:4px}
       </div>
     </div>
   </div>
-  <div style="max-width:820px;margin:0 auto;width:100%"><div class="ctx-strip" id="ctx-strip"></div></div>
+  <div style="max-width:820px;margin:0 auto;width:100%"><div class="ctx-strip" id="ctx-strip"></div><div style="padding:0 0 4px;text-align:right"><button id="gen-readme-btn" onclick="openReadmeModal()" style="display:none;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent2);cursor:pointer;border-radius:6px;padding:3px 10px;font-size:11px;font-family:inherit;transition:all .15s" title="Generate README.md from selected files">📝 Generate README</button></div></div>
   <div class="input-wrap">
     <div class="ibox">
       <textarea class="ti" id="ti" placeholder="Describe your task…" onkeydown="hk(event)" oninput="ar(this)" rows="1"></textarea>
@@ -660,6 +660,25 @@ pre::-webkit-scrollbar{height:4px}
     <div style="padding:8px 16px;border-top:1px solid var(--border2);display:flex;justify-content:flex-end;gap:8px">
       <button class="modal-cancel" id="rn-copy-btn" onclick="copyReleaseNotes()" style="display:none">📋 Copy</button>
       <button class="modal-cancel" onclick="$('relnotes-modal').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- README modal -->
+<div class="modal-overlay" id="readme-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:800px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <span style="font-size:15px;font-weight:600;flex:1">📝 Generate README.md</span>
+      <button onclick="$('readme-modal').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0 2px">✕</button>
+    </div>
+    <div id="readme-output" style="padding:14px 16px;overflow-y:auto;max-height:65vh;font-size:13px;line-height:1.75;color:var(--text);min-height:60px">
+      <span style="color:var(--muted)">Click Generate to create README from your selected files…</span>
+    </div>
+    <div style="padding:8px 16px;border-top:1px solid var(--border2);display:flex;justify-content:flex-end;gap:8px">
+      <button class="modal-cancel" id="readme-copy-btn" onclick="copyReadme()" style="display:none">📋 Copy</button>
+      <button class="modal-cancel" id="readme-save-btn" onclick="saveReadmeToContext()" style="display:none">📎 Add to context</button>
+      <button class="modal-ok" id="readme-gen-btn" onclick="generateReadme()">✨ Generate</button>
+      <button class="modal-cancel" onclick="$('readme-modal').style.display='none'">Close</button>
     </div>
   </div>
 </div>
@@ -826,7 +845,7 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}}
+  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}}
   if((e.metaKey||e.ctrlKey)&&e.key==='f'&&!e.target?.matches('input,textarea')){e.preventDefault();toggleChatSearch();}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key==='Backspace'){e.preventDefault();if($('ti'))$('ti').value='';}
@@ -1091,6 +1110,9 @@ function updCtx(){
   }
   if(totalTok>80000&&n>0){if(!S._budgetWarned){S._budgetWarned=true;toast('⚠️ Context approaching 100K token limit — consider summarizing large files',true);}}
   else{S._budgetWarned=false;}
+  // Show README generate button when files are selected and provider is available
+  const hasKey=S.prov==='anthropic'?!!$('ak')?.value:S.prov==='groq'?!!$('gk')?.value:false;
+  const rnBtn=$('gen-readme-btn');if(rnBtn)rnBtn.style.display=(n>0&&hasKey)?'block':'none';
   updHint();
 }
 function toggleSkill(chip){const cb=chip.querySelector('input');setTimeout(()=>{chip.classList.toggle('checked',cb.checked);saveEnhance();},0);}
@@ -1197,6 +1219,38 @@ async function generateReleaseNotes(){
   finally{btn.disabled=false;btn.textContent='✨ Generate';_rnAbort=null;}
 }
 function copyReleaseNotes(){const out=$('rn-output');navigator.clipboard.writeText(out.innerText||out.textContent||'');toast('Copied release notes!');}
+
+// ── README Generator ──────────────────────────────────────────────────────────
+let _readmeAbort=null,_readmeRaw='';
+function openReadmeModal(){
+  $('readme-output').innerHTML='<span style="color:var(--muted)">Click Generate to create README from your selected files…</span>';
+  $('readme-copy-btn').style.display='none';$('readme-save-btn').style.display='none';_readmeRaw='';
+  $('readme-modal').style.display='flex';
+}
+async function generateReadme(){
+  if(_readmeAbort){_readmeAbort.abort();_readmeAbort=null;}
+  const fc=bCtx();if(!fc.trim()){toast('Select files first',true);return;}
+  const btn=$('readme-gen-btn');btn.disabled=true;btn.textContent='⏳ Generating…';
+  $('readme-copy-btn').style.display='none';$('readme-save-btn').style.display='none';
+  $('readme-output').innerHTML='<span style="color:var(--muted)">Analyzing files…</span>';
+  _readmeAbort=new AbortController();_readmeRaw='';
+  const body={provider:S.prov,repo_name:S.repo?`${S.repo.owner}/${S.repo.repo}`:'',
+    file_context:fc,anthropic_model:S.anthropicModel||'claude-sonnet-4-6'};
+  if(S.prov==='anthropic')body.anthropic_key=$('ak').value;
+  else if(S.prov==='groq')body.groq_key=$('gk').value;
+  try{
+    const res=await fetch('/api/repo/generate-readme',{method:'POST',headers:{'Content-Type':'application/json'},signal:_readmeAbort.signal,body:JSON.stringify(body)});
+    if(!res.ok){$('readme-output').innerHTML=`<span style="color:var(--red)">Error: ${await res.text()}</span>`;return;}
+    $('readme-output').innerHTML='';
+    const out=$('readme-output');
+    const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;try{const ev=JSON.parse(line.slice(5).trim());if(ev.t==='text'){_readmeRaw+=ev.v;out.innerHTML=marked.parse(_readmeRaw);}else if(ev.t==='error'){out.innerHTML+=`<span style="color:var(--red)">Error: ${esc(ev.v)}</span>`;}else if(ev.t==='done')break;}catch{}}}
+    if(_readmeRaw){$('readme-copy-btn').style.display='block';$('readme-save-btn').style.display='block';}
+  }catch(e){if(e.name!=='AbortError')$('readme-output').innerHTML=`<span style="color:var(--red)">${esc(e.message)}</span>`;}
+  finally{btn.disabled=false;btn.textContent='✨ Generate';_readmeAbort=null;}
+}
+function copyReadme(){navigator.clipboard.writeText(_readmeRaw);toast('Copied README!');}
+function saveReadmeToContext(){if(!_readmeRaw)return;S.localFiles.set('README.md',_readmeRaw);updCtx();toast('Added README.md to context');$('readme-modal').style.display='none';}
 
 function setAnthModel(model){
   S.anthropicModel=model;

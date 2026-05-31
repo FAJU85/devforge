@@ -1096,6 +1096,81 @@ async def suggest_commit_message(body: CommitMsgBody):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+README_SYSTEM = (
+    "You are a technical writer. Generate a comprehensive, well-structured README.md for the given "
+    "repository based on its code files. Include: project name and one-line description, "
+    "features, tech stack, installation instructions (inferred from code), usage examples, "
+    "API reference if applicable, and contribution guidelines. Use GitHub-flavored Markdown with "
+    "badges where appropriate. Make it professional and developer-friendly."
+)
+
+class ReadmeBody(BaseModel):
+    provider: str = "anthropic"
+    anthropic_key: Optional[str] = ""
+    anthropic_model: Optional[str] = "claude-sonnet-4-6"
+    groq_key: Optional[str] = ""
+    repo_name: Optional[str] = ""
+    file_context: str
+
+@app.post("/api/repo/generate-readme")
+async def generate_readme(body: ReadmeBody):
+    """Stream an AI-generated README.md based on repo file context."""
+    if not (body.file_context or "").strip():
+        return JSONResponse({"error": "file_context required"}, status_code=400)
+    user_prompt = (
+        f"Repository: {body.repo_name or 'Unknown'}\n\n"
+        f"Files:\n{body.file_context[:12000]}"
+    )
+    model = (body.anthropic_model or "claude-sonnet-4-6").strip() or "claude-sonnet-4-6"
+
+    async def _stream():
+        if body.provider == "anthropic" and body.anthropic_key:
+            import threading
+            q: asyncio.Queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
+            def _run():
+                try:
+                    client = Anthropic(api_key=body.anthropic_key)
+                    with client.messages.stream(
+                        model=model, max_tokens=2048, system=README_SYSTEM,
+                        messages=[{"role": "user", "content": user_prompt}],
+                    ) as stream:
+                        for text in stream.text_stream:
+                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+                except Exception as e:
+                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+            threading.Thread(target=_run, daemon=True).start()
+            while True:
+                kind, val = await asyncio.wait_for(q.get(), timeout=90)
+                if kind == "text":
+                    yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
+                elif kind == "done":
+                    break
+                else:
+                    yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
+        elif body.provider == "groq" and body.groq_key:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.3-70b-versatile", "max_tokens": 2048,
+                      "messages": [{"role": "system", "content": README_SYSTEM},
+                                   {"role": "user", "content": user_prompt}]},
+                timeout=45,
+            )
+            if r.ok:
+                text = r.json()["choices"][0]["message"]["content"]
+                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
+                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
+            else:
+                yield f"data: {json.dumps({'t':'error','v':r.text[:200]})}\n\n"
+        else:
+            yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"
+        yield f"data: {json.dumps({'t':'done'})}\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
 class ToolDef(BaseModel):
     name: str
     description: str

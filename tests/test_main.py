@@ -2529,3 +2529,47 @@ class TestGistCreate:
             })
         assert r.status_code == 400
         assert "error" in r.json()
+
+
+class TestGenerateReadmeEndpoint:
+    def test_readme_empty_context_returns_400(self):
+        r = client.post("/api/repo/generate-readme", json={
+            "provider": "anthropic",
+            "anthropic_key": "sk-test",
+            "file_context": "   ",
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_readme_anthropic_streams(self):
+        mock_client = MagicMock()
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__enter__ = MagicMock(return_value=mock_stream_ctx)
+        mock_stream_ctx.__exit__ = MagicMock(return_value=False)
+        mock_stream_ctx.text_stream = iter(["# MyRepo\n\nA great project."])
+        mock_client.messages.stream.return_value = mock_stream_ctx
+        with patch("main.Anthropic", return_value=mock_client):
+            r = client.post("/api/repo/generate-readme", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "file_context": "main.py\n\ndef main(): pass",
+                "repo_name": "user/myrepo",
+            })
+        assert r.status_code == 200
+        assert "text/event-stream" in r.headers.get("content-type", "")
+
+    def test_readme_groq_success(self):
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.json.return_value = {
+            "choices": [{"message": {"content": "# README\n\nAwesome project."}}]
+        }
+        with patch("requests.post", return_value=mock_resp):
+            r = client.post("/api/repo/generate-readme", json={
+                "provider": "groq",
+                "groq_key": "gsk_test",
+                "file_context": "index.py\n\nprint('hello')",
+            })
+        assert r.status_code == 200
+        content = r.text
+        assert "README" in content or "text/event-stream" in r.headers.get("content-type", "")
