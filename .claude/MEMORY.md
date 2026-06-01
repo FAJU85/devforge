@@ -1,5 +1,5 @@
 # DevForge — Orchestrator Memory
-> Last updated: 2026-05-31 | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
+> Last updated: 2026-06-01 | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
 
 ## Project Identity
 - **Name:** DevForge
@@ -92,6 +92,16 @@ devforge/
 - [x] PR Review Mode (POST /api/github/pr/diff; loads diff as context; switches to Review agent)
 - [x] GitHub Gist Export (POST /api/github/gist/create; Gist button on code blocks)
 - [x] README Generator (POST /api/repo/generate-readme; streamed from selected files)
+- [x] Mobile-responsive UI (sidebar slide-over overlay, compact topbar, bottom-sheet modals)
+- [x] Removed Go/Zod skill chips (less relevant for typical users)
+
+## Cycle 26 Summary (2026-06-01) — Mobile UI + Skill Cleanup
+| Area | Change |
+|---|---|
+| Frontend | `@media(max-width:768px)` — sidebar as fixed slide-over overlay with dark backdrop; `exp-btn` always visible; topbar compacted; model/MA/mem/stat pills hidden; modals slide up from bottom |
+| Frontend | Removed 🐹 Go and 🔷 Zod skill chips from skills grid |
+| JS | Added `isMob()` helper; `collSidebar()`/`expSidebar()` handle mobile overlay; `init()` always collapses on mobile |
+| Tests | 190 total (no backend changes) |
 
 ## Cycle 25 Summary (2026-06-01) — Code Security Scanner
 | Area | Change |
@@ -113,7 +123,7 @@ devforge/
 
 ## Cumulative Scope Ledger
 ```
-totalCyclesCompleted: 25
+totalCyclesCompleted: 26
 totalFilesCreated: 3   (tests/__init__.py, tests/test_main.py, .gitignore)
 totalFilesMutated: 4   (main.py, requirements.txt, static/index.html, tests/test_main.py)
 totalPackagesAdded: 0
@@ -205,5 +215,5 @@ conservativeMode: false
 
 ## Git State
 - Branch: claude/exciting-galileo-7UDWc
-- Last commit: ab47b49 — Cycle 20: Code Explain Button + Chat Search
+- Last commit: 2ea8f88 — Cycle 26: Mobile-responsive UI + remove Go/Zod skill chips
 - Remote: origin/claude/exciting-galileo-7UDWc ✓ tracked
