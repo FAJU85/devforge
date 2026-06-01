@@ -1183,7 +1183,7 @@ class CodeScanBody(BaseModel):
 async def scan_code(body: CodeScanBody):
     """Scan code for security issues using AST analysis (Python) and pattern matching."""
     issues: list = []
-    code = (body.code or "").strip()
+    code = (body.code or "").strip()[:100_000]
     lang = (body.language or "text").lower()
     if not code:
         return {"issues": [], "safe": True, "language": lang, "total": 0}
@@ -1450,7 +1450,7 @@ class ScanDepsBody(BaseModel):
 async def scan_deps(body: ScanDepsBody):
     """Parse a dependency file, check latest versions, and stream an AI security audit."""
     fname = (body.filename or "").lower().strip().split("/")[-1]
-    content = (body.content or "").strip()
+    content = (body.content or "").strip()[:200_000]
     if not content:
         return JSONResponse({"error": "content required"}, status_code=400)
 
