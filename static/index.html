@@ -326,10 +326,32 @@ pre::-webkit-scrollbar{height:4px}
 [data-theme="light"] .scan-issue.scan-medium{background:#fef3c7}
 [data-theme="light"] .scan-issue.scan-low{background:var(--blue-dim)}
 .scan-msg{font-size:11px;color:var(--muted);margin-top:2px}
+/* Mobile overlay backdrop */
+.mob-overlay{display:none;position:fixed;inset:0;background:#0007;z-index:999;cursor:pointer}
+.mob-overlay.show{display:block}
+/* ── Mobile responsive ────────────────────────────────────────────────────── */
+@media(max-width:768px){
+  .sidebar{position:fixed;top:0;left:0;height:100vh;z-index:1000;width:82vw;min-width:240px;max-width:300px;transform:translateX(0);transition:transform .25s cubic-bezier(.4,0,.2,1);box-shadow:4px 0 28px #0007}
+  .sidebar.col{width:82vw;min-width:240px;max-width:300px;border-right:1px solid var(--border2)!important;transform:translateX(-106%)}
+  .exp-btn{display:flex!important}
+  .topbar{padding:0 8px;gap:4px;height:48px}
+  .atabs{gap:1px;flex:1}
+  .atab{padding:5px 7px;font-size:11px}
+  .tbr{gap:3px;flex-shrink:0}
+  .model-pill,.ma-pill,.mem-pill,.stat-pill{display:none!important}
+  .export-btn{padding:4px 7px;font-size:11px}
+  .msg-inner{padding:0 10px}
+  .input-wrap{padding:6px 10px 12px}
+  .ctx-strip{padding:4px 10px}
+  .empty-sub{font-size:12px;max-width:280px}
+  .modal-overlay{padding:0;align-items:flex-end}
+  .modal{border-radius:16px 16px 0 0!important;max-width:100%!important;max-height:92vh;overflow-y:auto}
+}
 </style>
 </head>
 <body>
 <div id="app">
+<div class="mob-overlay" id="mob-overlay" onclick="collSidebar()"></div>
 <aside class="sidebar" id="sidebar">
   <div class="s-head">
     <div class="s-logo"><div class="s-mark">⚡</div><div class="s-name">DevForge</div></div>
@@ -447,10 +469,8 @@ pre::-webkit-scrollbar{height:4px}
         </div>
         <div style="padding:0 16px 4px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between"><span>Skills</span><span style="font-weight:400;color:var(--muted2);font-size:10px">Stacks ↓</span></div>
         <div class="skills-grid">
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="go" class="skill-check"> 🐹 Go</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="react" class="skill-check"> ⚛️ React</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="nextjs" class="skill-check"> 🚀 Next.js</label>
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="zod" class="skill-check"> 🔷 Zod</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="tests" class="skill-check"> 🧪 Tests</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="errors" class="skill-check"> 🛡️ Errors</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="security" class="skill-check"> 🔒 Security</label>
@@ -997,8 +1017,9 @@ function clearSession(){localStorage.removeItem('df-session');}
 function restoreSession(){try{const raw=localStorage.getItem('df-session');if(!raw)return false;const{ghToken,ghUser}=JSON.parse(raw);if(!ghToken||!ghUser)return false;S.ghToken=ghToken;S.ghUser=ghUser;$('gh-av').src=ghUser.avatar_url||'';$('gh-nm').textContent=ghUser.name||ghUser.login;$('gh-lg').textContent='@'+ghUser.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();return true;}catch(e){return false;}}
 function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);const ts=$('ma-test-stage');const tt=$('think-toggle');const tb=$('think-budget');const data={prov:S.prov,anthropicKey:$('ak').value||'',anthropicModel:S.anthropicModel||'claude-sonnet-4-6',thinkingMode:tt?tt.checked:false,thinkingBudget:tb?tb.value:'2000',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||'',maTestStage:ts?ts.checked:false,maTestProv:$('ma-test-prov')?$('ma-test-prov').value||'':''};localStorage.setItem('df-enhance',JSON.stringify(data));}
 function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=d.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
-function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');}
-function expSidebar(){$('sidebar').classList.remove('col');$('exp-btn').classList.remove('show');}
+function isMob(){return window.innerWidth<=768;}
+function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
+function expSidebar(){$('sidebar').classList.remove('col');if(!isMob())$('exp-btn').classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
 marked.setOptions({breaks:true,gfm:true});
 function explainCode(btn){const code=btn.closest('.cblock').querySelector('code');if(!code)return;const snippet=code.textContent.slice(0,800);const ti=$('ti');ti.value=`Explain what this code does, step by step:\n\`\`\`\n${snippet}\n\`\`\``;ti.focus();ti.dispatchEvent(new Event('input'));$('msgs').scrollTo(0,$('msgs').scrollHeight);}
 async function createGist(btn,lang){
@@ -1610,7 +1631,7 @@ function quickScanRepo(files){
   $('rs-info').innerHTML=`${fw}<span style="color:var(--muted2);font-size:10px">${files.length} files · ~${sizeStr}</span>`;
 }
 
-(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();if(!restoreSession())expSidebar();})();
+(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();if(!restoreSession())expSidebar();if(isMob())collSidebar();})();
 </script>
 </body>
 </html>
