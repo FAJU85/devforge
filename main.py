@@ -185,18 +185,25 @@ def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="
                     result_content = f"Error: Tool '{block.name}' not found"
                 else:
                     try:
-                        hdrs = dict(tool_def.headers or {})
-                        url = tool_def.url
-                        inp = block.input or {}
-                        for k, v in inp.items():
-                            url = url.replace(f"{{{k}}}", str(v))
-                        if tool_def.method.upper() == "GET":
-                            params = {k: v for k, v in inp.items() if f"{{{k}}}" not in tool_def.url}
-                            r = requests.get(url, headers=hdrs, params=params, timeout=15)
+                        if not re.match(r"^https?://", tool_def.url or ""):
+                            result_content = "Error: Tool URL must start with http:// or https://"
                         else:
-                            hdrs.setdefault("Content-Type", "application/json")
-                            r = requests.request(tool_def.method.upper(), url, headers=hdrs, json=inp, timeout=15)
-                        result_content = r.text[:2000]
+                            hdrs = dict(tool_def.headers or {})
+                            url = tool_def.url
+                            inp = block.input or {}
+                            for k, v in inp.items():
+                                url = url.replace(f"{{{k}}}", str(v))
+                            method = (tool_def.method or "GET").upper()
+                            if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+                                result_content = f"Error: Unsupported method {method}"
+                            elif method == "GET":
+                                params = {k: v for k, v in inp.items() if f"{{{k}}}" not in tool_def.url}
+                                r = requests.get(url, headers=hdrs, params=params, timeout=15)
+                                result_content = r.text[:2000]
+                            else:
+                                hdrs.setdefault("Content-Type", "application/json")
+                                r = requests.request(method, url, headers=hdrs, json=inp, timeout=15)
+                                result_content = r.text[:2000]
                     except Exception as e:
                         result_content = f"Error: {e}"
                 asyncio.run_coroutine_threadsafe(
