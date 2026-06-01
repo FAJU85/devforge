@@ -3081,3 +3081,122 @@ class TestScanDepsExtraEcosystems:
         assert r.status_code == 200
         content = r.text
         assert "packages" in content
+
+    def test_scan_deps_outdated_flag_set(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"info": {"version": "3.0.0"}}
+            r = client.post("/api/repo/scan-deps", json={
+                "filename": "requirements.txt",
+                "content": "flask==1.0.0",
+                "provider": "anthropic",
+                "anthropic_key": "",
+            })
+        assert r.status_code == 200
+        import json as _json
+        for line in r.text.splitlines():
+            if line.startswith("data: "):
+                ev = _json.loads(line[6:])
+                if ev.get("t") == "packages":
+                    pkg = ev["v"]["packages"][0]
+                    assert pkg["pinned"] == "1.0.0"
+                    assert pkg["latest"] == "3.0.0"
+                    assert pkg["outdated"] is True
+                    break
+
+    def test_scan_deps_unpinned_flag_set(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "requirements.txt",
+            "content": "flask>=2.0",
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 200
+        import json as _json
+        for line in r.text.splitlines():
+            if line.startswith("data: "):
+                ev = _json.loads(line[6:])
+                if ev.get("t") == "packages":
+                    pkg = ev["v"]["packages"][0]
+                    assert pkg["unpinned"] is True
+                    assert pkg["pinned"] is None
+                    break
+
+
+class TestVersionCheckerHelpers:
+    """Unit tests for _pypi_latest and _npm_latest."""
+
+    def test_pypi_latest_returns_version_on_success(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"info": {"version": "1.2.3"}}
+            result = main._pypi_latest("requests")
+        assert result == {"name": "requests", "latest": "1.2.3"}
+
+    def test_pypi_latest_returns_none_on_http_error(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = False
+            result = main._pypi_latest("nonexistent-pkg")
+        assert result == {"name": "nonexistent-pkg", "latest": None}
+
+    def test_pypi_latest_returns_none_on_network_error(self):
+        with patch("requests.get", side_effect=Exception("timeout")):
+            result = main._pypi_latest("requests")
+        assert result == {"name": "requests", "latest": None}
+
+    def test_npm_latest_returns_version_on_success(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"version": "18.2.0"}
+            result = main._npm_latest("react")
+        assert result == {"name": "react", "latest": "18.2.0"}
+
+    def test_npm_latest_returns_none_on_http_error(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = False
+            result = main._npm_latest("nonexistent-pkg")
+        assert result == {"name": "nonexistent-pkg", "latest": None}
+
+    def test_npm_latest_returns_none_on_network_error(self):
+        with patch("requests.get", side_effect=Exception("connection refused")):
+            result = main._npm_latest("react")
+        assert result == {"name": "react", "latest": None}
+
+
+class TestBuildSystemAgentSecurity:
+    """Tests for SECURITY_FOOTER injection logic in build_system."""
+
+    def test_code_agent_gets_security_footer(self):
+        body = _body(agent="code")
+        result = main.build_system(body)
+        assert "Security Requirements" in result
+
+    def test_refactor_agent_gets_security_footer(self):
+        body = _body(agent="refactor")
+        result = main.build_system(body)
+        assert "Security Requirements" in result
+
+    def test_testgen_agent_gets_security_footer(self):
+        body = _body(agent="testgen")
+        result = main.build_system(body)
+        assert "Security Requirements" in result
+
+    def test_debug_agent_gets_security_footer(self):
+        body = _body(agent="debug")
+        result = main.build_system(body)
+        assert "Security Requirements" in result
+
+    def test_review_agent_no_security_footer(self):
+        body = _body(agent="review")
+        result = main.build_system(body)
+        assert "Security Requirements" not in result
+
+    def test_architect_agent_no_security_footer(self):
+        body = _body(agent="architect")
+        result = main.build_system(body)
+        assert "Security Requirements" not in result
+
+    def test_docs_agent_no_security_footer(self):
+        body = _body(agent="docs")
+        result = main.build_system(body)
+        assert "Security Requirements" not in result
