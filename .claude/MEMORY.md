@@ -1,5 +1,5 @@
 # DevForge — Orchestrator Memory
-> Last updated: 2026-06-01 (cycle 50) | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
+> Last updated: 2026-06-01 (cycle 52) | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
 
 ## Project Identity
 - **Name:** DevForge
@@ -94,6 +94,14 @@ devforge/
 - [x] README Generator (POST /api/repo/generate-readme; streamed from selected files)
 - [x] Mobile-responsive UI (sidebar slide-over overlay, compact topbar, bottom-sheet modals)
 - [x] Removed Go/Zod skill chips (less relevant for typical users)
+
+## Cycle 52 Summary (2026-06-01) — tfn() data-path/data-size
+| Area | Change |
+|---|---|
+| Frontend | `tfn()`: removed fragile `safe=path.replace(/'/g,...)` approach; all file tree onclick handlers use `data-path`/`data-size` attributes with `escA()` |
+| Tests | 264 total |
+
+## Cycle 50-51 Summary — see above (already logged in cycle 51 MEMORY commit) |
 
 ## Cycle 50 Summary (2026-06-01) — Tool URL/Method Validation in Anthropic Tool Use
 | Area | Change |
@@ -252,7 +260,7 @@ devforge/
 
 ## Cumulative Scope Ledger
 ```
-totalCyclesCompleted: 50
+totalCyclesCompleted: 52
 totalFilesCreated: 3   (tests/__init__.py, tests/test_main.py, .gitignore)
 totalFilesMutated: 4   (main.py, requirements.txt, static/index.html, tests/test_main.py)
 totalPackagesAdded: 0
@@ -344,5 +352,5 @@ conservativeMode: false
 
 ## Git State
 - Branch: claude/exciting-galileo-7UDWc
-- Last commit: 473b8b9 — Cycle 50: tool URL/method validation in Anthropic tool use
+- Last commit: ae25c8d — Cycle 52: tfn() data-path/data-size + 264 tests
 - Remote: origin/claude/exciting-galileo-7UDWc ✓ tracked
