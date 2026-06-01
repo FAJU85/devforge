@@ -15,7 +15,6 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "data-plane"})
 	})
 
-	// Phase 2: tool execution endpoint (stub — implementation in Phase 2)
 	r.POST("/tools/execute", tools.ExecuteHandler)
 
 	log.Println("data-plane listening on :8080")

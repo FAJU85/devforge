@@ -7,16 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 def retrieve_node(state: AgentState) -> dict:
-    """
-    RAG retrieval step.
-
-    Queries Pinecone for passages relevant to state['task'] and injects
-    them as rag_context so reasoning_node can ground the LLM before it
-    plans tool calls.
-
-    Phase 3: query_context() is a stub that returns "".
-    Phase 4: real Pinecone client is wired in.
-    """
+    """RAG retrieval step — queries Pinecone and injects context for reasoning_node."""
     task = state["task"]
     logger.info("retrieve_node: querying context for task=%r", task[:80])
 
