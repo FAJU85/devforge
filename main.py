@@ -27,6 +27,16 @@ AGENT_PROMPTS = {
     "testgen":   "You are a test generation expert. Write comprehensive test suites that cover all code paths. Include unit tests, integration tests, edge cases, and error conditions. Use the appropriate testing framework for the language. Show full file paths before every test file. Aim for high coverage and clear test names that document behavior.",
 }
 
+SECURITY_FOOTER = (
+    "\n\n## Security Requirements (Non-Negotiable):\n"
+    "• Never use eval(), exec(), os.system(), or any dynamic code execution\n"
+    "• Never hardcode passwords, API keys, tokens, or secrets — use environment variables\n"
+    "• Always validate and sanitize all user inputs before processing or storing\n"
+    "• Use parameterized queries for all database operations — no string concatenation in SQL\n"
+    "• Use HTTPS for all external connections\n"
+    "• Catch specific exceptions — never swallow errors silently with bare except clauses"
+)
+
 SKILL_PROMPTS = {
     "go":       "SKILL - Go/Golang: Write idiomatic Go. Use explicit error returns (never panic for business logic), interfaces for abstraction, goroutines+channels for concurrency. Follow Go naming conventions. Prefer stdlib.",
     "zod":      "SKILL - Zod + TypeScript: Use Zod for ALL schema validation and type inference. Define z.object() schemas first, derive types with z.infer<typeof schema>. Validate all external/user data through Zod. Use strict TypeScript config.",
@@ -73,6 +83,8 @@ def build_system(body: "ChatBody") -> str:
         for t in tools:
             base += f"- **{t.name}**: {t.description} ({t.method} {t.url})\n"
         base += "\nDescribe needed tool calls in your response; the user will execute them and share results."
+    if body.agent in ("code", "refactor", "testgen", "debug"):
+        base += SECURITY_FOOTER
     fc = (getattr(body, 'file_context', '') or '').strip()
     if fc:
         base += f"\n\n---\n**Repository context:**\n{fc}"
@@ -1094,6 +1106,128 @@ async def suggest_commit_message(body: CommitMsgBody):
             return JSONResponse({"error": "no provider key"}, status_code=400)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+SECURITY_PATTERNS: dict = {
+    "python": [
+        (r'shell\s*=\s*True', "high", "shell=True creates command injection risk — pass args as a list"),
+        (r'hashlib\.(md5|sha1)\b', "medium", "MD5/SHA-1 are weak hash functions — use SHA-256 or stronger"),
+        (r'\brandom\.(random|randint|choice|uniform)\(', "low", "random module is not cryptographically secure — use secrets for tokens"),
+    ],
+    "javascript": [
+        (r'\beval\s*\(', "high", "eval() executes arbitrary code — avoid it entirely"),
+        (r'\.innerHTML\s*=(?!=)', "high", "innerHTML assignment can cause XSS — use textContent or DOMPurify"),
+        (r'document\.write\s*\(', "high", "document.write() can cause XSS"),
+        (r'new\s+Function\s*\(', "high", "new Function() executes arbitrary code"),
+        (r'setTimeout\s*\(\s*["\']', "medium", "setTimeout with string argument is equivalent to eval()"),
+        (r'dangerouslySetInnerHTML', "medium", "dangerouslySetInnerHTML — ensure content is sanitized first"),
+        (r'Math\.random\s*\(', "low", "Math.random() is not cryptographically secure — use crypto.getRandomValues()"),
+        (r'localStorage\.setItem', "low", "localStorage stores data in plaintext — avoid storing sensitive data"),
+    ],
+    "typescript": [
+        (r'\beval\s*\(', "high", "eval() executes arbitrary code — avoid it entirely"),
+        (r'\.innerHTML\s*=(?!=)', "high", "innerHTML assignment can cause XSS — use textContent or DOMPurify"),
+        (r'new\s+Function\s*\(', "high", "new Function() executes arbitrary code"),
+        (r'dangerouslySetInnerHTML', "medium", "dangerouslySetInnerHTML — ensure content is sanitized first"),
+        (r':\s*any\b', "low", "TypeScript 'any' bypasses type safety — use explicit types"),
+        (r'Math\.random\s*\(', "low", "Math.random() is not cryptographically secure — use crypto.getRandomValues()"),
+    ],
+    "sql": [
+        (r'(?:SELECT|INSERT|UPDATE|DELETE)[^;]*["\'].*\+', "high", "String concatenation in SQL — use parameterized queries"),
+        (r'f["\'].*(?:SELECT|INSERT|UPDATE|DELETE).*\{', "high", "f-string SQL query — use parameterized queries"),
+    ],
+    "go": [
+        (r'fmt\.Sprintf.*(?:SELECT|INSERT|UPDATE|DELETE)', "high", "fmt.Sprintf in SQL — use database/sql parameterized queries"),
+        (r'exec\.Command\(.*\+', "high", "String concatenation in exec.Command — validate all inputs"),
+    ],
+    "bash": [
+        (r'\beval\s+', "high", "eval in bash executes arbitrary code — avoid with user-controlled input"),
+        (r'curl\s+.*\|\s*(?:bash|sh)\b', "high", "Piping curl to bash is a security risk — verify script integrity first"),
+    ],
+}
+
+GENERIC_SECURITY_PATTERNS = [
+    (r'(?i)(?:password|passwd|pwd)\s*=\s*["\'][^"\']{3,}["\']', "high", "Hardcoded password — use environment variables"),
+    (r'(?i)(?:secret|api_?key|private_?key)\s*=\s*["\'][^"\']{6,}["\']', "high", "Hardcoded secret/key — use environment variables"),
+    (r'(?i)token\s*=\s*["\'][a-zA-Z0-9_\-]{10,}["\']', "high", "Possible hardcoded token — use environment variables"),
+    (r'http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0)', "low", "Non-HTTPS external URL — use HTTPS for all connections"),
+]
+
+
+class CodeScanBody(BaseModel):
+    code: str
+    language: str = "text"
+
+
+@app.post("/api/code/scan")
+async def scan_code(body: CodeScanBody):
+    """Scan code for security issues using AST analysis (Python) and pattern matching."""
+    import ast as _ast
+    issues: list = []
+    code = (body.code or "").strip()
+    lang = (body.language or "text").lower()
+    if not code:
+        return {"issues": [], "safe": True, "language": lang, "total": 0}
+
+    # Python AST deep scan
+    if lang == "python":
+        try:
+            tree = _ast.parse(code)
+            DANGEROUS_CALLS = {"eval": "high", "exec": "high", "__import__": "medium", "compile": "medium"}
+            DANGEROUS_ATTRS = {
+                ("os", "system"): "high", ("os", "popen"): "high",
+                ("subprocess", "call"): "medium", ("subprocess", "run"): "medium",
+                ("subprocess", "Popen"): "medium",
+                ("pickle", "loads"): "high", ("pickle", "load"): "high",
+            }
+            for node in _ast.walk(tree):
+                ln = getattr(node, "lineno", None)
+                if isinstance(node, _ast.Call):
+                    func = node.func
+                    if isinstance(func, _ast.Name) and func.id in DANGEROUS_CALLS:
+                        sev = DANGEROUS_CALLS[func.id]
+                        issues.append({"severity": sev, "pattern": f"{func.id}()",
+                            "message": f"{func.id}() can execute arbitrary code — avoid or restrict carefully", "line": ln, "source": "ast"})
+                    elif isinstance(func, _ast.Attribute) and isinstance(func.value, _ast.Name):
+                        pair = (func.value.id, func.attr)
+                        if pair in DANGEROUS_ATTRS:
+                            sev = DANGEROUS_ATTRS[pair]
+                            issues.append({"severity": sev, "pattern": f"{pair[0]}.{pair[1]}()",
+                                "message": f"{pair[0]}.{pair[1]}() is a high-risk call — validate all inputs", "line": ln, "source": "ast"})
+                    for kw in node.keywords:
+                        if kw.arg == "shell" and isinstance(kw.value, _ast.Constant) and kw.value.value is True:
+                            issues.append({"severity": "high", "pattern": "shell=True",
+                                "message": "shell=True creates command injection risk — pass args as a list", "line": ln, "source": "ast"})
+                elif isinstance(node, _ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, _ast.Name):
+                            nm = target.id.lower()
+                            if any(kw in nm for kw in ("password", "secret", "api_key", "token", "private_key")):
+                                if isinstance(node.value, _ast.Constant) and isinstance(node.value.value, str) and len(node.value.value) >= 6:
+                                    issues.append({"severity": "high", "pattern": f"{target.id} = '...'",
+                                        "message": f"Hardcoded {target.id} — use os.environ or a secrets manager", "line": ln, "source": "ast"})
+        except SyntaxError as e:
+            issues.append({"severity": "medium", "pattern": "SyntaxError",
+                "message": f"Code has syntax errors: {e.msg}", "line": e.lineno, "source": "ast"})
+
+    # Regex scan — language-specific + generic patterns
+    lang_patterns = SECURITY_PATTERNS.get(lang, [])
+    ast_high_lines = {i["line"] for i in issues if i.get("source") == "ast" and i.get("severity") == "high"}
+    seen: set = set()
+    for lineno, line in enumerate(code.split("\n"), 1):
+        for pat, sev, msg in lang_patterns + GENERIC_SECURITY_PATTERNS:
+            if re.search(pat, line, re.IGNORECASE):
+                key = (lineno, pat[:20])
+                if key not in seen and not (lang == "python" and lineno in ast_high_lines and sev == "high"):
+                    seen.add(key)
+                    clean_pat = re.sub(r'[\\^$.*+?()\[\]{}|]', '', pat)[:30].strip()
+                    issues.append({"severity": sev, "pattern": clean_pat, "message": msg, "line": lineno, "source": "pattern"})
+
+    sev_order = {"high": 0, "medium": 1, "low": 2}
+    issues.sort(key=lambda x: (sev_order.get(x.get("severity", "low"), 3), x.get("line") or 9999))
+    issues = issues[:15]
+    safe = not any(i["severity"] in ("high", "medium") for i in issues)
+    return {"issues": issues, "safe": safe, "language": lang, "total": len(issues)}
 
 
 README_SYSTEM = (

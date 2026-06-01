@@ -126,7 +126,9 @@ class TestBuildSystem:
     def test_custom_instructions_override_agent_prompt(self):
         body = _body(instructions="Use only stdlib.")
         result = main.build_system(body)
-        assert result == "Use only stdlib."
+        assert result.startswith("Use only stdlib.")
+        # Security footer is always appended for code agents
+        assert "Security Requirements" in result
 
     def test_repo_context_appended(self):
         body = _body(owner="FAJU85", repo="devforge")
@@ -2573,3 +2575,39 @@ class TestGenerateReadmeEndpoint:
         assert r.status_code == 200
         content = r.text
         assert "README" in content or "text/event-stream" in r.headers.get("content-type", "")
+
+
+class TestCodeScanEndpoint:
+    def test_scan_detects_eval_in_python(self):
+        r = client.post("/api/code/scan", json={
+            "code": "result = eval(user_input)\nprint(result)",
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["safe"] is False
+        patterns = [i["pattern"] for i in data["issues"]]
+        assert any("eval" in p for p in patterns)
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_clean_code_returns_safe(self):
+        r = client.post("/api/code/scan", json={
+            "code": "def add(a: int, b: int) -> int:\n    return a + b\n\nresult = add(1, 2)",
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["safe"] is True
+        high_issues = [i for i in data["issues"] if i["severity"] == "high"]
+        assert len(high_issues) == 0
+
+    def test_scan_detects_hardcoded_secret(self):
+        r = client.post("/api/code/scan", json={
+            "code": 'api_key = "sk-real-secret-key-abc123"\nrequest(api_key)',
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        high = [i for i in data["issues"] if i["severity"] == "high"]
+        assert len(high) >= 1
+        assert any("api_key" in i.get("pattern", "").lower() or "hardcoded" in i.get("message", "").lower() for i in high)
