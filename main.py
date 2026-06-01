@@ -1163,6 +1163,16 @@ GENERIC_SECURITY_PATTERNS = [
     (r'http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0)', "low", "Non-HTTPS external URL — use HTTPS for all connections"),
 ]
 
+_DANGEROUS_CALLS: dict = {
+    "eval": "high", "exec": "high", "__import__": "medium", "compile": "medium",
+}
+_DANGEROUS_ATTRS: dict = {
+    ("os", "system"): "high", ("os", "popen"): "high",
+    ("subprocess", "call"): "medium", ("subprocess", "run"): "medium",
+    ("subprocess", "Popen"): "medium",
+    ("pickle", "loads"): "high", ("pickle", "load"): "high",
+}
+
 
 class CodeScanBody(BaseModel):
     code: str
@@ -1182,25 +1192,18 @@ async def scan_code(body: CodeScanBody):
     if lang == "python":
         try:
             tree = _ast.parse(code)
-            DANGEROUS_CALLS = {"eval": "high", "exec": "high", "__import__": "medium", "compile": "medium"}
-            DANGEROUS_ATTRS = {
-                ("os", "system"): "high", ("os", "popen"): "high",
-                ("subprocess", "call"): "medium", ("subprocess", "run"): "medium",
-                ("subprocess", "Popen"): "medium",
-                ("pickle", "loads"): "high", ("pickle", "load"): "high",
-            }
             for node in _ast.walk(tree):
                 ln = getattr(node, "lineno", None)
                 if isinstance(node, _ast.Call):
                     func = node.func
-                    if isinstance(func, _ast.Name) and func.id in DANGEROUS_CALLS:
-                        sev = DANGEROUS_CALLS[func.id]
+                    if isinstance(func, _ast.Name) and func.id in _DANGEROUS_CALLS:
+                        sev = _DANGEROUS_CALLS[func.id]
                         issues.append({"severity": sev, "pattern": f"{func.id}()",
                             "message": f"{func.id}() can execute arbitrary code — avoid or restrict carefully", "line": ln, "source": "ast"})
                     elif isinstance(func, _ast.Attribute) and isinstance(func.value, _ast.Name):
                         pair = (func.value.id, func.attr)
-                        if pair in DANGEROUS_ATTRS:
-                            sev = DANGEROUS_ATTRS[pair]
+                        if pair in _DANGEROUS_ATTRS:
+                            sev = _DANGEROUS_ATTRS[pair]
                             issues.append({"severity": sev, "pattern": f"{pair[0]}.{pair[1]}()",
                                 "message": f"{pair[0]}.{pair[1]}() is a high-risk call — validate all inputs", "line": ln, "source": "ast"})
                     for kw in node.keywords:

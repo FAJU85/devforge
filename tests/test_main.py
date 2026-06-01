@@ -2620,6 +2620,67 @@ class TestCodeScanEndpoint:
         assert len(high) >= 1
         assert any("api_key" in i.get("pattern", "").lower() or "hardcoded" in i.get("message", "").lower() for i in high)
 
+    def test_scan_detects_os_system_via_ast(self):
+        r = client.post("/api/code/scan", json={
+            "code": "import os\nos.system('ls -la')",
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["pattern"] == "os.system()" and i["severity"] == "high" for i in data["issues"])
+        assert any(i.get("source") == "ast" for i in data["issues"])
+
+    def test_scan_detects_pickle_loads(self):
+        r = client.post("/api/code/scan", json={
+            "code": "import pickle\ndata = pickle.loads(untrusted_bytes)",
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["pattern"] == "pickle.loads()" for i in data["issues"])
+
+    def test_scan_detects_shell_true(self):
+        r = client.post("/api/code/scan", json={
+            "code": "import subprocess\nsubprocess.run('ls', shell=True)",
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any("shell=True" in i.get("pattern", "") for i in data["issues"])
+
+    def test_scan_javascript_eval(self):
+        r = client.post("/api/code/scan", json={
+            "code": "const result = eval(userInput);",
+            "language": "javascript",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["safe"] is False
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_empty_code_returns_safe(self):
+        r = client.post("/api/code/scan", json={"code": "", "language": "python"})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["safe"] is True
+        assert data["total"] == 0
+
+    def test_scan_syntax_error_returns_medium(self):
+        r = client.post("/api/code/scan", json={
+            "code": "def foo(\n    return 1",
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["pattern"] == "SyntaxError" for i in data["issues"])
+
+    def test_scan_results_capped_at_15(self):
+        many_evals = "\n".join(f"eval(x{i})" for i in range(30))
+        r = client.post("/api/code/scan", json={"code": many_evals, "language": "python"})
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data["issues"]) <= 15
+
 
 class TestScanDepsEndpoint:
     def test_scan_deps_empty_content_returns_400(self):
