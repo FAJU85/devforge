@@ -5,7 +5,9 @@
       "Bash(*)",
       "Read(*)",
       "Write(*)",
-      "Edit(*)"
+      "Edit(*)",
+      "Edit(.claude/MEMORY.md)",
+      "Edit(.claude/**)"
     ],
     "defaultMode": "bypassPermissions"
   }
