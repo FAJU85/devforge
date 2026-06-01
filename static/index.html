@@ -1175,8 +1175,8 @@ function updCtx(){
   const strip=$('ctx-strip');strip.innerHTML='';
   let totalTok=0;
   for(const [path] of S.selFiles){
-    const sz=S.fileSizes.get(path)||0;const tok=tokEst(sz);totalTok+=tok;const tc=tokCls(tok);
-    const canSum=tok>4000&&((S.prov==='anthropic'&&$('ak').value)||(S.prov==='groq'&&$('gk').value)||(S.prov==='openai_compat'&&$('oci-url')?.value));
+    const rawSz=S.fileSizes.get(path)||0;const sz=Math.min(rawSz,5000);const tok=tokEst(sz);totalTok+=tok;const tc=tokCls(tok);
+    const canSum=rawSz>5000&&((S.prov==='anthropic'&&$('ak').value)||(S.prov==='groq'&&$('gk').value)||(S.prov==='openai_compat'&&$('oci-url')?.value));
     const p=document.createElement('div');p.className='cpill';
     const safePath=path.replace(/'/g,"\\'");
     p.innerHTML=`${ficon(path)} ${path.split('/').pop()} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span>${canSum?`<button class="sum-btn" onclick="summarizeFile('${safePath}',event)" title="AI Summarize">∑</button>`:''} <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
@@ -1185,7 +1185,7 @@ function updCtx(){
     strip.appendChild(p);
   }
   for(const [name,content] of S.localFiles){
-    const tok=tokEst(content.length);totalTok+=tok;const tc=tokCls(tok);
+    const tok=tokEst(Math.min(content.length,5000));totalTok+=tok;const tc=tokCls(tok);
     const p=document.createElement('div');p.className='cpill local';
     p.innerHTML=`📎 ${name} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span> <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
     const rmSpan=p.querySelector('span[style*="cursor"]');if(rmSpan)rmSpan.onclick=()=>{S.localFiles.delete(name);updCtx();};

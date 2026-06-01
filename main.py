@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Callable, List, Optional
+import ast as _ast
 import json, os, requests, base64, re, asyncio, threading
 from concurrent.futures import ThreadPoolExecutor, as_completed as _futs_done
 
@@ -1171,7 +1172,6 @@ class CodeScanBody(BaseModel):
 @app.post("/api/code/scan")
 async def scan_code(body: CodeScanBody):
     """Scan code for security issues using AST analysis (Python) and pattern matching."""
-    import ast as _ast
     issues: list = []
     code = (body.code or "").strip()
     lang = (body.language or "text").lower()
@@ -1226,7 +1226,7 @@ async def scan_code(body: CodeScanBody):
     for lineno, line in enumerate(code.split("\n"), 1):
         for pat, sev, msg in lang_patterns + GENERIC_SECURITY_PATTERNS:
             if re.search(pat, line, re.IGNORECASE):
-                key = (lineno, pat[:20])
+                key = (lineno, pat)
                 if key not in seen and not (lang == "python" and lineno in ast_high_lines and sev == "high"):
                     seen.add(key)
                     clean_pat = re.sub(r'[\\^$.*+?()\[\]{}|]', '', pat)[:30].strip()

@@ -2787,3 +2787,81 @@ class TestSuggestCommitMessage:
         call_args = mock_client.messages.create.call_args
         user_content = call_args.kwargs["messages"][0]["content"]
         assert "-old_code" in user_content
+
+
+class TestDepParserHelpers:
+    """Unit tests for the dependency file parser helpers."""
+
+    def test_parse_requirements_basic(self):
+        content = "fastapi==0.110.0\nrequests>=2.28.0\npydantic"
+        pkgs = main._parse_requirements(content)
+        names = [p["name"] for p in pkgs]
+        assert "fastapi" in names
+        assert "requests" in names
+        assert "pydantic" in names
+
+    def test_parse_requirements_skips_comments_and_flags(self):
+        content = "# comment\n-r base.txt\n--extra-index-url https://example.com\nflask==3.0.0"
+        pkgs = main._parse_requirements(content)
+        names = [p["name"] for p in pkgs]
+        assert "flask" in names
+        assert len(names) == 1
+
+    def test_parse_requirements_normalises_underscores(self):
+        content = "my_package==1.0.0"
+        pkgs = main._parse_requirements(content)
+        assert pkgs[0]["name"] == "my-package"
+
+    def test_parse_requirements_strips_extras(self):
+        content = "uvicorn[standard]==0.29.0"
+        pkgs = main._parse_requirements(content)
+        assert pkgs[0]["name"] == "uvicorn"
+        assert "standard" not in pkgs[0]["name"]
+
+    def test_parse_package_json_dependencies(self):
+        content = '{"dependencies":{"react":"^18.0.0"},"devDependencies":{"jest":"^29.0.0"}}'
+        pkgs = main._parse_package_json(content)
+        names = [p["name"] for p in pkgs]
+        assert "react" in names
+        assert "jest" in names
+
+    def test_parse_package_json_invalid_json_returns_empty(self):
+        pkgs = main._parse_package_json("not json")
+        assert pkgs == []
+
+    def test_parse_go_mod_block_require(self):
+        content = "module example.com/mymod\n\ngo 1.21\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n\tgolang.org/x/net v0.21.0\n)"
+        pkgs = main._parse_go_mod(content)
+        names = [p["name"] for p in pkgs]
+        assert "github.com/gin-gonic/gin" in names
+        assert "golang.org/x/net" in names
+
+    def test_parse_go_mod_single_require(self):
+        content = "module example.com/m\nrequire github.com/pkg/errors v0.9.1"
+        pkgs = main._parse_go_mod(content)
+        assert any(p["name"] == "github.com/pkg/errors" for p in pkgs)
+
+    def test_parse_go_mod_skips_comment_lines(self):
+        content = "require (\n\t// indirect\n\tgithub.com/real/dep v1.0.0\n)"
+        pkgs = main._parse_go_mod(content)
+        names = [p["name"] for p in pkgs]
+        assert "github.com/real/dep" in names
+        assert "//" not in names
+
+    def test_parse_cargo_toml_dependencies(self):
+        content = '[dependencies]\nserde = "1.0"\ntokio = { version = "1.36", features = ["full"] }\n\n[dev-dependencies]\ncargo-test = "0.1"'
+        pkgs = main._parse_cargo_toml(content)
+        names = [p["name"] for p in pkgs]
+        assert "serde" in names
+
+    def test_parse_cargo_toml_dev_dependencies(self):
+        content = '[dev-dependencies]\ncriterion = "0.5"'
+        pkgs = main._parse_cargo_toml(content)
+        assert any(p["name"] == "criterion" for p in pkgs)
+
+    def test_parse_cargo_toml_stops_at_next_section(self):
+        content = '[dependencies]\nfoo = "1.0"\n\n[profile.release]\nopt-level = 3'
+        pkgs = main._parse_cargo_toml(content)
+        names = [p["name"] for p in pkgs]
+        assert "foo" in names
+        assert "opt-level" not in names
