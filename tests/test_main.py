@@ -2942,6 +2942,65 @@ class TestDepParserHelpers:
         assert by_name["tokio"] == "1.36"
         assert by_name["async-trait"] == "0.1"
 
+    def test_parse_pyproject_toml_pep621_dependencies(self):
+        content = '[project]\ndependencies = [\n  "flask>=2.0",\n  "requests==2.31.0",\n]\n'
+        pkgs = main._parse_pyproject_toml(content)
+        by_name = {p["name"]: p["constraint"] for p in pkgs}
+        assert "flask" in by_name
+        assert by_name["flask"].startswith(">=")
+        assert "requests" in by_name
+        assert by_name["requests"] == "==2.31.0"
+
+    def test_parse_pyproject_toml_poetry_dependencies(self):
+        content = '[tool.poetry.dependencies]\npython = "^3.11"\nfastapi = "^0.100.0"\nhttpx = {version = "^0.24", extras = ["http2"]}\n'
+        pkgs = main._parse_pyproject_toml(content)
+        by_name = {p["name"]: p["constraint"] for p in pkgs}
+        assert "python" not in by_name, "python version constraint should be skipped"
+        assert "fastapi" in by_name
+        assert "^0.100.0" in by_name["fastapi"]
+
+    def test_parse_pyproject_toml_build_system_requires(self):
+        content = '[build-system]\nrequires = ["setuptools>=42", "wheel"]\nbuild-backend = "setuptools.build_meta"\n'
+        pkgs = main._parse_pyproject_toml(content)
+        names = [p["name"] for p in pkgs]
+        assert "setuptools" in names
+        assert "wheel" in names
+
+    def test_parse_pyproject_toml_deduplicates_across_sections(self):
+        content = (
+            '[project]\ndependencies = ["requests>=2.0"]\n'
+            '[build-system]\nrequires = ["requests>=1.0", "setuptools"]\n'
+        )
+        pkgs = main._parse_pyproject_toml(content)
+        names = [p["name"] for p in pkgs]
+        assert names.count("requests") == 1, "requests must not appear twice"
+
+    def test_parse_pyproject_toml_invalid_toml_returns_empty(self):
+        pkgs = main._parse_pyproject_toml("this is not : toml {{{{")
+        assert pkgs == []
+
+    def test_scan_deps_pyproject_toml_uses_correct_parser(self):
+        """pyproject.toml routed to _parse_pyproject_toml, not requirements parser."""
+        content = '[project]\ndependencies = ["flask>=2.0"]\n'
+        with patch("main._parse_pyproject_toml", wraps=main._parse_pyproject_toml) as mock_fn:
+            r = client.post("/api/repo/scan-deps", json={
+                "filename": "pyproject.toml",
+                "content": content,
+                "provider": "groq",
+                "groq_key": "fake",
+            })
+        mock_fn.assert_called_once()
+        # The packages event should contain flask, not a bogus 'requires' package
+        assert r.status_code == 200
+        events = [ln for ln in r.text.splitlines() if ln.startswith("data:")]
+        import json as _json
+        pkg_event = next((e for e in events if '"packages"' in e), None)
+        assert pkg_event is not None
+        payload = _json.loads(pkg_event[5:])
+        names = [p["name"] for p in payload["v"]["packages"]]
+        assert "flask" in names
+        assert "requires" not in names
+
 
 class TestCodeScanLanguages:
     """Tests for language-specific scan patterns not covered in TestCodeScanEndpoint."""

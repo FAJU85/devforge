@@ -1381,6 +1381,42 @@ def _parse_go_mod(content: str) -> list:
                 pkgs.append({"name": parts[0], "constraint": parts[1]})
     return pkgs
 
+def _parse_pyproject_toml(content: str) -> list:
+    try:
+        import tomllib
+    except ImportError:
+        return _parse_requirements(content)
+    try:
+        data = tomllib.loads(content)
+    except Exception:
+        return []
+    pkgs: list = []
+    seen: set = set()
+
+    def _add(name: str, constraint: str) -> None:
+        key = name.lower().replace("_", "-")
+        if key not in seen:
+            seen.add(key)
+            pkgs.append({"name": key, "constraint": constraint})
+
+    # PEP 621: [project].dependencies (PEP 508 strings)
+    for dep in ((data.get("project") or {}).get("dependencies") or []):
+        m = re.match(r"^([A-Za-z0-9_.-]+)\s*([>=<!~^,][^\s#;]*)?", str(dep).strip())
+        if m:
+            _add(m.group(1), (m.group(2) or "").strip())
+    # Poetry: [tool.poetry.dependencies]
+    for name, ver in (((data.get("tool") or {}).get("poetry") or {}).get("dependencies") or {}).items():
+        if name.lower() == "python":
+            continue
+        constraint = str(ver) if not isinstance(ver, dict) else (ver.get("version") or "")
+        _add(name, constraint)
+    # build-system.requires
+    for dep in ((data.get("build-system") or {}).get("requires") or []):
+        m = re.match(r"^([A-Za-z0-9_.-]+)\s*([>=<!~^,][^\s#;]*)?", str(dep).strip())
+        if m:
+            _add(m.group(1), (m.group(2) or "").strip())
+    return pkgs
+
 def _parse_cargo_toml(content: str) -> list:
     pkgs: list = []
     in_deps = False
@@ -1419,7 +1455,9 @@ async def scan_deps(body: ScanDepsBody):
         return JSONResponse({"error": "content required"}, status_code=400)
 
     # Detect ecosystem
-    if fname in ("requirements.txt", "pyproject.toml") or fname.endswith("requirements.txt"):
+    if fname == "pyproject.toml":
+        ecosystem, packages, checker = "python", _parse_pyproject_toml(content), _pypi_latest
+    elif fname == "requirements.txt" or fname.endswith("requirements.txt"):
         ecosystem, packages, checker = "python", _parse_requirements(content), _pypi_latest
     elif fname == "package.json":
         ecosystem, packages, checker = "javascript", _parse_package_json(content), _npm_latest
