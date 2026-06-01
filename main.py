@@ -1393,7 +1393,11 @@ def _parse_cargo_toml(content: str) -> list:
         if in_deps:
             m = re.match(r'^([a-zA-Z0-9_-]+)\s*=\s*["\']?([^"\'#\s,}]+)', line)
             if m:
-                pkgs.append({"name": m.group(1), "constraint": m.group(2).strip()})
+                constraint = m.group(2).strip()
+                if constraint.startswith("{"):
+                    vm = re.search(r'version\s*=\s*["\']([^"\']+)', line)
+                    constraint = vm.group(1) if vm else constraint
+                pkgs.append({"name": m.group(1), "constraint": constraint})
     return pkgs
 
 

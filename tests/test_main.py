@@ -2926,3 +2926,158 @@ class TestDepParserHelpers:
         names = [p["name"] for p in pkgs]
         assert "foo" in names
         assert "opt-level" not in names
+
+    def test_parse_cargo_toml_inline_table_extracts_version(self):
+        content = '[dependencies]\ntokio = { version = "1.36", features = ["full"] }'
+        pkgs = main._parse_cargo_toml(content)
+        tokio = next((p for p in pkgs if p["name"] == "tokio"), None)
+        assert tokio is not None
+        assert tokio["constraint"] == "1.36"
+
+    def test_parse_cargo_toml_simple_and_inline_mixed(self):
+        content = '[dependencies]\nserde = "1.0"\ntokio = { version = "1.36" }\nasync-trait = "0.1"'
+        pkgs = main._parse_cargo_toml(content)
+        by_name = {p["name"]: p["constraint"] for p in pkgs}
+        assert by_name["serde"] == "1.0"
+        assert by_name["tokio"] == "1.36"
+        assert by_name["async-trait"] == "0.1"
+
+
+class TestCodeScanLanguages:
+    """Tests for language-specific scan patterns not covered in TestCodeScanEndpoint."""
+
+    def test_scan_typescript_innerHTML_high(self):
+        r = client.post("/api/code/scan", json={
+            "code": 'el.innerHTML = userData;',
+            "language": "typescript",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["safe"] is False
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_typescript_any_low(self):
+        r = client.post("/api/code/scan", json={
+            "code": "function foo(x: any) { return x; }",
+            "language": "typescript",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "low" for i in data["issues"])
+
+    def test_scan_sql_string_concat_high(self):
+        r = client.post("/api/code/scan", json={
+            "code": "query = \"SELECT * FROM users WHERE id = '\" + userId + \"'\"",
+            "language": "sql",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_bash_eval_high(self):
+        r = client.post("/api/code/scan", json={
+            "code": "eval $user_input",
+            "language": "bash",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_go_fmt_sprintf_sql_high(self):
+        r = client.post("/api/code/scan", json={
+            "code": 'query := fmt.Sprintf("SELECT * FROM users WHERE id = %s", userId)',
+            "language": "go",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_generic_hardcoded_token(self):
+        r = client.post("/api/code/scan", json={
+            "code": 'token = "ghp_abcdefghij1234567890"',
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_http_url_triggers_low(self):
+        r = client.post("/api/code/scan", json={
+            "code": 'url = "http://api.example.com/endpoint"',
+            "language": "javascript",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "low" for i in data["issues"])
+
+    def test_scan_http_localhost_no_issue(self):
+        r = client.post("/api/code/scan", json={
+            "code": 'const url = "http://localhost:8080/api"',
+            "language": "javascript",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        http_issues = [i for i in data["issues"] if "http" in i.get("pattern", "").lower() or "https" in i.get("message", "").lower()]
+        assert len(http_issues) == 0
+
+
+class TestScanDepsExtraEcosystems:
+    """Tests for go.mod, cargo.toml, and unknown extension in scan_deps."""
+
+    def test_scan_deps_go_mod_parsed(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "go.mod",
+            "content": "module example.com/m\n\ngo 1.21\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n\tgolang.org/x/net v0.21.0\n)",
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 200
+        content = r.text
+        assert "packages" in content
+        assert "gin" in content
+
+    def test_scan_deps_cargo_toml_parsed(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "cargo.toml",
+            "content": '[dependencies]\nserde = "1.0"\ntokio = { version = "1.36", features = ["full"] }',
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 200
+        assert "packages" in r.text
+
+    def test_scan_deps_unknown_filename_falls_back_to_requirements(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "requirements-dev.txt",
+            "content": "pytest==7.4.0\npytest-asyncio==0.23.0",
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 200
+        assert "packages" in r.text
+
+    def test_scan_deps_no_packages_found_returns_400(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "go.mod",
+            "content": "module example.com/m\n\ngo 1.21\n",
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 400
+        assert "No packages" in r.json()["error"]
+
+    def test_scan_deps_groq_provider_streams(self):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = True
+            mock_post.return_value.json.return_value = {
+                "choices": [{"message": {"content": "All dependencies look reasonable."}}]
+            }
+            r = client.post("/api/repo/scan-deps", json={
+                "filename": "requirements.txt",
+                "content": "flask==2.3.0\nrequests==2.31.0",
+                "provider": "groq",
+                "groq_key": "gsk_test",
+            })
+        assert r.status_code == 200
+        content = r.text
+        assert "packages" in content
