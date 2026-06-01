@@ -1667,6 +1667,26 @@ class TestToolCallEndpoint:
         assert r.status_code == 200
         assert r.json()["status"] == 404
 
+    def test_tool_call_rejects_file_url(self):
+        r = client.post("/api/tools/call", json={"url": "file:///etc/passwd", "method": "GET"})
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_tool_call_rejects_gopher_url(self):
+        r = client.post("/api/tools/call", json={"url": "gopher://evil.example.com/", "method": "GET"})
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_tool_call_rejects_invalid_method(self):
+        r = client.post("/api/tools/call", json={"url": "https://example.com/", "method": "CONNECT"})
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_tool_call_rejects_head_method(self):
+        r = client.post("/api/tools/call", json={"url": "https://example.com/", "method": "HEAD"})
+        assert r.status_code == 400
+        assert "error" in r.json()
+
 
 class TestChatBodyWithTools:
     def test_chat_body_accepts_tools(self):
@@ -2608,6 +2628,12 @@ class TestCodeScanEndpoint:
         patterns = [i["pattern"] for i in data["issues"]]
         assert any("eval" in p for p in patterns)
         assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_large_input_is_truncated(self):
+        large_code = "x = 1\n" * 20_000  # ~120K chars
+        r = client.post("/api/code/scan", json={"code": large_code, "language": "python"})
+        assert r.status_code == 200
+        assert "issues" in r.json()
 
     def test_scan_clean_code_returns_safe(self):
         r = client.post("/api/code/scan", json={
