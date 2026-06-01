@@ -1,5 +1,5 @@
 # DevForge — Orchestrator Memory
-> Last updated: 2026-06-01 (cycle 28) | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
+> Last updated: 2026-06-01 (cycle 31) | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
 
 ## Project Identity
 - **Name:** DevForge
@@ -18,7 +18,7 @@ devforge/
 ├── Dockerfile               # python:3.11-slim, EXPOSE 7860
 ├── tests/
 │   ├── __init__.py
-│   └── test_main.py         # 172 tests
+│   └── test_main.py         # 249 tests
 └── .github/workflows/
     ├── sync-to-hf.yml
     └── sync-from-hf.yml
@@ -95,6 +95,35 @@ devforge/
 - [x] Mobile-responsive UI (sidebar slide-over overlay, compact topbar, bottom-sheet modals)
 - [x] Removed Go/Zod skill chips (less relevant for typical users)
 
+## Cycle 31 Summary (2026-06-01) — XSS Hardening + State Bug Fixes
+| Area | Change |
+|---|---|
+| Frontend | `insertToolCallCard`: tool name now set via `.textContent` instead of `innerHTML` (XSS fix for AI-controlled tool names) |
+| Frontend | `regenerate()`: also pops last user message before re-calling `send()`, fixing consecutive-user-message violation of Anthropic API alternation rules |
+| Frontend | `rmd()` lang sanitization: `lang` stripped to `[a-z0-9+#._-]` before use in inline `onclick` attribute (JS injection fix) |
+| Frontend | `suggestFiles()`: now sets `S.fileSizes.set(path, d.content.length)` so AI-suggested files show correct token counts |
+| Backend | `repo_write` exception handler broadened from `(KeyError, json.JSONDecodeError)` to `Exception` |
+| Tests | 249 total (no new tests this cycle) |
+
+## Cycle 30 Summary (2026-06-01) — Version Checker Tests + Security Footer Coverage
+| Area | Change |
+|---|---|
+| Tests | `TestScanDepsExtraEcosystems`: +2 tests for `outdated` and `unpinned` SSE event fields |
+| Tests | `TestVersionCheckerHelpers` (new): `_pypi_latest` success/HTTP-error/network-error; `_npm_latest` success/HTTP-error/network-error (6 tests) |
+| Tests | `TestBuildSystemAgentSecurity` (new): code/refactor/testgen/debug get SECURITY_FOOTER; review/architect/docs do NOT (7 tests) |
+| Tests | 249 total (+15 from cycle 29 base) |
+
+## Cycle 29 Summary (2026-06-01) — Cargo TOML Fix + Lang Sanitization + fileSizes Bug
+| Area | Change |
+|---|---|
+| Backend | `_parse_cargo_toml`: inline table deps like `tokio = { version = "1.36", features = ["full"] }` now correctly extract `version` field instead of returning `{` as constraint |
+| Frontend | `rmd()` lang sanitization: prevents JS injection via Markdown code fence language identifier |
+| Frontend | `suggestFiles()`: `S.fileSizes` populated for AI-suggested files (token count bug fix) |
+| Tests | `TestDepParserHelpers`: +2 tests for inline table parsing |
+| Tests | `TestCodeScanLanguages` (new): TypeScript innerHTML/`:any`, SQL concat, Bash eval, Go fmt.Sprintf, generic token, HTTP URL/localhost (8 tests) |
+| Tests | `TestScanDepsExtraEcosystems` (new): go.mod, cargo.toml, unknown filename, no-packages 400, Groq streaming (5 tests) |
+| Tests | 234 total (+15 from cycle 28 base of 219) |
+
 ## Cycle 26 Summary (2026-06-01) — Mobile UI + Skill Cleanup
 | Area | Change |
 |---|---|
@@ -123,7 +152,7 @@ devforge/
 
 ## Cumulative Scope Ledger
 ```
-totalCyclesCompleted: 26
+totalCyclesCompleted: 31
 totalFilesCreated: 3   (tests/__init__.py, tests/test_main.py, .gitignore)
 totalFilesMutated: 4   (main.py, requirements.txt, static/index.html, tests/test_main.py)
 totalPackagesAdded: 0
@@ -215,5 +244,5 @@ conservativeMode: false
 
 ## Git State
 - Branch: claude/exciting-galileo-7UDWc
-- Last commit: 2ea8f88 — Cycle 26: Mobile-responsive UI + remove Go/Zod skill chips
+- Last commit: f26015a — Cycle 31: XSS hardening, regenerate state bug, exception cleanup
 - Remote: origin/claude/exciting-galileo-7UDWc ✓ tracked
