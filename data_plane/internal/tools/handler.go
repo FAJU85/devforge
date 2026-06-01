@@ -2,38 +2,49 @@ package tools
 
 import (
 	"net/http"
+	"time"
 
+	"github.com/faju85/devforge/data_plane/internal/executor"
 	"github.com/gin-gonic/gin"
 )
 
-// ToolRequest is the payload sent by the Python control plane.
-// Phase 2 will flesh out the full schema.
-type ToolRequest struct {
-	TaskID string         `json:"task_id" binding:"required"`
+// ToolCall is a single tool invocation within a batch request.
+type ToolCall struct {
+	CallID string         `json:"call_id" binding:"required"`
 	Tool   string         `json:"tool"    binding:"required"`
 	Args   map[string]any `json:"args"`
 }
 
-// ToolResponse is the strictly formatted JSON returned to Python.
-type ToolResponse struct {
-	TaskID string         `json:"task_id"`
-	Tool   string         `json:"tool"`
-	Result map[string]any `json:"result,omitempty"`
-	Error  string         `json:"error,omitempty"`
+// BatchRequest is the payload the Python control plane sends.
+// A single request may contain many tool calls; all are executed concurrently.
+type BatchRequest struct {
+	TaskID string     `json:"task_id" binding:"required"`
+	Calls  []ToolCall `json:"calls"   binding:"required,min=1"`
 }
 
-// ExecuteHandler is a stub; Phase 2 implements concurrent dispatch.
+// BatchResponse is the strictly typed JSON payload returned to Python.
+// Python must not receive partial or untyped responses from this service.
+type BatchResponse struct {
+	TaskID     string               `json:"task_id"`
+	Results    []executor.ToolResult `json:"results"`
+	DurationMs int64                `json:"duration_ms"`
+}
+
+// ExecuteHandler accepts a BatchRequest, fans out all calls concurrently,
+// and returns a BatchResponse with one result per call, order preserved.
 func ExecuteHandler(c *gin.Context) {
-	var req ToolRequest
+	var req BatchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ToolResponse{Error: err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// TODO Phase 2: dispatch to goroutine pool
-	c.JSON(http.StatusOK, ToolResponse{
-		TaskID: req.TaskID,
-		Tool:   req.Tool,
-		Result: map[string]any{"status": "stub — Phase 2 pending"},
+	start := time.Now()
+	results := dispatch(c.Request.Context(), req.Calls)
+
+	c.JSON(http.StatusOK, BatchResponse{
+		TaskID:     req.TaskID,
+		Results:    results,
+		DurationMs: time.Since(start).Milliseconds(),
 	})
 }
