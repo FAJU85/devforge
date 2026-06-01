@@ -482,6 +482,15 @@ class TestSearchHfModels:
             resp = client.get("/api/hf/models")
         assert resp.status_code == 500
 
+    def test_rejects_limit_over_100(self):
+        resp = client.get("/api/hf/models?limit=500")
+        assert resp.status_code == 422
+
+    def test_rejects_query_over_200_chars(self):
+        long_q = "a" * 201
+        resp = client.get(f"/api/hf/models?q={long_q}")
+        assert resp.status_code == 422
+
 
 class TestGithubAuthStart:
     def test_returns_error_when_client_id_missing(self):
