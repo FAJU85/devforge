@@ -1298,7 +1298,7 @@ async function generateReleaseNotes(){
   let raw='';
   try{
     const res=await fetch('/api/repo/release-notes',{method:'POST',headers:{'Content-Type':'application/json'},signal:_rnAbort.signal,body:JSON.stringify(body)});
-    if(!res.ok){$('rn-output').innerHTML=`<span style="color:var(--red)">Error: ${await res.text()}</span>`;return;}
+    if(!res.ok){$('rn-output').innerHTML=`<span style="color:var(--red)">Error: ${esc(await res.text())}</span>`;return;}
     $('rn-output').innerHTML='';
     const out=$('rn-output');
     const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
@@ -1329,7 +1329,7 @@ async function generateReadme(){
   else if(S.prov==='groq')body.groq_key=$('gk').value;
   try{
     const res=await fetch('/api/repo/generate-readme',{method:'POST',headers:{'Content-Type':'application/json'},signal:_readmeAbort.signal,body:JSON.stringify(body)});
-    if(!res.ok){$('readme-output').innerHTML=`<span style="color:var(--red)">Error: ${await res.text()}</span>`;return;}
+    if(!res.ok){$('readme-output').innerHTML=`<span style="color:var(--red)">Error: ${esc(await res.text())}</span>`;return;}
     $('readme-output').innerHTML='';
     const out=$('readme-output');
     const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
@@ -1380,7 +1380,7 @@ async function runDepsAudit(){
             const outdated=packages.filter(p=>p.outdated).length;
             const unpinned=packages.filter(p=>p.unpinned).length;
             const tbl=`<div style="padding:8px 14px;background:var(--panel2);border-bottom:1px solid var(--border2);font-size:11px;color:var(--muted)">
-              📦 <strong style="color:var(--text)">${packages.length} packages</strong> · ecosystem: ${ecosystem}
+              📦 <strong style="color:var(--text)">${packages.length} packages</strong> · ecosystem: ${esc(ecosystem)}
               ${outdated?`· <span style="color:var(--red)">⚠️ ${outdated} outdated</span>`:''}
               ${unpinned?`· <span style="color:#f59e0b">⚠️ ${unpinned} unpinned</span>`:''}
             </div>
@@ -1389,7 +1389,7 @@ async function runDepsAudit(){
               <tbody>${packages.map(p=>{
                 const badge=p.outdated?'<span style="background:var(--red);color:#fff;border-radius:3px;padding:1px 5px;font-size:9px">OUTDATED</span>':p.unpinned?'<span style="background:#f59e0b;color:#000;border-radius:3px;padding:1px 5px;font-size:9px">UNPINNED</span>':'';
                 const pinColor=p.outdated?'color:var(--red)':'color:var(--text)';
-                return`<tr style="border-bottom:1px solid var(--border2)"><td style="padding:3px 12px;color:var(--accent2)">${p.name}</td><td style="padding:3px 12px;${pinColor}">${p.pinned||p.constraint||'—'}</td><td style="padding:3px 12px;color:var(--accent2)">${p.latest||'—'}</td><td style="padding:3px 8px">${badge}</td></tr>`;
+                return`<tr style="border-bottom:1px solid var(--border2)"><td style="padding:3px 12px;color:var(--accent2)">${esc(p.name)}</td><td style="padding:3px 12px;${pinColor}">${esc(p.pinned||p.constraint||'—')}</td><td style="padding:3px 12px;color:var(--accent2)">${esc(p.latest||'—')}</td><td style="padding:3px 8px">${badge}</td></tr>`;
               }).join('')}</tbody>
             </table></div>`;
             $('deps-pkg-table').innerHTML=tbl;
@@ -1483,7 +1483,7 @@ async function send(){
     const thinkingMode=!!(thinkToggle&&thinkToggle.checked&&(S.anthropicModel||'').includes('opus'));
     const thinkingBudget=thinkBudget?parseInt(thinkBudget.value)||2000:2000;
     const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},signal:S.abortCtrl?.signal,body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,anthropic_model:S.anthropicModel||'claude-sonnet-4-6',thinking_mode:thinkingMode,thinking_budget:thinkingBudget,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:'',hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:histMsgs,file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent,ma_plan_provider:$('ma-plan-prov').value||'',ma_code_provider:$('ma-code-prov').value||'',ma_test_provider:$('ma-test-prov')?$('ma-test-prov').value||'':'',ma_review_provider:$('ma-rev-prov').value||'',ma_include_test_stage:includeTest,memory:getMemoryContext(),tools:S.tools||[]})});
-    if(!res.ok){const err=await res.text();tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${res.status}: ${err.slice(0,300)}</span></div></div>`;S.streaming=false;$('send-btn').disabled=false;return;}
+    if(!res.ok){const err=await res.text();tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${res.status}: ${esc(err.slice(0,300))}</span></div></div>`;S.streaming=false;$('send-btn').disabled=false;return;}
     if(multiAgent){
       tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent" style="color:var(--purple)">Multi-Agent</span><span class="msg-time">${now()}</span></div><div id="${streamId}-wrap"></div></div>`;
       const wrap=document.getElementById(`${streamId}-wrap`);
@@ -1561,7 +1561,7 @@ function renderToolList(){
   const el=$('tool-list');const badge=$('tool-count-badge');
   if(!S.tools.length){el.style.display='none';badge.style.display='none';return;}
   el.style.display='block';badge.textContent=S.tools.length;badge.style.display='inline';
-  el.innerHTML=S.tools.map((t,i)=>`<div class="tool-item"><span class="tool-method">${t.method||'GET'}</span><span class="tool-name-lbl" title="${t.description}">${t.name}</span><button class="tool-del" onclick="editTool(${i})" title="Edit" style="color:var(--muted2);font-size:11px">✏️</button><button class="tool-del" onclick="deleteTool(${i})" title="Remove">✕</button></div>`).join('');
+  el.innerHTML=S.tools.map((t,i)=>`<div class="tool-item"><span class="tool-method">${esc(t.method||'GET')}</span><span class="tool-name-lbl" title="${escA(t.description||'')}">${esc(t.name)}</span><button class="tool-del" onclick="editTool(${i})" title="Edit" style="color:var(--muted2);font-size:11px">✏️</button><button class="tool-del" onclick="deleteTool(${i})" title="Remove">✕</button></div>`).join('');
 }
 function openAddTool(){
   $('tm-edit-idx').value='-1';$('tm-name').value='';$('tm-desc').value='';
