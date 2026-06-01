@@ -410,6 +410,15 @@ class TestRunHf:
         kinds = [k for k, _ in items]
         assert "error" in kinds
 
+    def test_run_hf_puts_error_when_token_empty(self):
+        items = _run_runner_sync(main._run_hf, "sys", [], "", "model")
+
+        kinds = [k for k, _ in items]
+        assert "error" in kinds
+        error_vals = [v for k, v in items if k == "error"]
+        assert error_vals
+        assert "HF_TOKEN" in error_vals[0]
+
 
 # ---------------------------------------------------------------------------
 # HTTP endpoints via TestClient
@@ -2208,7 +2217,6 @@ class TestPromptEnhance:
         assert len(data["enhanced"]) > 5
 
     def test_enhance_with_groq(self):
-        import requests as _req
         mock_resp = MagicMock()
         mock_resp.ok = True
         mock_resp.json.return_value = {
