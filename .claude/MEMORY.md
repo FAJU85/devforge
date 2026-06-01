@@ -1,5 +1,5 @@
 # DevForge — Orchestrator Memory
-> Last updated: 2026-06-01 (cycle 41) | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
+> Last updated: 2026-06-01 (cycle 50) | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
 
 ## Project Identity
 - **Name:** DevForge
@@ -94,6 +94,57 @@ devforge/
 - [x] README Generator (POST /api/repo/generate-readme; streamed from selected files)
 - [x] Mobile-responsive UI (sidebar slide-over overlay, compact topbar, bottom-sheet modals)
 - [x] Removed Go/Zod skill chips (less relevant for typical users)
+
+## Cycle 50 Summary (2026-06-01) — Tool URL/Method Validation in Anthropic Tool Use
+| Area | Change |
+|---|---|
+| Backend | `_run_anthropic_with_tools`: validate `tool_def.url` scheme (http/https only) and method allowlist, mirroring cycle-41 fix |
+| Tests | 264 total |
+
+## Cycle 49 Summary (2026-06-01) — HF Model Search Validation Tests
+| Area | Change |
+|---|---|
+| Backend | `/api/hf/models`: `q` max_length=200, `limit` ge=1 le=100 |
+| Tests | +2 tests (limit>100 → 422; query>200 chars → 422) → 264 total |
+
+## Cycle 48 Summary (2026-06-01) — HF Model Search Query/Limit Caps
+| Area | Change |
+|---|---|
+| Backend | `/api/hf/models`: added `max_length=200` on query param, `ge=1, le=100` on limit |
+| Tests | 262 total |
+
+## Cycle 47 Summary (2026-06-01) — commit_url Protocol Validation
+| Area | Change |
+|---|---|
+| Frontend | `commitFile()`: `a.href=res.commit_url` now guarded by `/^https?:\/\//` test |
+| Tests | 262 total |
+
+## Cycle 46 Summary (2026-06-01) — Tab Title, summarize data-path, SSE ev fixes
+| Area | Change |
+|---|---|
+| Frontend | Tab `title` attribute uses `escA()`; summarize button uses `data-path` attr instead of inline arg |
+| Frontend | SSE `ev.label` and `ev.v` (error) escaped in multi-agent and single-stream paths |
+| Tests | 262 total |
+
+## Cycle 45 Summary (2026-06-01) — SHA/date/SSE error escaping
+| Area | Change |
+|---|---|
+| Frontend | `c.sha`, `c.date`, `r.sha`, `r.date` escaped in commit/workflow panels |
+| Frontend | `ev.v` (SSE error) escaped in both multi-agent and single-stream paths |
+| Tests | 262 total |
+
+## Cycle 44 Summary (2026-06-01) — Batch Panel DOM Closure, b.sha
+| Area | Change |
+|---|---|
+| Frontend | `showBatchPanel`: replaced `JSON.stringify(blocks)` in onclick attr with DOM closure |
+| Frontend | `loadBranches`: `b.sha` truncated to 7 chars and escaped |
+| Tests | 262 total |
+
+## Cycle 43 Summary (2026-06-01) — Tool Call + Scan Tests
+| Area | Change |
+|---|---|
+| Tests | `TestToolCallEndpoint`: +4 tests (rejects file://, gopher://, CONNECT, HEAD) |
+| Tests | `TestCodeScanEndpoint`: +1 test (120K input truncated, returns 200) → 262 total |
 
 ## Cycle 41 Summary (2026-06-01) — /api/tools/call SSRF + Method Allowlist
 | Area | Change |
@@ -201,7 +252,7 @@ devforge/
 
 ## Cumulative Scope Ledger
 ```
-totalCyclesCompleted: 41
+totalCyclesCompleted: 50
 totalFilesCreated: 3   (tests/__init__.py, tests/test_main.py, .gitignore)
 totalFilesMutated: 4   (main.py, requirements.txt, static/index.html, tests/test_main.py)
 totalPackagesAdded: 0
@@ -293,5 +344,5 @@ conservativeMode: false
 
 ## Git State
 - Branch: claude/exciting-galileo-7UDWc
-- Last commit: a325cf6 — Cycle 41: /api/tools/call SSRF + method allowlist
+- Last commit: 473b8b9 — Cycle 50: tool URL/method validation in Anthropic tool use
 - Remote: origin/claude/exciting-galileo-7UDWc ✓ tracked
