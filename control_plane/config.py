@@ -3,8 +3,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ANTHROPIC_API_KEY: str = os.environ["ANTHROPIC_API_KEY"]
-PINECONE_API_KEY: str = os.environ["PINECONE_API_KEY"]
+# Use getenv (not environ) so tests run without real secrets set.
+# Nodes will fail at call-time if keys are empty — not at import-time.
+ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
 PINECONE_INDEX: str = os.getenv("PINECONE_INDEX", "agent-memory")
 PINECONE_ENVIRONMENT: str = os.getenv("PINECONE_ENVIRONMENT", "us-east-1-aws")
 
