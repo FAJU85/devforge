@@ -332,7 +332,7 @@ def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
 
 async def stream_one(runner, system: str, messages: list):
     q: asyncio.Queue = asyncio.Queue()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     threading.Thread(target=runner, args=(q, loop, system, messages), daemon=True).start()
     while True:
         try:
@@ -1026,7 +1026,7 @@ async def generate_release_notes(body: ReleaseNotesBody):
     async def _stream():
         if body.provider == "anthropic" and body.anthropic_key:
             q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             def _run():
                 try:
                     client = Anthropic(api_key=body.anthropic_key)
@@ -1269,7 +1269,7 @@ async def generate_readme(body: ReadmeBody):
     async def _stream():
         if body.provider == "anthropic" and body.anthropic_key:
             q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             def _run():
                 try:
                     client = Anthropic(api_key=body.anthropic_key)
@@ -1467,7 +1467,7 @@ async def scan_deps(body: ScanDepsBody):
         yield f"data: {json.dumps({'t':'packages','v':{'ecosystem':ecosystem,'packages':pkg_results}})}\n\n"
         if body.provider == "anthropic" and body.anthropic_key:
             q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             model = (body.anthropic_model or "claude-haiku-4-5-20251001").strip() or "claude-haiku-4-5-20251001"
             def _run():
                 try:

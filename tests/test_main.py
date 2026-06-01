@@ -2663,3 +2663,127 @@ class TestScanDepsEndpoint:
         assert r.status_code == 200
         content = r.text
         assert "packages" in content
+
+
+class TestCallToolEndpoint:
+    def test_get_request_success(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = '{"ok":true}'
+            r = client.post("/api/tools/call", json={
+                "url": "https://api.example.com/data",
+                "method": "GET",
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == 200
+        assert "ok" in data["response"]
+
+    def test_post_request_success(self):
+        with patch("requests.request") as mock_req:
+            mock_req.return_value.status_code = 201
+            mock_req.return_value.text = '{"id":1}'
+            r = client.post("/api/tools/call", json={
+                "url": "https://api.example.com/items",
+                "method": "POST",
+                "body_json": {"name": "test"},
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == 201
+
+    def test_network_error_returns_500(self):
+        with patch("requests.get", side_effect=Exception("connection refused")):
+            r = client.post("/api/tools/call", json={
+                "url": "https://api.example.com/fail",
+                "method": "GET",
+            })
+        assert r.status_code == 500
+        assert "error" in r.json()
+
+    def test_response_truncated_at_2000_chars(self):
+        long_body = "x" * 5000
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = long_body
+            r = client.post("/api/tools/call", json={
+                "url": "https://api.example.com/big",
+                "method": "GET",
+            })
+        assert r.status_code == 200
+        assert len(r.json()["response"]) <= 2000
+
+
+class TestSuggestCommitMessage:
+    def test_anthropic_returns_message(self):
+        mock_client = MagicMock()
+        mock_msg = MagicMock()
+        mock_msg.content = [MagicMock(text="feat(api): add commit suggest endpoint")]
+        mock_client.messages.create.return_value = mock_msg
+        with patch("main.Anthropic", return_value=mock_client):
+            r = client.post("/api/commit/suggest-message", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "path": "main.py",
+                "diff": "def new_func(): pass",
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert "message" in data
+        assert data["message"] == "feat(api): add commit suggest endpoint"
+
+    def test_groq_returns_message(self):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = True
+            mock_post.return_value.json.return_value = {
+                "choices": [{"message": {"content": "fix(auth): handle expired token"}}]
+            }
+            r = client.post("/api/commit/suggest-message", json={
+                "provider": "groq",
+                "groq_key": "gk-test",
+                "path": "auth.py",
+                "content": "token = refresh()",
+            })
+        assert r.status_code == 200
+        assert r.json()["message"] == "fix(auth): handle expired token"
+
+    def test_no_key_returns_400(self):
+        r = client.post("/api/commit/suggest-message", json={
+            "provider": "anthropic",
+            "anthropic_key": "",
+            "path": "README.md",
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_groq_api_error_returns_400(self):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = False
+            mock_post.return_value.text = "rate limit exceeded"
+            r = client.post("/api/commit/suggest-message", json={
+                "provider": "groq",
+                "groq_key": "gk-test",
+                "path": "main.py",
+                "diff": "removed old code",
+            })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_uses_diff_over_content(self):
+        """diff takes precedence — snippet is taken from body.diff when both present."""
+        mock_client = MagicMock()
+        mock_msg = MagicMock()
+        mock_msg.content = [MagicMock(text="refactor(core): simplify logic")]
+        mock_client.messages.create.return_value = mock_msg
+        with patch("main.Anthropic", return_value=mock_client) as _:
+            r = client.post("/api/commit/suggest-message", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "path": "core.py",
+                "diff": "-old_code\n+new_code",
+                "content": "new_code",
+            })
+        assert r.status_code == 200
+        call_args = mock_client.messages.create.call_args
+        user_content = call_args.kwargs["messages"][0]["content"]
+        assert "-old_code" in user_content
