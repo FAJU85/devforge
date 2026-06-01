@@ -808,7 +808,7 @@ function renderTabBar(){
   list.innerHTML=S.tabs.map(t=>{
     const active=t.id===S.activeTabId;const n=t.name||'Chat';
     const cnt=t.msgs?.length;
-    return`<div class="tab-item${active?' active':''}" onclick="switchTab('${t.id}')" ondblclick="promptRenameTab('${t.id}')" title="${n}${cnt?' · '+cnt+' messages':''}"><span class="tab-name">${esc(n)}</span>${S.tabs.length>1?`<button class="tab-close" onclick="closeTab('${t.id}',event)">✕</button>`:''}</div>`;
+    return`<div class="tab-item${active?' active':''}" onclick="switchTab('${t.id}')" ondblclick="promptRenameTab('${t.id}')" title="${escA(n)}${cnt?' · '+cnt+' messages':''}"><span class="tab-name">${esc(n)}</span>${S.tabs.length>1?`<button class="tab-close" onclick="closeTab('${t.id}',event)">✕</button>`:''}</div>`;
   }).join('');
 }
 function newTab(){
@@ -1183,8 +1183,7 @@ function updCtx(){
     const rawSz=S.fileSizes.get(path)||0;const sz=Math.min(rawSz,5000);const tok=tokEst(sz);totalTok+=tok;const tc=tokCls(tok);
     const canSum=rawSz>5000&&((S.prov==='anthropic'&&$('ak').value)||(S.prov==='groq'&&$('gk').value)||(S.prov==='openai_compat'&&$('oci-url')?.value));
     const p=document.createElement('div');p.className='cpill';
-    const safePath=path.replace(/'/g,"\\'");
-    p.innerHTML=`${ficon(path)} ${esc(path.split('/').pop())} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span>${canSum?`<button class="sum-btn" onclick="summarizeFile('${safePath}',event)" title="AI Summarize">∑</button>`:''} <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
+    p.innerHTML=`${ficon(path)} ${esc(path.split('/').pop())} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span>${canSum?`<button class="sum-btn" data-path="${escA(path)}" onclick="summarizeFile(this.dataset.path,event)" title="AI Summarize">∑</button>`:''} <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
     p.onclick=(e)=>{if(e.target.tagName==='BUTTON'||e.target.tagName==='SPAN'&&e.target.style.cursor==='pointer')return;};
     const rmSpan=p.querySelector('span[style*="cursor"]');if(rmSpan)rmSpan.onclick=()=>{S.selFiles.delete(path);S.fileSizes.delete(path);updTF(path);updCtx();};
     strip.appendChild(p);
