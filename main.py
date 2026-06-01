@@ -1568,14 +1568,19 @@ class ToolCallBody(BaseModel):
 @app.post("/api/tools/call")
 async def call_tool(body: ToolCallBody):
     """Proxy a user-defined tool HTTP call to avoid CORS issues."""
+    if not re.match(r"^https?://", body.url):
+        return JSONResponse({"error": "Only http:// and https:// URLs are supported"}, status_code=400)
+    method = body.method.upper()
+    if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+        return JSONResponse({"error": f"Unsupported method: {method}"}, status_code=400)
     try:
         hdrs = dict(body.headers or {})
-        if body.method.upper() != "GET":
+        if method != "GET":
             hdrs.setdefault("Content-Type", "application/json")
-        if body.method.upper() == "GET":
+        if method == "GET":
             r = requests.get(body.url, headers=hdrs, timeout=15)
         else:
-            r = requests.request(body.method.upper(), body.url, headers=hdrs, json=body.body_json, timeout=15)
+            r = requests.request(method, body.url, headers=hdrs, json=body.body_json, timeout=15)
         return {"status": r.status_code, "response": r.text[:2000]}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
