@@ -985,8 +985,9 @@ function regenerate(){
   let lastUser=null;
   for(let i=S.msgs.length-1;i>=0;i--){if(S.msgs[i].role==='user'){lastUser=S.msgs[i].content;break;}}
   if(!lastUser){toast('Nothing to regenerate',true);return;}
-  // Remove last AI message from state (keep the user message)
+  // Remove last AI message AND last user message (send() re-adds the user message)
   if(S.msgs.length>0&&S.msgs[S.msgs.length-1].role==='assistant')S.msgs.pop();
+  if(S.msgs.length>0&&S.msgs[S.msgs.length-1].role==='user')S.msgs.pop();
   // Remove last AI message bubble from DOM
   const msgs=$('msgs');const wraps=msgs.querySelectorAll('.msg-wrap');
   if(wraps.length>0){const last=wraps[wraps.length-1];const av=last.querySelector('.msg-av');if(av&&av.classList.contains('agent'))last.remove();}
@@ -1596,7 +1597,11 @@ function insertToolCallCard(data){
   const card=document.createElement('div');
   card.className='tool-card';card.id=`tool-card-${data.id}`;
   const inputStr=data.input&&Object.keys(data.input).length?JSON.stringify(data.input,null,2):'(no parameters)';
-  card.innerHTML=`<div class="tool-card-hd"><span>🔧</span><span class="tc-name">${data.name}</span><span class="tc-status spin">⏳</span></div><pre class="tool-input">${inputStr}</pre>`;
+  const hd=document.createElement('div');hd.className='tool-card-hd';
+  hd.innerHTML=`<span>🔧</span><span class="tc-name"></span><span class="tc-status spin">⏳</span>`;
+  hd.querySelector('.tc-name').textContent=data.name;
+  const pre=document.createElement('pre');pre.className='tool-input';pre.textContent=inputStr;
+  card.appendChild(hd);card.appendChild(pre);
   chatEl.appendChild(card);chatEl.scrollTop=chatEl.scrollHeight;
 }
 function updateToolResultCard(data){

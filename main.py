@@ -503,7 +503,7 @@ async def repo_write(body: WriteFileBody):
     if existing.ok:
         try:
             sha = existing.json().get("sha")
-        except (KeyError, json.JSONDecodeError):
+        except Exception:
             pass
 
     payload: dict = {
