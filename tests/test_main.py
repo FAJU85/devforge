@@ -95,6 +95,17 @@ class TestParseGhUrl:
         assert owner is None
         assert repo is None
 
+    def test_git_in_middle_of_name_not_stripped(self):
+        """Repo name 'my-git-repo.git' should become 'my-git-repo', not 'my-repo.'."""
+        owner, repo = main.parse_gh_url("https://github.com/acme/my-git-repo.git")
+        assert owner == "acme"
+        assert repo == "my-git-repo"
+
+    def test_shorthand_git_in_middle_of_name(self):
+        owner, repo = main.parse_gh_url("acme/widget.git-tools.git")
+        assert owner == "acme"
+        assert repo == "widget.git-tools"
+
 
 # ---------------------------------------------------------------------------
 # gh_hdrs

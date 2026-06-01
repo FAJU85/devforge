@@ -421,9 +421,9 @@ def parse_gh_url(url: str) -> "tuple[str | None, str | None]":
     m = re.search(r"github\.com/([^/\s]+)/([^/\s]+)", url.strip())
     if not m:
         m2 = re.match(r"^([^/\s]+)/([^/\s]+)$", url.strip())
-        if m2: return m2.group(1), m2.group(2).replace(".git", "")
+        if m2: return m2.group(1), m2.group(2).removesuffix(".git")
         return None, None
-    return m.group(1), m.group(2).replace(".git", "").rstrip("/")
+    return m.group(1), m.group(2).removesuffix(".git").rstrip("/")
 
 def gh_hdrs(token: str) -> dict:
     """Build GitHub API request headers for an authenticated token.

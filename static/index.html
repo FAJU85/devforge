@@ -763,6 +763,8 @@ async function summarizeFile(path,evt){
 }
 function fmt(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(0)+'k';return n||0;}
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
+function escA(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function safeOpen(el){const u=el.dataset.url;if(u&&/^https?:\/\//.test(u))window.open(u,'_blank');}
 function scrollB(){const m=$('msgs');m.scrollTop=m.scrollHeight;}
 // ── Message actions ───────────────────────────────────────────────────────────
 function cpMsg(btn){const body=btn.closest('.msg-inner').querySelector('.msg-body');navigator.clipboard.writeText(body?body.textContent:'');btn.textContent='✓';setTimeout(()=>{btn.textContent='copy';},1500);}
@@ -1100,7 +1102,7 @@ function showWritePanel(btn){
     }
   }
 
-  panel.innerHTML=`${diffHtml}<div class="wp-row"><div class="wp-field"><div class="flabel">Path</div><input class="finput wp-path" value="${fp.replace(/"/g,'&quot;')}" placeholder="src/file.ts"></div><div class="wp-field" style="max-width:140px"><div class="flabel">Branch</div><input class="finput wp-branch" value="${branch}" placeholder="main"></div></div><div class="wp-row"><div class="wp-field"><div class="flabel">Commit message <button onclick="suggestCommitMsg(this.closest('.write-panel'))" style="background:none;border:none;color:var(--purple);cursor:pointer;font-size:11px;padding:0 2px" title="AI: suggest commit message">✨</button></div><input class="finput wp-msg" value="Update ${fname}" placeholder="feat: …"></div><button class="wp-commit" onclick="commitFile(this)">📤 Commit</button></div>`;
+  panel.innerHTML=`${diffHtml}<div class="wp-row"><div class="wp-field"><div class="flabel">Path</div><input class="finput wp-path" value="${escA(fp)}" placeholder="src/file.ts"></div><div class="wp-field" style="max-width:140px"><div class="flabel">Branch</div><input class="finput wp-branch" value="${escA(branch)}" placeholder="main"></div></div><div class="wp-row"><div class="wp-field"><div class="flabel">Commit message <button onclick="suggestCommitMsg(this.closest('.write-panel'))" style="background:none;border:none;color:var(--purple);cursor:pointer;font-size:11px;padding:0 2px" title="AI: suggest commit message">✨</button></div><input class="finput wp-msg" value="Update ${escA(fname)}" placeholder="feat: …"></div><button class="wp-commit" onclick="commitFile(this)">📤 Commit</button></div>`;
   cblock.appendChild(panel);
 }
 async function commitFile(btn){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const panel=btn.closest('.write-panel');const cblock=panel.closest('.cblock');const path=panel.querySelector('.wp-path').value.trim();const branch=panel.querySelector('.wp-branch').value.trim();const message=panel.querySelector('.wp-msg').value.trim();const code=cblock.querySelector('code');if(!path||!message||!code)return;btn.textContent='⏳ Writing…';btn.disabled=true;const res=await post('/api/repo/write',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,content:code.textContent,message,branch});if(res.error){toast('Write failed: '+res.error,true);btn.textContent='📤 Commit';btn.disabled=false;return;}btn.textContent='✅ Written!';const defaultBranch=S.repo.branch||'main';if(res.commit_url){const a=document.createElement('a');a.href=res.commit_url;a.target='_blank';a.className='wp-link';a.textContent='View commit →';btn.after(a);}if(branch!==defaultBranch){const prBtn=document.createElement('button');prBtn.className='wp-commit';prBtn.style.cssText='background:var(--blue);margin-left:6px';prBtn.textContent='🔀 Create PR';prBtn.onclick=()=>openPRModal(branch);btn.after(prBtn);}toast(`✅ Committed to ${branch}: ${path}`);}
@@ -1213,7 +1215,7 @@ async function searchCode(){
   if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${d.error}</div>`;return;}
   if(!d.items?.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No results found</div>';return;}
   panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>${d.total} results</span><button onclick="$('search-results-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
-    d.items.map(item=>`<div class="search-result" onclick="loadSearchResult('${item.path.replace(/'/g,"\\'")}')" title="Click to add to context"><div class="sr-path">${ficon(item.path)} ${item.path}</div>${item.snippets.map(s=>`<div class="sr-snippet">${esc(s)}</div>`).join('')}</div>`).join('');
+    d.items.map(item=>`<div class="search-result" onclick="loadSearchResult(this.dataset.path)" data-path="${escA(item.path)}" title="Click to add to context"><div class="sr-path">${ficon(item.path)} ${esc(item.path)}</div>${item.snippets.map(s=>`<div class="sr-snippet">${esc(s)}</div>`).join('')}</div>`).join('');
 }
 async function loadSearchResult(path){
   if(S.selFiles.has(path)){toast('Already in context');return;}
@@ -1231,7 +1233,7 @@ async function toggleCommits(){
   if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${d.error}</div>`;return;}
   if(!d.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No commits found</div>';return;}
   panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>Recent commits on ${esc(S.repo.branch)}</span><button onclick="$('commits-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
-    d.map(c=>`<div class="commit-item" onclick="window.open('${c.url}','_blank')"><div><span class="ci-sha">${c.sha}</span><span class="ci-msg">${esc(c.message)}</span></div><div class="ci-meta">${esc(c.author)} · ${c.date}</div></div>`).join('');
+    d.map(c=>`<div class="commit-item" onclick="safeOpen(this)" data-url="${escA(c.url)}"><div><span class="ci-sha">${c.sha}</span><span class="ci-msg">${esc(c.message)}</span></div><div class="ci-meta">${esc(c.author)} · ${c.date}</div></div>`).join('');
 }
 
 async function toggleWorkflows(){
@@ -1244,7 +1246,7 @@ async function toggleWorkflows(){
   if(!d.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No workflow runs found</div>';return;}
   const icon=c=>{if(c==='success')return '✅';if(c==='failure')return '❌';if(c==='cancelled')return '⛔';if(c==='skipped')return '⏭️';return '🔄';};
   panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>GitHub Actions — ${esc(S.repo.owner+'/'+S.repo.repo)}</span><button onclick="$('workflows-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
-    d.map(r=>`<div class="commit-item" onclick="window.open('${r.url}','_blank')" title="${esc(r.conclusion||r.status)}"><div><span style="margin-right:4px">${icon(r.conclusion)}</span><span class="ci-msg">${esc(r.name)}</span></div><div class="ci-meta">${esc(r.branch)} · ${r.sha} · ${r.date}</div></div>`).join('');
+    d.map(r=>`<div class="commit-item" onclick="safeOpen(this)" data-url="${escA(r.url)}" title="${escA(r.conclusion||r.status)}"><div><span style="margin-right:4px">${icon(r.conclusion)}</span><span class="ci-msg">${esc(r.name)}</span></div><div class="ci-meta">${esc(r.branch)} · ${r.sha} · ${r.date}</div></div>`).join('');
 }
 
 // ── PR Review ────────────────────────────────────────────────────────────────
