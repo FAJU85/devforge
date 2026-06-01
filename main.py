@@ -262,7 +262,7 @@ def _run_hf(q, loop, system, messages, token, model):
         tok = (token or "").strip()
         if not tok:
             asyncio.run_coroutine_threadsafe(
-                q.put(("error", "HuggingFace token required. Enter your HF token in AI Provider → 🤗 HF tab.")),
+                q.put(("error", "HF_TOKEN is not set. Add it to the Space secrets in HuggingFace settings.")),
                 loop,
             )
             return
@@ -276,7 +276,7 @@ def _run_hf(q, loop, system, messages, token, model):
     except Exception as e:
         err = str(e)
         if "401" in err or "Unauthorized" in err or "Invalid username" in err:
-            err = "HuggingFace token is invalid or expired. Update it in AI Provider → 🤗 HF tab."
+            err = "HuggingFace token is invalid or expired. Update the HF_TOKEN Space secret."
         asyncio.run_coroutine_threadsafe(q.put(("error", err)), loop)
 
 def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
