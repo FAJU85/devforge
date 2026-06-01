@@ -1216,7 +1216,7 @@ async function searchCode(){
   const d=await post('/api/repo/search',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,query:q});
   if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${esc(String(d.error))}</div>`;return;}
   if(!d.items?.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No results found</div>';return;}
-  panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>${d.total} results</span><button onclick="$('search-results-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
+  panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>${Number(d.total)||0} results</span><button onclick="$('search-results-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
     d.items.map(item=>`<div class="search-result" onclick="loadSearchResult(this.dataset.path)" data-path="${escA(item.path)}" title="Click to add to context"><div class="sr-path">${ficon(item.path)} ${esc(item.path)}</div>${item.snippets.map(s=>`<div class="sr-snippet">${esc(s)}</div>`).join('')}</div>`).join('');
 }
 async function loadSearchResult(path){
