@@ -1569,8 +1569,7 @@ async def enhance_prompt(body: PromptEnhanceBody):
             )
             enhanced = msg.content[0].text.strip()
         elif body.provider == "groq" and body.groq_key:
-            import requests as _req
-            r = _req.post(
+            r = requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
                 json={"model": "llama-3.1-8b-instant", "max_tokens": 512,

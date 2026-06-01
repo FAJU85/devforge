@@ -217,8 +217,6 @@ pre::-webkit-scrollbar{height:4px}
 .toast.err{color:var(--red);border-color:var(--red)}
 .qfill-btn{background:var(--panel);border:1px solid var(--border2);border-radius:7px;padding:5px 9px;color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
 .qfill-btn:hover{border-color:var(--accent-border);color:var(--accent2)}
-.stack-chip{display:flex;align-items:center;gap:4px;padding:4px 9px;background:var(--panel);border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-size:11px;color:var(--muted);transition:all .15s;font-family:inherit;white-space:nowrap}
-.stack-chip:hover{border-color:var(--blue-border);color:var(--blue);background:var(--blue-dim)}
 .mem-pill{background:var(--purple-dim);border:1px solid var(--purple-border);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--purple);white-space:nowrap;cursor:pointer;display:none}
 .mem-pill:hover{opacity:.8}
 .stat-pill{background:var(--panel2);border:1px solid var(--border2);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--muted2);font-family:'JetBrains Mono',monospace;white-space:nowrap;display:none}
@@ -555,7 +553,10 @@ pre::-webkit-scrollbar{height:4px}
         <div class="more-menu" id="more-menu">
           <button id="export-btn" onclick="exportChat();closeMoreMenu()">⬇️ Export chat</button>
           <button id="issue-btn" onclick="openIssueModal();closeMoreMenu()">📋 Create Issue</button>
-          <button id="search-chat-btn" onclick="toggleChatSearch();closeMoreMenu()">🔍 Search chat</button>
+          <button id="relnotes-btn" onclick="openReleaseNotes();closeMoreMenu()">🏷️ Release Notes</button>
+          <button id="readme-btn" onclick="openReadmeModal();closeMoreMenu()">📝 Gen README</button>
+          <button id="deps-btn" onclick="openDepsModal();closeMoreMenu()">🔍 Scan Deps</button>
+          <button id="search-chat-btn" onclick="toggleChatSearch();closeMoreMenu()">🔎 Search chat</button>
           <button id="clear-btn" onclick="clearChat();closeMoreMenu()">🗑️ Clear chat</button>
         </div>
       </div>
@@ -923,10 +924,6 @@ function loadPreset(key){if(!key)return;let p;if(key.startsWith('__')){p=BUILTIN
 function savePreset(){const name=$('preset-name').value.trim();if(!name){toast('Enter a preset name',true);return;}const saved=JSON.parse(localStorage.getItem('df-presets')||'{}');saved[name]={instructions:$('instr-input').value,rules:$('rules-input').value,skills:Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value)};localStorage.setItem('df-presets',JSON.stringify(saved));$('preset-name').value='';renderSavedPresets();toast('Saved: '+name);}
 function renderSavedPresets(){try{const saved=JSON.parse(localStorage.getItem('df-presets')||'{}');const g=$('preset-saved-group');if(!g)return;g.innerHTML='';Object.keys(saved).forEach(name=>{const o=document.createElement('option');o.value=name;o.textContent='★ '+name;g.appendChild(o);});}catch(e){}}
 
-// ── Quick Stacks ─────────────────────────────────────────────────────────────
-const STACKS={fullstack_ts:{skills:['react','nextjs','zod','tests','errors','perf'],label:'Full-Stack TS'},python_api:{skills:['tests','errors','security','sql','docs'],label:'Python API'},go_service:{skills:['go','errors','tests','perf','docker'],label:'Go Service'},secure_review:{skills:['security','errors','docs'],label:'Secure Review'}};
-function activateStack(key){const s=STACKS[key];if(!s)return;document.querySelectorAll('.skill-check').forEach(el=>{el.checked=s.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});saveEnhance();toast('Stack: '+s.label);}
-
 // ── Session Memory ────────────────────────────────────────────────────────────
 function memKey(){return S.repo?`df-mem-${S.repo.owner}/${S.repo.repo}`:null;}
 function loadMemory(){const k=memKey();if(!k)return;try{const raw=localStorage.getItem(k);if(!raw)return;const data=JSON.parse(raw);S.memory=data;$('mem-pill').style.display='flex';$('mem-pill').title=`Memory from ${new Date(data.ts).toLocaleDateString()} — click to clear`;}catch(e){S.memory=null;}}
@@ -1276,7 +1273,6 @@ async function reviewPR(){
 }
 
 // ── Release Notes ─────────────────────────────────────────────────────────────
-function openReleaseNotesModal(){return openReleaseNotes();}
 function openReleaseNotes(){
   if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}
   $('rn-output').innerHTML='<span style="color:var(--muted)">Configure range above and click Generate…</span>';

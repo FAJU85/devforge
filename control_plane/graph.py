@@ -1,9 +1,4 @@
-"""
-LangGraph StateGraph definition.
-
-Phase 3: nodes and routing logic are defined.
-Phase 4: Pinecone is initialised and graph.compile() is called.
-"""
+"""LangGraph StateGraph definition — compiled and ready to invoke."""
 from langgraph.graph import END, StateGraph
 
 from control_plane.nodes.execution import execution_node
@@ -54,5 +49,4 @@ def build_graph():
     )
     g.add_edge("synthesis", END)
 
-    # Phase 4 calls g.compile() after wiring Pinecone memory.
-    return g  # returns the uncompiled graph; Phase 4 compiles it
+    return g.compile()
