@@ -259,15 +259,25 @@ def _run_groq(q, loop, system, messages, api_key, model):
 
 def _run_hf(q, loop, system, messages, token, model):
     try:
-        hf = InferenceClient(model=model, token=token) if token else InferenceClient(model=model)
+        tok = (token or "").strip()
+        if not tok:
+            asyncio.run_coroutine_threadsafe(
+                q.put(("error", "HuggingFace token required. Enter your HF token in AI Provider → 🤗 HF tab.")),
+                loop,
+            )
+            return
+        hf = InferenceClient(model=model, token=tok)
         msgs = [{"role": "system", "content": system}] + messages
-        for tok in hf.chat_completion(messages=msgs, max_tokens=4096, stream=True):
-            text = tok.choices[0].delta.content or ""
+        for chunk in hf.chat_completion(messages=msgs, max_tokens=4096, stream=True):
+            text = chunk.choices[0].delta.content or ""
             if text:
                 asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
-        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+        err = str(e)
+        if "401" in err or "Unauthorized" in err or "Invalid username" in err:
+            err = "HuggingFace token is invalid or expired. Update it in AI Provider → 🤗 HF tab."
+        asyncio.run_coroutine_threadsafe(q.put(("error", err)), loop)
 
 def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
     """Thread target: stream completions from any OpenAI-compatible endpoint.
