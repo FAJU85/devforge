@@ -1214,7 +1214,7 @@ async function searchCode(){
   if(!q){return;}if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}
   const panel=$('search-results-panel');panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">Searching…</div>';panel.style.display='block';
   const d=await post('/api/repo/search',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,query:q});
-  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${d.error}</div>`;return;}
+  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${esc(String(d.error))}</div>`;return;}
   if(!d.items?.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No results found</div>';return;}
   panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>${d.total} results</span><button onclick="$('search-results-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
     d.items.map(item=>`<div class="search-result" onclick="loadSearchResult(this.dataset.path)" data-path="${escA(item.path)}" title="Click to add to context"><div class="sr-path">${ficon(item.path)} ${esc(item.path)}</div>${item.snippets.map(s=>`<div class="sr-snippet">${esc(s)}</div>`).join('')}</div>`).join('');
@@ -1232,7 +1232,7 @@ async function toggleCommits(){
   if(!S.repo||!S.ghToken)return;
   panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">Loading commits…</div>';panel.style.display='block';
   const d=await post('/api/repo/commits',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,branch:S.repo.branch});
-  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${d.error}</div>`;return;}
+  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${esc(String(d.error))}</div>`;return;}
   if(!d.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No commits found</div>';return;}
   panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>Recent commits on ${esc(S.repo.branch)}</span><button onclick="$('commits-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
     d.map(c=>`<div class="commit-item" onclick="safeOpen(this)" data-url="${escA(c.url)}"><div><span class="ci-sha">${c.sha}</span><span class="ci-msg">${esc(c.message)}</span></div><div class="ci-meta">${esc(c.author)} · ${c.date}</div></div>`).join('');
@@ -1244,7 +1244,7 @@ async function toggleWorkflows(){
   if(panel.style.display==='block'){panel.style.display='none';return;}
   panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">Loading workflow runs…</div>';panel.style.display='block';
   const d=await post('/api/repo/workflow-runs',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,max_results:15});
-  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${d.error}</div>`;return;}
+  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${esc(String(d.error))}</div>`;return;}
   if(!d.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No workflow runs found</div>';return;}
   const icon=c=>{if(c==='success')return '✅';if(c==='failure')return '❌';if(c==='cancelled')return '⛔';if(c==='skipped')return '⏭️';return '🔄';};
   panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>GitHub Actions — ${esc(S.repo.owner+'/'+S.repo.repo)}</span><button onclick="$('workflows-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
@@ -1444,7 +1444,7 @@ function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='ant
 function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';const short=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';$('model-pill').textContent=short;}else if(S.prov==='groq')$('model-pill').textContent=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')$('model-pill').textContent=($('oci-model')&&$('oci-model').value)||'custom';else $('model-pill').textContent=S.hfModel.split('/').pop();}
 let searchTimer=null;
 function debounceSearch(q){clearTimeout(searchTimer);searchTimer=setTimeout(()=>fetchModels(q),400);}
-async function fetchModels(q=''){$('model-list').innerHTML='<div class="list-msg">Searching…</div>';try{const models=await get(`/api/hf/models?q=${encodeURIComponent(q)}&limit=25`);if(models.error){$('model-list').innerHTML=`<div class="list-msg" style="color:var(--red)">${models.error}</div>`;return;}if(!models.length){$('model-list').innerHTML='<div class="list-msg">No models found</div>';return;}$('model-list').innerHTML=models.map(m=>`<div class="list-item${S.hfModel===m.id?' active':''}" onclick="selectModel('${m.id.replace(/'/g,"\\'")}',this)"><div class="li-name">${m.name}</div><div class="li-sub"><span style="color:var(--muted)">${m.author}</span><span>↓${fmt(m.downloads)}</span><span>❤️${fmt(m.likes)}</span>${m.gated?'<span class="li-badge">gated</span>':''}</div></div>`).join('');}catch(e){$('model-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';}}
+async function fetchModels(q=''){$('model-list').innerHTML='<div class="list-msg">Searching…</div>';try{const models=await get(`/api/hf/models?q=${encodeURIComponent(q)}&limit=25`);if(models.error){$('model-list').innerHTML=`<div class="list-msg" style="color:var(--red)">${esc(String(models.error))}</div>`;return;}if(!models.length){$('model-list').innerHTML='<div class="list-msg">No models found</div>';return;}$('model-list').innerHTML=models.map(m=>`<div class="list-item${S.hfModel===m.id?' active':''}" data-id="${escA(m.id)}" onclick="selectModel(this.dataset.id,this)"><div class="li-name">${esc(m.name||'')}</div><div class="li-sub"><span style="color:var(--muted)">${esc(m.author||'')}</span><span>↓${fmt(m.downloads)}</span><span>❤️${fmt(m.likes)}</span>${m.gated?'<span class="li-badge">gated</span>':''}</div></div>`).join('');}catch(e){$('model-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';}}
 function selectModel(id,el){S.hfModel=id;document.querySelectorAll('#model-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');$('hf-sel-name').textContent=id;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';updBadge();saveEnhance();}
 function clearModel(){$('hf-selected').style.display='none';$('hf-browser').style.display='block';$('model-search').value='';fetchModels('');}
 function setAgent(el){document.querySelectorAll('.atab').forEach(t=>t.classList.remove('on'));el.classList.add('on');S.agent=el.dataset.agent;}
@@ -1506,7 +1506,7 @@ async function send(){
       saveMemory();autoSaveChat();}
     // Add copy + regenerate actions to the AI message we just rendered
     if(reply&&!multiAgent){const meta=tw.querySelector('.msg-meta');if(meta&&!meta.querySelector('.msg-actions')){const acts=document.createElement('div');acts.className='msg-actions';acts.innerHTML='<button class="msg-act" onclick="cpMsg(this)">copy</button><button class="msg-act" onclick="regenerate()" title="Regenerate this response">🔄</button>';meta.appendChild(acts);}}
-  }catch(e){tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${e.message}</span></div></div>`;}
+  }catch(e){tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${esc(String(e.message||e))}</span></div></div>`;}
   clearInterval(timerId);
   S.streaming=false;$('send-btn').disabled=false;$('stop-btn').style.display='none';S.abortCtrl=null;
   // Offer batch commit if multiple writable files detected
@@ -1624,7 +1624,7 @@ function quickScanRepo(files){
   files.forEach(f=>{const e=f.path.split('.').pop()?.toLowerCase()||'other';exts[e]=(exts[e]||0)+1;totalSize+=(f.size||0);});
   const sorted=Object.entries(exts).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const frameworks=[];Object.keys(FRAMEWORK_HINTS).forEach(k=>{if(rootFiles.has(k)||Array.from(rootFiles).some(f=>f.includes(k)))frameworks.push(FRAMEWORK_HINTS[k]);});
-  const langsHtml=sorted.map(([ext,cnt])=>{const col=LANG_COLORS[ext]||'var(--border)';return`<span class="rs-lang" style="background:${col}22;color:${col};border:1px solid ${col}44">.${ext} ${cnt}</span>`;}).join('');
+  const langsHtml=sorted.map(([ext,cnt])=>{const col=LANG_COLORS[ext]||'var(--border)';return`<span class="rs-lang" style="background:${col}22;color:${col};border:1px solid ${col}44">.${esc(ext)} ${Number(cnt)}</span>`;}).join('');
   const fw=frameworks.slice(0,3).map(f=>`<span class="rs-badge">${f}</span>`).join('');
   const sizeStr=totalSize>1e6?(totalSize/1e6).toFixed(1)+'MB':totalSize>1e3?(totalSize/1e3).toFixed(0)+'KB':totalSize+'B';
   const rs=$('rs-card');if(!rs)return;rs.style.display='block';
