@@ -31,7 +31,7 @@ devforge/
 - **Auth:** GitHub OAuth Device Flow (GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET env vars)
 - **HF Token:** HF_TOKEN env var (optional)
 
-## Features Implemented (Cycles 1-20 Complete)
+## Features Implemented (Cycles 1-24 Complete)
 - [x] GitHub OAuth one-click (Device Flow)
 - [x] Repo browser + file tree (up to 8 files in context)
 - [x] AI Provider: Anthropic Claude (haiku/sonnet/opus selector)
@@ -88,6 +88,17 @@ devforge/
 - [x] AI Commit Message Suggestions (POST /api/commit/suggest-message; ✨ in write panel)
 - [x] Code Explain Button (? on code blocks; fills prompt with explain request)
 - [x] Chat Search (Ctrl+F; highlight all matches; ▼/▲ navigate)
+- [x] Release Notes Generator (POST /api/repo/release-notes; tag/SHA range; AI-streamed Markdown)
+- [x] PR Review Mode (POST /api/github/pr/diff; loads diff as context; switches to Review agent)
+- [x] GitHub Gist Export (POST /api/github/gist/create; Gist button on code blocks)
+- [x] README Generator (POST /api/repo/generate-readme; streamed from selected files)
+
+## Cycle 25 Summary (2026-06-01) — Code Security Scanner
+| Area | Change |
+|---|---|
+| Backend | `POST /api/code/scan` — AST analysis for Python + regex for JS/TS/SQL/Go/Bash; `SECURITY_FOOTER` injected into code/refactor/testgen/debug system prompts |
+| Frontend | 🛡️ Scan button on code blocks; inline severity-coded results; 🔧 Auto-Fix fills prompt for self-healing loop |
+| Tests | 3 new (TestCodeScanEndpoint) + 1 updated; 187 total |
 
 ## Features NOT Yet Implemented (Target)
 - [ ] MCP (Model Context Protocol) tool support
@@ -102,13 +113,41 @@ devforge/
 
 ## Cumulative Scope Ledger
 ```
-totalCyclesCompleted: 20
+totalCyclesCompleted: 25
 totalFilesCreated: 3   (tests/__init__.py, tests/test_main.py, .gitignore)
 totalFilesMutated: 4   (main.py, requirements.txt, static/index.html, tests/test_main.py)
 totalPackagesAdded: 0
 scopeFreeze: false
 conservativeMode: false
 ```
+
+## Cycle 24 Summary (2026-05-31) — README Generator
+| Area | Change |
+|---|---|
+| Backend | `POST /api/repo/generate-readme` — streams AI README from file context |
+| Frontend | 📝 Generate README button; modal with streaming preview; copy/add-to-context |
+| Tests | 3 new (TestGenerateReadmeEndpoint); 184 total |
+
+## Cycle 23 Summary (2026-05-31) — GitHub Gist Export
+| Area | Change |
+|---|---|
+| Backend | `POST /api/github/gist/create` |
+| Frontend | Gist button on code blocks (when GitHub connected) |
+| Tests | 3 new (TestGistCreate); 181 total |
+
+## Cycle 22 Summary (2026-05-31) — PR Review Mode
+| Area | Change |
+|---|---|
+| Backend | `POST /api/github/pr/diff` — PR metadata + 40KB diff |
+| Frontend | PR # input in sidebar; loads diff as local context; switches to Review agent |
+| Tests | 3 new (TestPRDiffEndpoint); 178 total |
+
+## Cycle 21 Summary (2026-05-31) — Release Notes Generator
+| Area | Change |
+|---|---|
+| Backend | `POST /api/repo/release-notes` — streamed AI release notes from commits |
+| Frontend | 📋 Release Notes topbar button; modal with since/until/max-commits |
+| Tests | 3 new (TestReleaseNotesEndpoint); 175 total |
 
 ## Cycle 20 Summary (2026-05-31) — Code Explain + Chat Search
 | Area | Change |
