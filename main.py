@@ -563,8 +563,7 @@ async def suggest_files(body: SuggestFilesBody):
     result = ""
     try:
         if body.provider == "anthropic" and body.anthropic_key:
-            from anthropic import Anthropic as _Anth
-            client = _Anth(api_key=body.anthropic_key)
+            client = Anthropic(api_key=body.anthropic_key)
             msg = client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=256,
@@ -1026,7 +1025,6 @@ async def generate_release_notes(body: ReleaseNotesBody):
 
     async def _stream():
         if body.provider == "anthropic" and body.anthropic_key:
-            import threading
             q: asyncio.Queue = asyncio.Queue()
             loop = asyncio.get_event_loop()
             def _run():
@@ -1270,7 +1268,6 @@ async def generate_readme(body: ReadmeBody):
 
     async def _stream():
         if body.provider == "anthropic" and body.anthropic_key:
-            import threading
             q: asyncio.Queue = asyncio.Queue()
             loop = asyncio.get_event_loop()
             def _run():
@@ -1469,7 +1466,6 @@ async def scan_deps(body: ScanDepsBody):
     async def _stream():
         yield f"data: {json.dumps({'t':'packages','v':{'ecosystem':ecosystem,'packages':pkg_results}})}\n\n"
         if body.provider == "anthropic" and body.anthropic_key:
-            import threading as _th
             q: asyncio.Queue = asyncio.Queue()
             loop = asyncio.get_event_loop()
             model = (body.anthropic_model or "claude-haiku-4-5-20251001").strip() or "claude-haiku-4-5-20251001"
@@ -1483,7 +1479,7 @@ async def scan_deps(body: ScanDepsBody):
                     asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
                 except Exception as e:
                     asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
-            _th.Thread(target=_run, daemon=True).start()
+            threading.Thread(target=_run, daemon=True).start()
             while True:
                 kind, val = await asyncio.wait_for(q.get(), timeout=60)
                 if kind == "text": yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
