@@ -1057,7 +1057,8 @@ async function scanCode(btn,lang){
       const issuesText=d.issues.map(i=>`[${i.severity.toUpperCase()}] ${i.pattern}${i.line?' (line '+i.line+')':''}: ${i.message}`).join('\n');
       const issueHtml=d.issues.map(i=>{
         const icon=i.severity==='high'?'🔴':i.severity==='medium'?'🟡':'🔵';
-        return`<div class="scan-issue scan-${i.severity}">${icon} <strong>${i.pattern}</strong>${i.line?` <span style="color:var(--muted);font-size:10px">line ${i.line}</span>`:''}<div class="scan-msg">${i.message}</div></div>`;
+        const sev=['high','medium','low'].includes(i.severity)?i.severity:'low';
+        return`<div class="scan-issue scan-${sev}">${icon} <strong>${esc(String(i.pattern||''))}</strong>${i.line?` <span style="color:var(--muted);font-size:10px">line ${Number(i.line)||0}</span>`:''}<div class="scan-msg">${esc(String(i.message||''))}</div></div>`;
       }).join('');
       const enc=encodeURIComponent(issuesText);
       panel.innerHTML=`<div class="scan-header"><span class="scan-title">🛡️ Security Scan — ${summary}</span><button class="ccopy" style="border-color:var(--accent-border);color:var(--accent2)" onclick="autoFixCode(this)" data-issues="${enc}" title="Ask AI to fix these issues">🔧 Auto-Fix</button></div><div class="scan-issues">${issueHtml}</div>`;
