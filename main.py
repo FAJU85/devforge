@@ -350,7 +350,7 @@ async def root():
         return HTMLResponse(f.read())
 
 @app.get("/api/hf/models")
-async def search_hf_models(q: str = Query(default=""), limit: int = Query(default=25)):
+async def search_hf_models(q: str = Query(default="", max_length=200), limit: int = Query(default=25, ge=1, le=100)):
     params = {"pipeline_tag": "text-generation", "sort": "downloads", "direction": -1, "limit": limit, "full": False}
     if q.strip(): params["search"] = q.strip()
     try:
