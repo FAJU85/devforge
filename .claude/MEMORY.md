@@ -1,5 +1,5 @@
 # DevForge — Orchestrator Memory
-> Last updated: 2026-05-31 | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
+> Last updated: 2026-06-01 | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
 
 ## Project Identity
 - **Name:** DevForge
@@ -18,7 +18,7 @@ devforge/
 ├── Dockerfile               # python:3.11-slim, EXPOSE 7860
 ├── tests/
 │   ├── __init__.py
-│   └── test_main.py         # 69 tests, 92% line/branch coverage
+│   └── test_main.py         # 172 tests
 └── .github/workflows/
     ├── sync-to-hf.yml
     └── sync-from-hf.yml
@@ -27,40 +27,103 @@ devforge/
 ## Stack
 - **Backend:** Python 3.11 / FastAPI / Uvicorn
 - **Frontend:** Single HTML file (Vanilla JS, marked.js, highlight.js)
-- **AI Providers:** Anthropic Claude, Groq, HuggingFace Inference API
+- **AI Providers:** Anthropic Claude, Groq, HuggingFace Inference API, OpenAI-compat
 - **Auth:** GitHub OAuth Device Flow (GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET env vars)
 - **HF Token:** HF_TOKEN env var (optional)
 
-## Features Implemented (v1 — Cycles 1-3 Complete)
+## Features Implemented (Cycles 1-24 Complete)
 - [x] GitHub OAuth one-click (Device Flow)
 - [x] Repo browser + file tree (up to 8 files in context)
-- [x] AI Provider: Anthropic Claude (current model)
+- [x] AI Provider: Anthropic Claude (haiku/sonnet/opus selector)
 - [x] AI Provider: Groq (llama, mixtral, gemma, deepseek, qwen)
 - [x] AI Provider: HuggingFace (any text-generation model)
-- [x] Multi-agent pipeline (Plan → Implement → Review, same provider)
-- [x] Skills: Go, Zod, Tests, Errors, Security, Docs, Perf, SOLID
+- [x] Multi-agent pipeline (Plan → Implement → Test → Review, same provider)
+- [x] Skills: Go, Zod, Tests, Errors, Security, Docs, Perf, SOLID, React, Next.js, Docker, SQL
 - [x] Custom Rules textarea
 - [x] Custom Instructions textarea
 - [x] SSE streaming responses
 - [x] Light/Dark theme
-- [x] localStorage persistence (survives page refresh) ← fixed Cycle 1
-- [x] OpenAI-compatible custom endpoint (Ollama, OpenRouter, LM Studio…) ← added Cycle 2
-- [x] GitHub write-back: agent commits generated code directly to repo ← added Cycle 3
+- [x] localStorage persistence (survives page refresh)
+- [x] OpenAI-compatible custom endpoint (Ollama, OpenRouter, LM Studio…)
+- [x] GitHub write-back: agent commits generated code directly to repo
+- [x] File upload for instructions/rules/local context
+- [x] Cross-provider multi-agent (different AI per stage: Plan/Code/Test/Review)
+- [x] Instruction Presets (7 built-in + save/load/delete custom)
+- [x] Endpoint quick-fill: Vercel AI Gateway, OpenRouter, Ollama, LM Studio
+- [x] Session Memory: per-repo localStorage context injected across sessions
+- [x] Chat Export: download conversation as .md
+- [x] Token stats: real (Anthropic) + estimated (other providers) display
+- [x] Quick Stacks: Full-Stack TS, Python API, Go Service, Secure Review
+- [x] New Agent Tabs: Refactor + Test Gen
+- [x] Code diff view in write panel
+- [x] Message actions (copy, delete, regenerate)
+- [x] Conversation auto-save/restore per repo (tab-based)
+- [x] Conversation Tabs (per-repo named threads, auto-named from first message)
+- [x] GitHub Issue creation (modal + POST /api/github/issue/create)
+- [x] GitHub PR creation (modal + POST /api/github/pr/create)
+- [x] Repo quick-scan card (language breakdown, file count)
+- [x] 4-stage multi-agent pipeline (+ Test Gen stage)
+- [x] Batch file commit (extract all code blocks, commit in one op)
+- [x] Stream cancel / AbortController (Stop button)
+- [x] POST /api/repo/write/batch endpoint
+- [x] AI file suggestions (POST /api/repo/suggest-files, haiku/llama)
+- [x] File tree search / live filter
+- [x] Streaming timer (elapsed seconds indicator)
+- [x] Keyboard shortcuts (Escape, Cmd+/, Cmd+Shift+Backspace, Ctrl+F)
+- [x] HTTP Tools (define tools, proxy via /api/tools/call, Anthropic native tool use)
+- [x] File summarization (POST /api/repo/summarize-file, haiku/llama)
+- [x] Code search (POST /api/repo/search, GitHub code search API)
+- [x] Commit history viewer (POST /api/repo/commits)
+- [x] Branch selector + switcher (GET /api/repo/branches)
+- [x] Anthropic model selector (Haiku / Sonnet / Opus)
+- [x] Prompt history (up/down arrow, 50 entries)
+- [x] Token budget bar (color-coded, 80K warning, per-file token count)
+- [x] Extended Thinking Mode (Claude Opus only; collapsible thinking block in UI)
+- [x] Prompt Enhancement (POST /api/prompt/enhance; ✨ button fills textarea)
+- [x] Response Regeneration (🔄 button on AI messages)
+- [x] GitHub Actions workflow status (POST /api/repo/workflow-runs; ⚙️ panel)
+- [x] File Peek Modal (👁 button on file tree; full content view + add to context)
+- [x] Smart context trimming (auto-drop oldest messages when >90K tokens)
+- [x] Snippet Library (📌 save/load/delete prompt snippets, up to 30)
+- [x] AI Commit Message Suggestions (POST /api/commit/suggest-message; ✨ in write panel)
+- [x] Code Explain Button (? on code blocks; fills prompt with explain request)
+- [x] Chat Search (Ctrl+F; highlight all matches; ▼/▲ navigate)
+- [x] Release Notes Generator (POST /api/repo/release-notes; tag/SHA range; AI-streamed Markdown)
+- [x] PR Review Mode (POST /api/github/pr/diff; loads diff as context; switches to Review agent)
+- [x] GitHub Gist Export (POST /api/github/gist/create; Gist button on code blocks)
+- [x] README Generator (POST /api/repo/generate-readme; streamed from selected files)
+- [x] Mobile-responsive UI (sidebar slide-over overlay, compact topbar, bottom-sheet modals)
+- [x] Removed Go/Zod skill chips (less relevant for typical users)
+
+## Cycle 26 Summary (2026-06-01) — Mobile UI + Skill Cleanup
+| Area | Change |
+|---|---|
+| Frontend | `@media(max-width:768px)` — sidebar as fixed slide-over overlay with dark backdrop; `exp-btn` always visible; topbar compacted; model/MA/mem/stat pills hidden; modals slide up from bottom |
+| Frontend | Removed 🐹 Go and 🔷 Zod skill chips from skills grid |
+| JS | Added `isMob()` helper; `collSidebar()`/`expSidebar()` handle mobile overlay; `init()` always collapses on mobile |
+| Tests | 190 total (no backend changes) |
+
+## Cycle 25 Summary (2026-06-01) — Code Security Scanner
+| Area | Change |
+|---|---|
+| Backend | `POST /api/code/scan` — AST analysis for Python + regex for JS/TS/SQL/Go/Bash; `SECURITY_FOOTER` injected into code/refactor/testgen/debug system prompts |
+| Frontend | 🛡️ Scan button on code blocks; inline severity-coded results; 🔧 Auto-Fix fills prompt for self-healing loop |
+| Tests | 3 new (TestCodeScanEndpoint) + 1 updated; 187 total |
 
 ## Features NOT Yet Implemented (Target)
 - [ ] MCP (Model Context Protocol) tool support
-- [ ] File upload for instructions/context
-- [ ] Cross-provider multi-agent (different AI for each stage)
-- [ ] Persistent memory (beyond localStorage)
-- [ ] Fine-tune instruction presets
+- [ ] Persistent server-side memory (beyond localStorage)
 - [ ] Mistral / Cohere / Gemini providers (can now use via Custom endpoint)
+- [ ] Smart context window management (file chunking, token budgeting beyond current trim)
+- [ ] Release notes generator
+- [ ] Multiple named conversation tabs per repo (done — single tab auto-name)
 
 ## Known Construction Errors
-> All Cycle 1 violations resolved. No outstanding PROTOCOL violations.
+> None outstanding.
 
 ## Cumulative Scope Ledger
 ```
-totalCyclesCompleted: 3
+totalCyclesCompleted: 26
 totalFilesCreated: 3   (tests/__init__.py, tests/test_main.py, .gitignore)
 totalFilesMutated: 4   (main.py, requirements.txt, static/index.html, tests/test_main.py)
 totalPackagesAdded: 0
@@ -68,34 +131,89 @@ scopeFreeze: false
 conservativeMode: false
 ```
 
-## Cycle 3 Summary (2026-05-31)
+## Cycle 24 Summary (2026-05-31) — README Generator
 | Area | Change |
 |---|---|
-| Backend | `WriteFileBody` + `POST /api/repo/write` (create/update via GitHub Contents API) |
-| Frontend | `rmd()` detects `### \`path\`` headings → injects `📤 Write` button; `showWritePanel()` + `commitFile()` |
-| Tests | 4 new cases; 82 total |
+| Backend | `POST /api/repo/generate-readme` — streams AI README from file context |
+| Frontend | 📝 Generate README button; modal with streaming preview; copy/add-to-context |
+| Tests | 3 new (TestGenerateReadmeEndpoint); 184 total |
 
-## Cycle 2 Summary (2026-05-31) — SESSION_APPROVED
+## Cycle 23 Summary (2026-05-31) — GitHub Gist Export
 | Area | Change |
 |---|---|
-| Backend | `_run_openai_compat()` + `ChatBody` fields + `get_runner` routing |
-| Frontend | Custom provider button, custom endpoint panel, provider/badge/enhance/send updated |
-| Tests | New tests covering custom endpoint paths |
+| Backend | `POST /api/github/gist/create` |
+| Frontend | Gist button on code blocks (when GitHub connected) |
+| Tests | 3 new (TestGistCreate); 181 total |
 
-## Cycle 1 Summary (2026-05-31) — SESSION_APPROVED
-| Priority | Fix | Result |
-|---|---|---|
-| CRITICAL | Bare `except: pass` → typed `json.JSONDecodeError` / `(KeyError, IndexError)` | ✓ |
-| HIGH | requirements.txt → full pip-compile lock with SHA-256 hashes | ✓ |
-| MEDIUM | Model ID updated to current model | ✓ |
-| MEDIUM | Test suite shipped (69 tests, 92% coverage) | ✓ |
-| LOW | Type annotations + docstrings: `build_system`, `get_runner`, `parse_gh_url`, `gh_hdrs` | ✓ |
-| LOW | `sessionStorage` → `localStorage` (5 occurrences) | ✓ |
+## Cycle 22 Summary (2026-05-31) — PR Review Mode
+| Area | Change |
+|---|---|
+| Backend | `POST /api/github/pr/diff` — PR metadata + 40KB diff |
+| Frontend | PR # input in sidebar; loads diff as local context; switches to Review agent |
+| Tests | 3 new (TestPRDiffEndpoint); 178 total |
 
-## Active Canvas
-> Canvas ID: CANVAS-DF-2026-003 — in progress (2026-05-31)
+## Cycle 21 Summary (2026-05-31) — Release Notes Generator
+| Area | Change |
+|---|---|
+| Backend | `POST /api/repo/release-notes` — streamed AI release notes from commits |
+| Frontend | 📋 Release Notes topbar button; modal with since/until/max-commits |
+| Tests | 3 new (TestReleaseNotesEndpoint); 175 total |
+
+## Cycle 20 Summary (2026-05-31) — Code Explain + Chat Search
+| Area | Change |
+|---|---|
+| Frontend | `explainCode()` — ? button on code blocks; `toggleChatSearch()`/`runChatSearch()`/`stepChatSearch()` — Ctrl+F chat search bar with match highlighting and navigation |
+| Tests | 172 total (no new backend) |
+
+## Cycle 19 Summary (2026-05-31) — Snippets + AI Commit Messages
+| Area | Change |
+|---|---|
+| Backend | `POST /api/commit/suggest-message` (haiku/llama) |
+| Frontend | 📌 Snippets section (save/load/delete, localStorage); ✨ button in write panel for AI commit message |
+| Tests | 3 new (TestCommitSuggestMessage); 172 total |
+
+## Cycle 18 Summary (2026-05-31) — File Peek + Smart Trim
+| Area | Change |
+|---|---|
+| Frontend | 👁 peek-btn on file tree; peek modal (full view + add to context); smart context trim before send (>90K) |
+| Tests | 169 total (no new backend) |
+
+## Cycle 17 Summary (2026-05-31) — GitHub Actions Viewer
+| Area | Change |
+|---|---|
+| Backend | `POST /api/repo/workflow-runs` — Actions runs list |
+| Frontend | ⚙️ button + workflows-panel showing status icons |
+| Tests | 3 new (TestWorkflowRunsEndpoint); 169 total |
+
+## Cycle 16 Summary (2026-05-31) — Prompt Enhancement + Regenerate
+| Area | Change |
+|---|---|
+| Backend | `POST /api/prompt/enhance` (haiku/llama rewrites prompt) |
+| Frontend | ✨ button fills textarea; 🔄 regenerate on AI messages |
+| Tests | 4 new (TestPromptEnhance); 166 total |
+
+## Cycle 15 Summary (2026-05-31) — Extended Thinking Mode
+| Area | Change |
+|---|---|
+| Backend | `_run_anthropic_thinking()`, `thinking_mode`/`thinking_budget` fields, `stream_one()` passes thinking events |
+| Frontend | `.thinking-block` CSS; think-opts panel (Opus only); SSE handler for thinking events |
+| Tests | 4 new (TestExtendedThinking); 162 total |
+
+## Cycles 10-14 Summary (prior session)
+- Cycle 10: HTTP Tools (native Anthropic tool use)
+- Cycle 11: File summarization endpoint
+- Cycle 12: GitHub code search
+- Cycle 13: Commit history + branch switcher
+- Cycle 14: Anthropic model selector + prompt history
+
+## Cycle 9 Summary (2026-05-31) — AI Assist + UX Polish
+| Area | Change |
+|---|---|
+| Backend | `POST /api/repo/suggest-files`: haiku/llama picks relevant files from task |
+| Frontend | File tree search (live filter); AI Suggest button; streaming timer; keyboard shortcuts |
+| Tests | 5 new tests (TestSuggestFiles); 124 total |
 
 ## Git State
 - Branch: claude/exciting-galileo-7UDWc
-- Last commit: 5d5722c — Add GitHub write-back
+- Last commit: 2ea8f88 — Cycle 26: Mobile-responsive UI + remove Go/Zod skill chips
 - Remote: origin/claude/exciting-galileo-7UDWc ✓ tracked

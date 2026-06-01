@@ -67,6 +67,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
 .tfile{display:flex;align-items:center;gap:7px;padding:3px 10px 3px 16px;cursor:pointer;font-size:12px;color:var(--muted);border-left:2px solid transparent;transition:all .1s;font-family:'JetBrains Mono',monospace;user-select:none}
 .tfile:hover{background:var(--hover);color:var(--text)}.tfile.sel{color:var(--accent);background:var(--accent-dim);border-left-color:var(--accent2)}
 .tfile input[type=checkbox]{width:12px;height:12px;accent-color:var(--accent2);flex-shrink:0}
+.peek-btn{background:none;border:none;cursor:pointer;opacity:0;font-size:11px;padding:0 2px;flex-shrink:0;transition:opacity .1s;line-height:1}
+.tfile:hover .peek-btn{opacity:.6}.peek-btn:hover{opacity:1!important}
 .tfolder{user-select:none}
 .tfolder-h{display:flex;align-items:center;gap:7px;padding:3px 10px 3px 14px;cursor:pointer;color:var(--muted2);font-size:12px;transition:background .1s}
 .tfolder-h:hover{background:var(--hover);color:var(--muted)}
@@ -186,6 +188,14 @@ pre::-webkit-scrollbar{height:4px}
 .ma-block.collapsed .ma-block-body{display:none}
 .ma-arr{margin-left:auto;font-size:9px;transition:transform .15s}
 .ma-block.collapsed .ma-arr{transform:rotate(-90deg)}
+.thinking-block{border:1px solid var(--purple-border);border-radius:8px;background:var(--purple-dim);margin:6px 0 6px 31px;overflow:hidden}
+.think-hd{display:flex;align-items:center;gap:6px;padding:7px 12px;cursor:pointer;font-size:12px;font-weight:500;color:var(--purple);user-select:none}
+.think-arr{margin-left:auto;font-size:9px;transition:transform .15s}
+.thinking-block.collapsed .think-arr{transform:rotate(-90deg)}
+.think-body{padding:8px 12px;font-size:12px;color:var(--muted);white-space:pre-wrap;max-height:220px;overflow-y:auto;font-family:'JetBrains Mono',monospace;line-height:1.5;border-top:1px solid var(--purple-border)}
+.thinking-block.collapsed .think-body{display:none}
+.think-opts{padding:6px 10px 8px;display:none;flex-direction:column;gap:6px}
+.think-opts.on{display:flex}
 .thinking{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;margin-left:31px}
 .dots{display:flex;gap:5px}.dot{width:5px;height:5px;border-radius:50%;background:var(--accent2);animation:blink 1.4s ease infinite}
 .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
@@ -205,10 +215,146 @@ pre::-webkit-scrollbar{height:4px}
 .send-btn:hover{opacity:.9;transform:translateY(-1px)}.send-btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 18px;color:var(--text);font-size:13px;z-index:999;animation:fadein .2s ease;max-width:90vw;box-shadow:var(--shadow);text-align:center}
 .toast.err{color:var(--red);border-color:var(--red)}
+.qfill-btn{background:var(--panel);border:1px solid var(--border2);border-radius:7px;padding:5px 9px;color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.qfill-btn:hover{border-color:var(--accent-border);color:var(--accent2)}
+.mem-pill{background:var(--purple-dim);border:1px solid var(--purple-border);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--purple);white-space:nowrap;cursor:pointer;display:none}
+.mem-pill:hover{opacity:.8}
+.stat-pill{background:var(--panel2);border:1px solid var(--border2);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--muted2);font-family:'JetBrains Mono',monospace;white-space:nowrap;display:none}
+.export-btn{background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;padding:5px 9px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.export-btn:hover{border-color:var(--accent-border);color:var(--accent2)}
+.msg-actions{display:none;gap:4px;margin-left:auto;align-items:center}
+.msg-wrap:hover .msg-actions{display:flex}
+.msg-act{background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;padding:2px 8px;border-radius:5px;font-size:11px;font-family:inherit;transition:all .15s;line-height:1.6}
+.msg-act:hover{color:var(--text);border-color:var(--border)}
+.msg-act.del:hover{color:var(--red);border-color:var(--red)}
+.diff-panel{padding:10px 14px;background:var(--code-bg);border-top:1px solid var(--border2);max-height:260px;overflow-y:auto}
+.diff-panel pre{font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;margin:0}
+.diff-add{background:#1a3a1a;color:#7ee787;display:block;padding:0 4px}
+.diff-del{background:#3a1a1a;color:#f87171;display:block;padding:0 4px}
+.diff-ctx{color:var(--muted2);display:block;padding:0 4px}
+.diff-hd{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:var(--panel);border-bottom:1px solid var(--border2);font-size:11px;color:var(--muted)}
+.diff-stat{font-size:11px}
+.diff-stat .add{color:#7ee787}.diff-stat .del{color:var(--red)}
+[data-theme="light"] .diff-add{background:#d4edda;color:#155724}
+[data-theme="light"] .diff-del{background:#f8d7da;color:#721c24}
+[data-theme="light"] .diff-ctx{color:var(--muted)}
+.modal-overlay{position:fixed;inset:0;background:#0007;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 40px #0004}
+.modal-head{font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.modal-row{margin-bottom:10px}
+.modal-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.modal-cancel{background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;padding:7px 14px;border-radius:8px;font-size:12px;font-family:inherit;transition:all .15s}
+.modal-cancel:hover{color:var(--text);border-color:var(--border)}
+.modal-ok{background:var(--accent2);border:none;border-radius:8px;padding:7px 14px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity .15s}
+.modal-ok:hover{opacity:.9}.modal-ok:disabled{opacity:.4;cursor:not-allowed}
+.label-chips{display:flex;gap:5px;flex-wrap:wrap;padding:4px 0}
+.lchip{display:flex;align-items:center;gap:4px;padding:4px 9px;background:var(--panel2);border:1px solid var(--border2);border-radius:20px;cursor:pointer;font-size:11px;color:var(--muted);user-select:none;transition:all .15s}
+.lchip input{display:none}.lchip.on{background:var(--blue-dim);border-color:var(--blue-border);color:var(--blue)}
+.rs-card{margin:0 10px 6px;padding:9px 12px;background:var(--panel2);border:1px solid var(--border2);border-radius:10px;display:none}
+.rs-langs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px}
+.rs-lang{font-size:10px;padding:2px 7px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-weight:600}
+.rs-info{font-size:11px;color:var(--muted);line-height:1.5}
+.rs-badge{display:inline-block;background:var(--panel);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-size:10px;margin-right:4px}
+.tok-badge{font-size:9px;color:var(--muted2);font-family:'JetBrains Mono',monospace;margin-left:auto;flex-shrink:0;padding-left:4px;pointer-events:none}
+.tok-badge.med{color:#f59e0b}.tok-badge.high{color:var(--red)}
+.cpill-tok{font-size:9px;padding:1px 4px;border-radius:6px;background:var(--panel2);color:var(--muted2);margin:0 2px;font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.cpill-tok.med{color:#f59e0b}.cpill-tok.high{color:var(--red)}
+.sum-btn{background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;border-radius:4px;padding:0 5px;font-size:11px;line-height:1.5;transition:all .15s;flex-shrink:0}
+.sum-btn:hover{color:var(--accent2);border-color:var(--accent2)}
+.budget-wrap{padding:0 10px 6px;display:none}
+.budget-bar{height:3px;background:var(--border2);border-radius:2px;overflow:hidden;margin-bottom:3px}
+.budget-fill{height:100%;border-radius:2px;transition:width .3s,background .3s;width:0%}
+.budget-lbl{font-size:10px;color:var(--muted);display:flex;justify-content:space-between}
+.tab-bar{border-bottom:1px solid var(--border2);background:var(--sidebar);padding:0 8px;display:none;align-items:flex-end;gap:2px;height:36px;flex-shrink:0;overflow-x:auto}
+.tabs-list{display:flex;align-items:flex-end;gap:2px;flex:1;overflow-x:auto}
+.tab-item{display:flex;align-items:center;gap:4px;padding:0 10px;height:30px;border:1px solid var(--border2);border-bottom:none;border-radius:8px 8px 0 0;background:var(--panel2);color:var(--muted);cursor:pointer;font-size:12px;white-space:nowrap;max-width:160px;transition:all .15s;user-select:none;flex-shrink:0}
+.tab-item.active{background:var(--bg);color:var(--text);border-color:var(--border);font-weight:500}
+.tab-item:not(.active):hover{background:var(--hover);color:var(--text)}
+.tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px}
+.tab-close{background:none;border:none;color:var(--muted2);cursor:pointer;padding:2px 0 2px 4px;font-size:13px;line-height:1;transition:color .15s;flex-shrink:0}
+.tab-close:hover{color:var(--red)}
+.tab-add{background:none;border:1px dashed var(--border2);border-radius:6px 6px 0 0;color:var(--muted);cursor:pointer;padding:0 10px;height:30px;font-size:18px;line-height:1;transition:all .15s;flex-shrink:0;margin-left:2px}
+.tab-add:hover{border-color:var(--accent2);color:var(--accent2)}
+.model-selector{display:flex;gap:4px;padding:4px 10px 6px}
+.msel-btn{flex:1;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;color:var(--muted);cursor:pointer;padding:5px 4px;font-size:11px;font-family:inherit;transition:all .15s;text-align:center;line-height:1.3}
+.msel-btn.on{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent2);font-weight:600}
+.msel-btn:hover:not(.on){border-color:var(--border);color:var(--text)}
+.branch-sel-wrap{padding:4px 10px 2px;display:flex;gap:5px;align-items:center}
+.branch-sel{flex:1;min-width:0}
+.search-result{padding:6px 10px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .1s}
+.search-result:last-child{border-bottom:none}
+.search-result:hover{background:var(--hover)}
+.sr-path{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent2);font-weight:600;margin-bottom:2px}
+.sr-snippet{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:pre-wrap;word-break:break-all;max-height:36px;overflow:hidden}
+.commit-item{padding:6px 10px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .1s}
+.commit-item:last-child{border-bottom:none}
+.commit-item:hover{background:var(--hover)}
+.ci-sha{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--blue);font-weight:600;margin-right:6px}
+.ci-msg{font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ci-meta{font-size:10px;color:var(--muted);margin-top:2px}
+.repo-panel{margin:0 10px 6px;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;display:none;max-height:220px;overflow-y:auto}
+.tool-item{display:flex;align-items:center;gap:6px;padding:5px 10px;border-bottom:1px solid var(--border2);font-size:11px}
+.tool-item:last-child{border-bottom:none}
+.tool-method{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--blue-dim);color:var(--blue);font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.tool-name-lbl{font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tool-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px;padding:0 2px;line-height:1;transition:color .15s;flex-shrink:0}
+.tool-del:hover{color:var(--red)}
+.search-hi{background:#ff0;color:#000;border-radius:2px;padding:0 1px}
+[data-theme="dark"] .search-hi{background:#b5851b;color:#ffe}
+.search-hi.current{background:var(--accent2);color:#fff}
+.tool-card{margin:8px 0;border:1px solid var(--blue-border);border-radius:10px;background:var(--blue-dim);overflow:hidden;font-size:12px}
+.tool-card-hd{display:flex;align-items:center;gap:7px;padding:7px 12px;background:rgba(0,0,0,.1);font-size:12px}
+.tc-name{font-weight:700;color:var(--blue)}
+.tc-status{margin-left:auto;font-size:13px}
+.tc-status.spin{animation:spin 1s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tool-input{margin:0;padding:6px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);overflow-x:auto;white-space:pre-wrap;word-break:break-all;border-top:1px solid var(--blue-border)}
+.tool-result{margin:0;padding:6px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);overflow-x:auto;white-space:pre-wrap;word-break:break-all;border-top:1px solid var(--blue-border);max-height:180px;overflow-y:auto}
+[data-theme="light"] .tool-card{background:var(--blue-dim);border-color:var(--blue-border)}
+.scan-panel{padding:10px 14px;background:var(--panel2);border-top:1px solid var(--border2);font-size:12px}
+.scan-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.scan-title{font-size:12px;font-weight:600;color:var(--text)}
+.scan-clean{color:var(--accent2);font-weight:600;padding:4px 0;font-size:12px}
+.scan-issues{display:flex;flex-direction:column;gap:4px}
+.scan-issue{padding:5px 9px;border-radius:6px;border-left:3px solid transparent;line-height:1.4}
+.scan-issue.scan-high{background:#3a1a1a;border-left-color:var(--red)}
+.scan-issue.scan-medium{background:#2a2a00;border-left-color:#f59e0b}
+.scan-issue.scan-low{background:var(--blue-dim);border-left-color:var(--blue)}
+[data-theme="light"] .scan-issue.scan-high{background:#fee2e2}
+[data-theme="light"] .scan-issue.scan-medium{background:#fef3c7}
+[data-theme="light"] .scan-issue.scan-low{background:var(--blue-dim)}
+.scan-msg{font-size:11px;color:var(--muted);margin-top:2px}
+.more-menu{position:absolute;top:calc(100% + 4px);right:0;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px #0005;z-index:200;display:none;min-width:160px;overflow:hidden}
+.more-menu.open{display:block}
+.more-menu button{display:flex;align-items:center;gap:9px;width:100%;background:none;border:none;border-bottom:1px solid var(--border2);color:var(--text);cursor:pointer;padding:9px 14px;font-size:12px;font-family:inherit;transition:background .1s;text-align:left;white-space:nowrap}
+.more-menu button:last-child{border-bottom:none}
+.more-menu button:hover{background:var(--hover2)}
+/* Mobile overlay backdrop */
+.mob-overlay{display:none;position:fixed;inset:0;background:#0007;z-index:999;cursor:pointer}
+.mob-overlay.show{display:block}
+/* ── Mobile responsive ────────────────────────────────────────────────────── */
+@media(max-width:768px){
+  .sidebar{position:fixed;top:0;left:0;height:100vh;z-index:1000;width:82vw;min-width:240px;max-width:300px;transform:translateX(0);transition:transform .25s cubic-bezier(.4,0,.2,1);box-shadow:4px 0 28px #0007}
+  .sidebar.col{width:82vw;min-width:240px;max-width:300px;border-right:1px solid var(--border2)!important;transform:translateX(-106%)}
+  .exp-btn{display:flex!important}
+  .topbar{padding:0 8px;gap:4px;height:48px}
+  .atabs{gap:1px;flex:1}
+  .atab{padding:5px 7px;font-size:11px}
+  .tbr{gap:3px;flex-shrink:0}
+  .model-pill,.ma-pill,.mem-pill,.stat-pill{display:none!important}
+  .export-btn{padding:4px 7px;font-size:11px}
+  .msg-inner{padding:0 10px}
+  .input-wrap{padding:6px 10px 12px}
+  .ctx-strip{padding:4px 10px}
+  .empty-sub{font-size:12px;max-width:280px}
+  .modal-overlay{padding:0;align-items:flex-end}
+  .modal{border-radius:16px 16px 0 0!important;max-width:100%!important;max-height:92vh;overflow-y:auto}
+}
 </style>
 </head>
 <body>
 <div id="app">
+<div class="mob-overlay" id="mob-overlay" onclick="collSidebar()"></div>
 <aside class="sidebar" id="sidebar">
   <div class="s-head">
     <div class="s-logo"><div class="s-mark">⚡</div><div class="s-name">DevForge</div></div>
@@ -233,7 +379,35 @@ pre::-webkit-scrollbar{height:4px}
         <div class="search-wrap"><span class="search-icon">⌕</span><input class="search-in" id="repo-search" placeholder="Search your repos…" oninput="filterRepos(this.value)"></div>
         <div class="list-scroll" id="repo-list"><div class="list-msg">Loading…</div></div>
         <div class="sec-st" id="repo-st"></div>
+        <div class="rs-card" id="rs-card"><div class="rs-langs" id="rs-langs"></div><div class="rs-info" id="rs-info"></div></div>
+        <div class="branch-sel-wrap" id="branch-sel-wrap" style="display:none">
+          <span style="font-size:11px;color:var(--muted);flex-shrink:0">Branch:</span>
+          <select class="finput branch-sel" id="branch-select" onchange="switchBranch(this.value)"></select>
+          <button onclick="toggleCommits()" title="Recent commits" id="commits-btn" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:11px;transition:all .15s;flex-shrink:0" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--muted)'">📜</button>
+          <button onclick="toggleWorkflows()" title="GitHub Actions workflow runs" id="workflows-btn" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:11px;transition:all .15s;flex-shrink:0" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">⚙️</button>
+        </div>
+        <div style="padding:0 10px 6px;display:none" id="pr-review-wrap">
+          <div style="display:flex;gap:5px;align-items:center">
+            <span style="font-size:11px;color:var(--muted);flex-shrink:0">PR #</span>
+            <input class="finput" id="pr-review-num" type="number" min="1" placeholder="123" style="width:70px;padding:3px 7px" onkeydown="if(event.key==='Enter')reviewPR()">
+            <button onclick="reviewPR()" style="background:var(--blue-dim);border:1px solid var(--blue-border);color:var(--blue);cursor:pointer;border-radius:6px;padding:4px 10px;font-size:11px;font-family:inherit;flex-shrink:0;transition:all .15s">🔍 Review PR</button>
+          </div>
+        </div>
+        <div class="repo-panel" id="commits-panel"></div>
+        <div class="repo-panel" id="workflows-panel"></div>
+        <div style="padding:0 10px 4px;display:none" id="repo-search-wrap">
+          <div style="position:relative">
+            <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--muted2);font-size:12px;pointer-events:none">🔍</span>
+            <input class="search-in" id="repo-search-code" placeholder="Search code in repo…" style="padding-left:28px" onkeydown="if(event.key==='Enter')searchCode()">
+          </div>
+        </div>
+        <div class="repo-panel" id="search-results-panel"></div>
+        <div id="tree-search-wrap" style="display:none;padding:0 10px 4px;position:relative"><span style="position:absolute;left:18px;top:50%;transform:translateY(-50%);color:var(--muted2);font-size:13px;pointer-events:none">⌕</span><input class="search-in" id="tree-search" placeholder="Filter files…" oninput="filterTree(this.value)" style="padding-left:30px"></div>
         <div class="tree" id="file-tree"></div>
+        <div class="budget-wrap" id="budget-wrap">
+          <div class="budget-bar"><div class="budget-fill" id="budget-fill"></div></div>
+          <div class="budget-lbl"><span id="budget-tok">0 tokens</span><span style="color:var(--muted2)">100K ctx</span></div>
+        </div>
       </div>
     </div>
     <div class="s-sec">
@@ -245,20 +419,36 @@ pre::-webkit-scrollbar{height:4px}
           <button class="prov-btn" id="ph" onclick="setProv('hf')">🤗 HF</button>
           <button class="prov-btn" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
         </div>
-        <div class="pfields" id="pf-a"><div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off"></div></div>
+        <div class="pfields" id="pf-a" style="flex-direction:column">
+          <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" oninput="saveEnhance()"></div>
+          <div class="model-selector">
+            <button class="msel-btn" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
+            <button class="msel-btn on" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
+            <button class="msel-btn" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent — for complex architecture">🧠<br>Opus</button>
+          </div>
+          <div class="think-opts" id="think-opts">
+            <div class="ma-row"><div><div class="ma-label" style="font-size:12px">Extended Thinking</div><div class="ma-sub">Opus reasons before answering</div></div><div><input type="checkbox" id="think-toggle" class="toggle-input" onchange="saveEnhance()"><label for="think-toggle" class="toggle-label"></label></div></div>
+            <div style="display:flex;align-items:center;gap:8px;padding:0 2px"><span class="flabel" style="flex:1;margin:0">Budget tokens</span><select class="finput" id="think-budget" style="width:110px;padding:3px 6px" onchange="saveEnhance()"><option value="2000">2K (fast)</option><option value="4000">4K</option><option value="8000">8K (deep)</option><option value="16000">16K (max)</option></select></div>
+          </div>
+        </div>
         <div id="pf-g" style="display:none">
           <div class="prov-note green">✓ <strong>Free tier</strong> — <a href="https://console.groq.com" target="_blank">console.groq.com</a></div>
           <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off"></div>
           <div><div class="flabel">Model</div><select class="finput" id="gm" onchange="updBadge()"><option value="llama-3.3-70b-versatile">Llama 3.3 70B — Best</option><option value="llama-3.1-8b-instant">Llama 3.1 8B — Fast</option><option value="mixtral-8x7b-32768">Mixtral 8x7B</option><option value="gemma2-9b-it">Gemma 2 9B</option><option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B</option><option value="qwen-qwq-32b">Qwen QwQ 32B</option></select></div></div>
         </div>
         <div id="pf-h" style="display:none">
-          <div class="prov-note blue">Requires HF token with credits.</div>
-          <div class="pfields"><div><div class="flabel">HF Token</div><input class="finput" id="hft" type="password" placeholder="hf_…" autocomplete="off"></div></div>
+          <div class="prov-note green">✓ <strong>Token pre-configured</strong> — HF_TOKEN set via Space secrets.</div>
           <div id="hf-selected" class="hf-selected" style="display:none"><span>🤗</span><span class="hf-sel-name" id="hf-sel-name">—</span><button class="hf-sel-clear" onclick="clearModel()">✕</button></div>
           <div id="hf-browser"><div class="search-wrap" style="padding:0 10px 6px"><span class="search-icon">⌕</span><input class="search-in" id="model-search" placeholder="Search HF models…" oninput="debounceSearch(this.value)"></div><div class="list-scroll" id="model-list"><div class="list-msg">Search to browse models</div></div></div>
         </div>
         <div id="pf-o" style="display:none">
-          <div class="prov-note">OpenAI-compatible endpoint — Ollama, LM Studio, OpenRouter, Mistral…</div>
+          <div class="prov-note">OpenAI-compatible endpoint — quick-fill or enter manually:</div>
+          <div style="padding:0 10px 8px;display:flex;gap:5px;flex-wrap:wrap">
+            <button class="qfill-btn" onclick="fillEndpoint('vercel')">🌐 Vercel Gateway</button>
+            <button class="qfill-btn" onclick="fillEndpoint('openrouter')">🔄 OpenRouter</button>
+            <button class="qfill-btn" onclick="fillEndpoint('ollama')">🦙 Ollama</button>
+            <button class="qfill-btn" onclick="fillEndpoint('lmstudio')">🖥 LM Studio</button>
+          </div>
           <div class="pfields">
             <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" oninput="updBadge()"></div>
             <div><div class="flabel">Model</div><input class="finput" id="oci-model" placeholder="llama3" autocomplete="off" oninput="updBadge()"></div>
@@ -276,22 +466,66 @@ pre::-webkit-scrollbar{height:4px}
           <div class="ma-stage-row"><div class="ma-stage-lbl">🗺️ Plan</div><select class="finput" id="ma-plan-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
           <div class="ma-stage-row"><div class="ma-stage-lbl">⚙️ Code</div><select class="finput" id="ma-code-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
           <div class="ma-stage-row"><div class="ma-stage-lbl">🔍 Review</div><select class="finput" id="ma-rev-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 6px"><input type="checkbox" id="ma-test-stage" class="toggle-input" onchange="onTestStageToggle()"><label for="ma-test-stage" class="toggle-label" style="flex-shrink:0"></label><div><div style="font-size:11px;color:var(--text)">🧪 Include Test stage</div><div style="font-size:10px;color:var(--muted2)">Plan → Code → Test → Review</div></div></div>
+          <div class="ma-stage-row" id="ma-test-row" style="display:none"><div class="ma-stage-lbl">🧪 Test</div><select class="finput" id="ma-test-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
         </div>
-        <div style="padding:0 16px 6px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Skills</div>
+        <div style="padding:0 16px 4px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between"><span>Skills</span><span style="font-weight:400;color:var(--muted2);font-size:10px">Stacks ↓</span></div>
         <div class="skills-grid">
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="go" class="skill-check"> 🐹 Go</label>
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="zod" class="skill-check"> 🔷 Zod</label>
+          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="react" class="skill-check"> ⚛️ React</label>
+          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="nextjs" class="skill-check"> 🚀 Next.js</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="tests" class="skill-check"> 🧪 Tests</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="errors" class="skill-check"> 🛡️ Errors</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="security" class="skill-check"> 🔒 Security</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="docs" class="skill-check"> 📝 Docs</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="perf" class="skill-check"> ⚡ Perf</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="solid" class="skill-check"> 🎯 SOLID</label>
+          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="docker" class="skill-check"> 🐳 Docker</label>
+          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="sql" class="skill-check"> 🗄️ SQL</label>
         </div>
         <div style="padding:6px 16px 4px;display:flex;align-items:center;justify-content:space-between"><span style="font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Rules</span><label class="ul-lbl" for="rules-upload" title="Load from file">📎 Upload</label><input type="file" id="rules-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'rules-input')"></div>
         <textarea class="side-textarea" id="rules-input" placeholder="e.g. Never use var. Always return errors." oninput="saveEnhance()"></textarea>
         <div style="padding:8px 16px 4px;display:flex;align-items:center;justify-content:space-between"><span style="font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Custom Instructions</span><label class="ul-lbl" for="instr-upload" title="Load from file">📎 Upload</label><input type="file" id="instr-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'instr-input')"></div>
         <textarea class="side-textarea" id="instr-input" placeholder="Override the default agent behavior…" oninput="saveEnhance()" style="margin-bottom:4px"></textarea>
+        <div style="padding:8px 16px 4px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Presets</div>
+        <div style="padding:0 10px 8px;display:flex;flex-direction:column;gap:5px">
+          <select class="finput" id="preset-sel" onchange="loadPreset(this.value)">
+            <option value="">— Load a preset —</option>
+            <optgroup label="Built-in">
+              <option value="__react_ts">⚛️ React + TypeScript</option>
+              <option value="__python">🐍 Python Backend</option>
+              <option value="__go">🐹 Go Microservice</option>
+              <option value="__security">🔒 Security Auditor</option>
+              <option value="__docs">📝 Tech Writer</option>
+              <option value="__nextjs">🚀 Next.js + Vercel</option>
+              <option value="__fastapi">⚡ FastAPI + Python</option>
+            </optgroup>
+            <optgroup label="Saved" id="preset-saved-group"></optgroup>
+          </select>
+          <div style="display:flex;gap:5px">
+            <input class="finput" id="preset-name" placeholder="Name to save current…" style="flex:1">
+            <button onclick="savePreset()" style="background:var(--accent2);border:none;border-radius:8px;padding:7px 10px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;transition:opacity .15s">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="s-sec closed">
+      <div class="s-lbl" onclick="toggleSec(this)">📌 Snippets <span id="snip-count" style="font-size:10px;background:var(--purple-dim);color:var(--purple);border-radius:10px;padding:1px 6px;display:none"></span> <span class="s-arr">▼</span></div>
+      <div class="s-content" style="padding-bottom:6px">
+        <div style="padding:4px 10px 4px;font-size:11px;color:var(--muted)">Save prompts for quick reuse.</div>
+        <div id="snip-list" style="margin:0 10px 6px;display:none;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto"></div>
+        <div style="padding:0 10px;display:flex;gap:6px">
+          <button onclick="saveSnippet()" style="flex:1;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--purple)';this.style.color='var(--purple)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📌 Save prompt</button>
+        </div>
+      </div>
+    </div>
+    <div class="s-sec">
+      <div class="s-lbl" onclick="toggleSec(this)">🔧 Tools <span id="tool-count-badge" style="font-size:10px;background:var(--blue-dim);color:var(--blue);border-radius:10px;padding:1px 6px;display:none"></span> <span class="s-arr">▼</span></div>
+      <div class="s-content" style="padding-bottom:6px">
+        <div style="padding:4px 10px 6px;font-size:11px;color:var(--muted)">Define HTTP tools Claude can call autonomously (Anthropic only).</div>
+        <div id="tool-list" style="margin:0 10px 6px;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;display:none"></div>
+        <div style="padding:0 10px">
+          <button onclick="openAddTool()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+ Define Tool</button>
+        </div>
       </div>
     </div>
   </div>
@@ -305,12 +539,40 @@ pre::-webkit-scrollbar{height:4px}
       <button class="atab" data-agent="architect" onclick="setAgent(this)">🏗️ Arch</button>
       <button class="atab" data-agent="debug" onclick="setAgent(this)">🐛 Debug</button>
       <button class="atab" data-agent="docs" onclick="setAgent(this)">📝 Docs</button>
+      <button class="atab" data-agent="refactor" onclick="setAgent(this)">🔀 Refactor</button>
+      <button class="atab" data-agent="testgen" onclick="setAgent(this)">🧪 Tests</button>
     </div>
     <div class="tbr">
       <div class="model-pill" id="model-pill">claude-sonnet-4</div>
       <div class="ctx-pill" id="ctx-pill" style="display:none">0 files</div>
       <div class="ma-pill" id="ma-pill" style="display:none">🤖 Multi-Agent</div>
+      <div class="mem-pill" id="mem-pill" onclick="clearMemory()" title="Session memory active — click to clear">🧠 Memory</div>
+      <div class="stat-pill" id="stat-pill">~0 tok</div>
+      <div style="position:relative;flex-shrink:0">
+        <button class="export-btn" id="more-btn" onclick="toggleMoreMenu()" title="More actions" style="font-size:15px;letter-spacing:.05em;padding:4px 9px">⋯</button>
+        <div class="more-menu" id="more-menu">
+          <button id="export-btn" onclick="exportChat();closeMoreMenu()">⬇️ Export chat</button>
+          <button id="issue-btn" onclick="openIssueModal();closeMoreMenu()">📋 Create Issue</button>
+          <button id="relnotes-btn" onclick="openReleaseNotes();closeMoreMenu()">🏷️ Release Notes</button>
+          <button id="readme-btn" onclick="openReadmeModal();closeMoreMenu()">📝 Gen README</button>
+          <button id="deps-btn" onclick="openDepsModal();closeMoreMenu()">🔍 Scan Deps</button>
+          <button id="search-chat-btn" onclick="toggleChatSearch();closeMoreMenu()">🔎 Search chat</button>
+          <button id="clear-btn" onclick="clearChat();closeMoreMenu()">🗑️ Clear chat</button>
+        </div>
+      </div>
     </div>
+  </div>
+  <div id="chat-search-bar" style="display:none;padding:4px 12px;border-bottom:1px solid var(--border2);background:var(--panel2);display:none;align-items:center;gap:8px">
+    <span style="font-size:12px;color:var(--muted)">Find:</span>
+    <input id="chat-search-in" class="finput" placeholder="Search messages…" style="flex:1;padding:4px 8px;font-size:12px" oninput="runChatSearch(this.value)">
+    <span id="chat-search-count" style="font-size:11px;color:var(--muted);white-space:nowrap"></span>
+    <button onclick="stepChatSearch(1)" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:4px;padding:2px 7px;font-size:11px">▼</button>
+    <button onclick="stepChatSearch(-1)" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:4px;padding:2px 7px;font-size:11px">▲</button>
+    <button onclick="toggleChatSearch()" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:14px;padding:0 2px">✕</button>
+  </div>
+  <div id="tab-bar" class="tab-bar">
+    <div id="tabs-list" class="tabs-list"></div>
+    <button class="tab-add" onclick="newTab()" title="New conversation tab">+</button>
   </div>
   <div class="msgs" id="msgs">
     <div class="empty" id="empty">
@@ -332,15 +594,150 @@ pre::-webkit-scrollbar{height:4px}
       <div class="ifoot">
         <button class="attach-btn" title="Upload local files as context" onclick="$('ctx-upload').click()">📎</button>
         <input type="file" id="ctx-upload" multiple accept=".txt,.md,.ts,.tsx,.js,.jsx,.py,.go,.json,.yaml,.yml,.toml,.css,.html,.sh,.rs,.rb,.java,.cpp,.c,.h" style="display:none" onchange="uploadContext(this)">
+        <button class="attach-btn" id="suggest-btn" title="AI: suggest relevant files for your task" onclick="suggestFiles()" style="display:none;font-size:11px;gap:4px">🤔 Suggest</button>
         <span class="ihint" id="hint">Open sidebar to get started</span>
+        <button class="send-btn" id="stop-btn" onclick="stopStream()" style="display:none;background:var(--red)">⏹ Stop</button>
+        <button class="send-btn" id="enhance-btn" onclick="enhancePrompt()" title="AI: improve your prompt" style="background:var(--purple);padding:7px 10px">✨</button>
         <button class="send-btn" id="send-btn" onclick="send()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg> Send</button>
       </div>
     </div>
   </div>
 </div>
 </div>
+
+<!-- Issue modal -->
+<div class="modal-overlay" id="issue-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-head">📋 Create GitHub Issue</div>
+    <div class="modal-row"><div class="flabel">Title</div><input class="finput" id="issue-title" placeholder="Issue title…" style="margin-top:3px"></div>
+    <div class="modal-row"><div class="flabel">Body</div><textarea class="side-textarea" id="issue-body" placeholder="Describe the issue…" style="width:100%;min-height:120px;max-height:200px;margin-top:3px;resize:vertical"></textarea></div>
+    <div class="modal-row"><div class="flabel">Labels</div><div class="label-chips"><label class="lchip" onclick="this.classList.toggle('on')"><input type="checkbox" value="bug"> 🐛 bug</label><label class="lchip" onclick="this.classList.toggle('on')"><input type="checkbox" value="enhancement"> ✨ enhancement</label><label class="lchip" onclick="this.classList.toggle('on')"><input type="checkbox" value="question"> ❓ question</label><label class="lchip" onclick="this.classList.toggle('on')"><input type="checkbox" value="documentation"> 📝 docs</label></div></div>
+    <div class="modal-foot"><button class="modal-cancel" onclick="$('issue-modal').style.display='none'">Cancel</button><button class="modal-ok" id="issue-ok" onclick="submitIssue()">Create Issue</button></div>
+  </div>
+</div>
+
+<!-- PR modal -->
+<div class="modal-overlay" id="pr-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-head">🔀 Create Pull Request</div>
+    <div class="modal-row"><div class="flabel">Title</div><input class="finput" id="pr-title" placeholder="PR title…" style="margin-top:3px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="flex:1"><div class="flabel">Head branch (with changes)</div><input class="finput" id="pr-head" placeholder="feat/my-change" style="margin-top:3px"></div>
+      <div style="flex:1"><div class="flabel">Base branch (merge into)</div><input class="finput" id="pr-base" placeholder="main" style="margin-top:3px"></div>
+    </div>
+    <div class="modal-row"><div class="flabel">Description</div><textarea class="side-textarea" id="pr-body" placeholder="Describe the changes…" style="width:100%;min-height:100px;max-height:180px;margin-top:3px;resize:vertical"></textarea></div>
+    <div class="modal-foot"><button class="modal-cancel" onclick="$('pr-modal').style.display='none'">Cancel</button><button class="modal-ok" id="pr-ok" onclick="submitPR()">Create PR</button></div>
+  </div>
+</div>
+
+<!-- Tool modal -->
+<div class="modal-overlay" id="tool-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-head">🔧 Define Tool</div>
+    <input type="hidden" id="tm-edit-idx" value="-1">
+    <div class="modal-row">
+      <div class="flabel">Name <span style="color:var(--muted);font-weight:400">(no spaces, used as identifier)</span></div>
+      <input class="finput" id="tm-name" placeholder="e.g. get_weather" style="margin-top:3px;font-family:'JetBrains Mono',monospace">
+    </div>
+    <div class="modal-row">
+      <div class="flabel">Description <span style="color:var(--muted);font-weight:400">(Claude reads this to decide when to call the tool)</span></div>
+      <textarea class="side-textarea" id="tm-desc" placeholder="e.g. Get current weather for a city. Returns temperature and conditions." style="width:100%;min-height:60px;margin-top:3px;resize:vertical"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="width:80px"><div class="flabel">Method</div><select class="finput" id="tm-method" style="margin-top:3px"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></div>
+      <div style="flex:1"><div class="flabel">URL <span style="color:var(--muted);font-weight:400">(use {param} for path params)</span></div><input class="finput" id="tm-url" placeholder="https://api.example.com/v1/{endpoint}" style="margin-top:3px;font-family:'JetBrains Mono',monospace"></div>
+    </div>
+    <div class="modal-row">
+      <div class="flabel">Input Schema <span style="color:var(--muted);font-weight:400">(JSON Schema for parameters, optional)</span></div>
+      <textarea class="side-textarea" id="tm-schema" placeholder='{"type":"object","properties":{"city":{"type":"string","description":"City name"}},"required":["city"]}' style="width:100%;min-height:80px;margin-top:3px;resize:vertical;font-family:&apos;JetBrains Mono&apos;,monospace;font-size:11px"></textarea>
+    </div>
+    <div class="modal-row">
+      <div class="flabel">Custom Headers <span style="color:var(--muted);font-weight:400">(JSON object, optional)</span></div>
+      <textarea class="side-textarea" id="tm-headers" placeholder='{"Authorization":"Bearer YOUR_TOKEN"}' style="width:100%;min-height:50px;margin-top:3px;resize:vertical;font-family:&apos;JetBrains Mono&apos;,monospace;font-size:11px"></textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="modal-cancel" onclick="closeToolModal()">Cancel</button>
+      <button class="modal-ok" onclick="saveTool()">Save Tool</button>
+    </div>
+  </div>
+</div>
+
+<!-- File peek modal -->
+<div class="modal-overlay" id="peek-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:700px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <span id="peek-icon">📄</span><span id="peek-path" style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></span>
+      <span id="peek-size" style="font-size:11px;color:var(--muted);flex-shrink:0"></span>
+      <button id="peek-add-btn" onclick="peekAddToCtx()" style="background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent2);cursor:pointer;border-radius:6px;padding:4px 10px;font-size:11px;font-family:inherit;flex-shrink:0">+ Add to context</button>
+      <button onclick="$('peek-modal').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0 2px;flex-shrink:0">✕</button>
+    </div>
+    <pre id="peek-body" style="margin:0;padding:14px 16px;overflow:auto;max-height:65vh;font-size:12px;font-family:'JetBrains Mono',monospace;line-height:1.6;color:var(--text);background:var(--code-bg)"></pre>
+  </div>
+</div>
+
+<!-- Release Notes modal -->
+<div class="modal-overlay" id="relnotes-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:700px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <span style="font-size:15px;font-weight:600;flex:1">📋 Generate Release Notes</span>
+      <button onclick="$('relnotes-modal').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0 2px">✕</button>
+    </div>
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border2);display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:1;min-width:140px"><div class="flabel">Since (tag or SHA, optional)</div><input class="finput" id="rn-since" placeholder="v1.0.0 or abc1234" style="margin-top:3px"></div>
+      <div style="flex:1;min-width:140px"><div class="flabel">Until (tag or SHA, default HEAD)</div><input class="finput" id="rn-until" placeholder="v1.1.0 or HEAD" style="margin-top:3px"></div>
+      <div style="width:80px"><div class="flabel">Max commits</div><input class="finput" id="rn-max" value="30" type="number" min="5" max="50" style="margin-top:3px"></div>
+      <button class="modal-ok" id="rn-gen-btn" onclick="generateReleaseNotes()">✨ Generate</button>
+    </div>
+    <div id="rn-output" style="padding:14px 16px;overflow-y:auto;max-height:55vh;font-size:13px;line-height:1.75;color:var(--text);min-height:60px">
+      <span style="color:var(--muted)">Configure range above and click Generate…</span>
+    </div>
+    <div style="padding:8px 16px;border-top:1px solid var(--border2);display:flex;justify-content:flex-end;gap:8px">
+      <button class="modal-cancel" id="rn-copy-btn" onclick="copyReleaseNotes()" style="display:none">📋 Copy</button>
+      <button class="modal-cancel" onclick="$('relnotes-modal').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- README modal -->
+<div class="modal-overlay" id="readme-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:800px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <span style="font-size:15px;font-weight:600;flex:1">📝 Generate README.md</span>
+      <button onclick="$('readme-modal').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0 2px">✕</button>
+    </div>
+    <div id="readme-output" style="padding:14px 16px;overflow-y:auto;max-height:65vh;font-size:13px;line-height:1.75;color:var(--text);min-height:60px">
+      <span style="color:var(--muted)">Click Generate to create README from your selected files…</span>
+    </div>
+    <div style="padding:8px 16px;border-top:1px solid var(--border2);display:flex;justify-content:flex-end;gap:8px">
+      <button class="modal-cancel" id="readme-copy-btn" onclick="copyReadme()" style="display:none">📋 Copy</button>
+      <button class="modal-cancel" id="readme-save-btn" onclick="saveReadmeToContext()" style="display:none">📎 Add to context</button>
+      <button class="modal-ok" id="readme-gen-btn" onclick="generateReadme()">✨ Generate</button>
+      <button class="modal-cancel" onclick="$('readme-modal').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deps Audit modal -->
+<div class="modal-overlay" id="deps-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:800px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <span style="font-size:15px;font-weight:600;flex:1">🔍 Dependency Vulnerability Audit</span>
+      <button onclick="$('deps-modal').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0 2px">✕</button>
+    </div>
+    <div id="deps-pkg-table" style="max-height:180px;overflow-y:auto;border-bottom:1px solid var(--border2)"></div>
+    <div id="deps-ai-output" style="padding:14px 16px;overflow-y:auto;max-height:320px;font-size:13px;line-height:1.75;color:var(--text);min-height:60px">
+      <span style="color:var(--muted)">Click Audit to start scanning…</span>
+    </div>
+    <div style="padding:8px 16px;border-top:1px solid var(--border2);display:flex;justify-content:flex-end;gap:8px">
+      <button class="modal-cancel" id="deps-copy-btn" onclick="copyDepsAudit()" style="display:none">📋 Copy Report</button>
+      <button class="modal-ok" id="deps-run-btn" onclick="runDepsAudit()">🔍 Audit</button>
+      <button class="modal-cancel" onclick="$('deps-modal').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',agent:'code',streaming:false};
+const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),fileSizes:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',anthropicModel:'claude-sonnet-4-6',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[],promptHistory:[],histIdx:-1,_draftText:'',_budgetWarned:false,tabs:[],activeTabId:null};
 const $=id=>document.getElementById(id);
 const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
 const get=p=>fetch(p).then(r=>r.json());
@@ -349,43 +746,697 @@ function ar(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,
 function now(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
 function fext(p){const e=p.split('.');return e.length>1?e.pop().toLowerCase():'';}
 function ficon(p){const e=fext(p);const m={js:'🟨',jsx:'⚛️',ts:'🔷',tsx:'⚛️',py:'🐍',go:'🐹',rs:'🦀',md:'📝',json:'📋',css:'🎨',html:'🌐',sh:'🐚',yml:'⚙️',yaml:'⚙️',toml:'⚙️',lock:'🔒',sql:'🗄️'};return m[e]||'📄';}
+function tokEst(size){return Math.max(1,Math.round((size||0)/4));}
+function tokFmt(n){return n>=1000?(n/1000).toFixed(1)+'K':String(n);}
+function tokCls(n){return n>8000?'high':n>2000?'med':'';}
+function loadPromptHistory(){try{S.promptHistory=JSON.parse(localStorage.getItem('df-prompt-history')||'[]');}catch(e){S.promptHistory=[];}}
+function pushHistory(txt){if(!txt.trim()||S.promptHistory[0]===txt)return;S.promptHistory.unshift(txt);if(S.promptHistory.length>50)S.promptHistory.length=50;localStorage.setItem('df-prompt-history',JSON.stringify(S.promptHistory));}
+async function summarizeFile(path,evt){
+  evt.stopPropagation();
+  const content=S.selFiles.get(path);if(!content)return;
+  const btn=evt.target;btn.textContent='…';btn.disabled=true;
+  try{
+    const d=await post('/api/repo/summarize-file',{content,filename:path.split('/').pop(),provider:S.prov,anthropic_key:$('ak').value||'',groq_key:$('gk').value||'',groq_model:$('gm').value||'',openai_compat_key:$('oci-key').value||'',openai_compat_base_url:$('oci-url').value||'',openai_compat_model:($('oci-model')&&$('oci-model').value)||''});
+    if(d.error){toast(d.error,true);}else{S.selFiles.set(path,`[AI Summary of ${path.split('/').pop()}]\n${d.summary}`);S.fileSizes.set(path,d.summary.length);updCtx();toast(`Summarized ${path.split('/').pop()}`);}
+  }catch(e){toast('Summarize failed',true);}
+  btn.textContent='∑';btn.disabled=false;
+}
 function fmt(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(0)+'k';return n||0;}
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
 function scrollB(){const m=$('msgs');m.scrollTop=m.scrollHeight;}
+// ── Message actions ───────────────────────────────────────────────────────────
+function cpMsg(btn){const body=btn.closest('.msg-inner').querySelector('.msg-body');navigator.clipboard.writeText(body?body.textContent:'');btn.textContent='✓';setTimeout(()=>{btn.textContent='copy';},1500);}
+function delMsg(wrapId,idx){const el=document.getElementById(wrapId);if(el)el.remove();if(idx>=0&&idx<S.msgs.length)S.msgs.splice(idx,1);autoSaveChat();}
+
+// ── Clear + auto-save conversation ────────────────────────────────────────────
+function clearChat(){if(!S.msgs.length)return;if(!confirm('Clear this conversation?'))return;S.msgs=[];S.stats={tokens:0,messages:0};clearChatDOM();autoSaveChat();toast('Conversation cleared');renderTabBar();}
+// ── Conversation Tabs ──────────────────────────────────────────────────────────
+function tabKey(){return S.repo?`df-tabs-${S.repo.owner}/${S.repo.repo}`:null;}
+function loadTabs(){
+  const k=tabKey();if(!k)return;
+  let migratedMsgs=[];
+  try{
+    const raw=localStorage.getItem(k);
+    if(raw){const data=JSON.parse(raw);if(data?.tabs?.length){S.tabs=data.tabs;S.activeTabId=data.activeTabId||S.tabs[0].id;if(!S.tabs.find(t=>t.id===S.activeTabId))S.activeTabId=S.tabs[0].id;}}
+    else{
+      const oldKey=`df-chat-${S.repo.owner}/${S.repo.repo}`;
+      const oldRaw=localStorage.getItem(oldKey);
+      if(oldRaw){try{const old=JSON.parse(oldRaw);if(old.msgs?.length)migratedMsgs=old.msgs;}catch(e){}}
+      const firstTab={id:'tab-1',name:'Chat',msgs:migratedMsgs,stats:{tokens:0,messages:0}};
+      S.tabs=[firstTab];S.activeTabId='tab-1';
+    }
+  }catch(e){const firstTab={id:'tab-1',name:'Chat',msgs:[],stats:{tokens:0,messages:0}};S.tabs=[firstTab];S.activeTabId='tab-1';}
+  if(!S.tabs.length){const t={id:'tab-1',name:'Chat',msgs:[],stats:{tokens:0,messages:0}};S.tabs=[t];S.activeTabId='tab-1';}
+  const tab=S.tabs.find(t=>t.id===S.activeTabId);
+  S.msgs=tab?[...tab.msgs]:[];S.stats=tab&&tab.stats?{...tab.stats}:{tokens:0,messages:0};
+  renderTabBar();
+  if(S.msgs.length){$('empty').style.display='none';restoreTabChat();if(migratedMsgs.length)toast(`Restored ${S.msgs.length} messages`);}
+}
+function saveTabs(){
+  const k=tabKey();if(!k)return;
+  const tab=S.tabs.find(t=>t.id===S.activeTabId);
+  if(tab){tab.msgs=[...S.msgs].slice(-40);tab.stats={...S.stats};}
+  try{localStorage.setItem(k,JSON.stringify({tabs:S.tabs,activeTabId:S.activeTabId,ts:Date.now()}));}catch(e){}
+}
+function renderTabBar(){
+  const bar=$('tab-bar');const list=$('tabs-list');if(!bar||!list)return;
+  if(!S.tabs.length||!S.repo){bar.style.display='none';return;}
+  bar.style.display='flex';
+  list.innerHTML=S.tabs.map(t=>{
+    const active=t.id===S.activeTabId;const n=t.name||'Chat';
+    const cnt=t.msgs?.length;
+    return`<div class="tab-item${active?' active':''}" onclick="switchTab('${t.id}')" ondblclick="promptRenameTab('${t.id}')" title="${n}${cnt?' · '+cnt+' messages':''}"><span class="tab-name">${esc(n)}</span>${S.tabs.length>1?`<button class="tab-close" onclick="closeTab('${t.id}',event)">✕</button>`:''}</div>`;
+  }).join('');
+}
+function newTab(){
+  if(S.tabs.length>=8){toast('Max 8 tabs',true);return;}
+  saveTabs();
+  const id='tab-'+Date.now();const n=S.tabs.length+1;
+  S.tabs.push({id,name:`Chat ${n}`,msgs:[],stats:{tokens:0,messages:0}});
+  S.activeTabId=id;S.msgs=[];S.stats={tokens:0,messages:0};
+  renderTabBar();clearChatDOM();saveTabs();toast(`New tab: Chat ${n}`);
+}
+function switchTab(id){
+  if(id===S.activeTabId)return;
+  saveTabs();S.activeTabId=id;
+  const tab=S.tabs.find(t=>t.id===id);
+  S.msgs=tab?[...tab.msgs]:[];S.stats=tab&&tab.stats?{...tab.stats}:{tokens:0,messages:0};
+  clearChatDOM();if(S.msgs.length){$('empty').style.display='none';restoreTabChat();}
+  renderTabBar();
+}
+function closeTab(id,evt){
+  evt.stopPropagation();if(S.tabs.length<=1)return;
+  const tab=S.tabs.find(t=>t.id===id);
+  if(tab?.msgs?.length>2&&!confirm(`Close "${tab.name}"?\n${tab.msgs.length} messages will be lost.`))return;
+  const idx=S.tabs.findIndex(t=>t.id===id);S.tabs.splice(idx,1);
+  if(S.activeTabId===id){
+    const ni=Math.max(0,idx-1);
+    S.activeTabId=S.tabs[ni]?.id||S.tabs[0]?.id;
+    const nt=S.tabs.find(t=>t.id===S.activeTabId);
+    S.msgs=nt?[...nt.msgs]:[];S.stats=nt&&nt.stats?{...nt.stats}:{tokens:0,messages:0};
+    clearChatDOM();if(S.msgs.length){$('empty').style.display='none';restoreTabChat();}
+  }
+  renderTabBar();saveTabs();
+}
+function promptRenameTab(id){
+  const tab=S.tabs.find(t=>t.id===id);if(!tab)return;
+  const name=prompt('Rename tab:',tab.name);
+  if(name&&name.trim()){tab.name=name.trim().slice(0,30);renderTabBar();saveTabs();}
+}
+function clearChatDOM(){
+  $('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';
+  $('stat-pill').style.display=S.stats.tokens>0?'flex':'none';
+  if(S.stats.tokens>0)$('stat-pill').textContent=tokFmt(S.stats.tokens)+' tok · '+S.stats.messages+' msg';
+}
+
+function restoreTabChat(){
+  S.msgs.forEach((m,i)=>{
+    const w=document.createElement('div');w.className='msg-wrap';const wid='mw'+Date.now()+i;w.id=wid;
+    if(m.role==='user'){w.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av user">U</div><span class="msg-role">You</span><div class="msg-actions"><button class="msg-act" onclick="cpMsg(this)">copy</button><button class="msg-act del" onclick="delMsg('${wid}',${i})">✕</button></div></div><div class="msg-body">${esc(m.content)}</div></div>`;}
+    else{w.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span><div class="msg-actions"><button class="msg-act" onclick="cpMsg(this)">copy</button></div></div><div class="msg-body">${rmd(m.content)}</div></div>`;}
+    $('msgs').appendChild(w);
+  });
+  if(S.stats.tokens>0){$('stat-pill').textContent=tokFmt(S.stats.tokens)+' tok · '+S.stats.messages+' msg';$('stat-pill').style.display='flex';}
+  scrollB();
+}
+function autoSaveChat(){if(!S.repo)return;saveTabs();}
+function restoreChat(){loadTabs();}
+
+// ── File tree search ──────────────────────────────────────────────────────────
+function filterTree(q){const tree=$('file-tree');if(!tree)return;const low=q.toLowerCase().trim();tree.querySelectorAll('.tfile').forEach(el=>{const name=el.querySelector('span:last-child')?.textContent?.toLowerCase()||'';el.style.display=(!low||name.includes(low))?'':'none';});tree.querySelectorAll('.tfolder').forEach(fd=>{const anyVis=Array.from(fd.querySelectorAll('.tfile')).some(e=>e.style.display!=='none');fd.style.display=anyVis?'':'none';if(low)fd.classList.add('open');});}
+
+// ── AI file suggestion ────────────────────────────────────────────────────────
+async function suggestFiles(){
+  const task=$('ti').value.trim();
+  if(!task){toast('Type a task first, then click Suggest',true);return;}
+  if(!S.repo){toast('Connect a repo first',true);return;}
+  const allPaths=S.repo.files.map(f=>f.path);
+  if(!allPaths.length){toast('No files in repo',true);return;}
+  const btn=$('suggest-btn');btn.textContent='🤔…';btn.disabled=true;
+  try{
+    const res=await post('/api/repo/suggest-files',{
+      provider:S.prov,anthropic_key:$('ak').value||'',groq_key:$('gk').value||'',
+      groq_model:$('gm').value||'',openai_compat_key:$('oci-key').value||'',
+      openai_compat_base_url:$('oci-url').value||'',openai_compat_model:$('oci-model').value||'',
+      task,files:allPaths
+    });
+    if(res.error){toast('Suggest failed: '+res.error,true);return;}
+    if(!res.files?.length){toast('No suggestions from AI',true);return;}
+    let loaded=0;
+    for(const path of res.files){
+      if(S.selFiles.size+S.localFiles.size>=8)break;
+      if(!S.selFiles.has(path)){
+        const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});
+        if(!d.error){S.selFiles.set(path,d.content);updTF(path);loaded++;}
+      }
+    }
+    updCtx();toast(`🤔 AI suggested ${res.files.length} files, loaded ${loaded}`);
+  }catch(e){toast('Suggest error: '+e.message,true);}
+  finally{btn.textContent='🤔 Suggest';btn.disabled=false;}
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}}
+  if((e.metaKey||e.ctrlKey)&&e.key==='f'&&!e.target?.matches('input,textarea')){e.preventDefault();toggleChatSearch();}
+  if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
+  if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key==='Backspace'){e.preventDefault();if($('ti'))$('ti').value='';}
+  if(e.target?.id==='ti'&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey){
+    if(e.key==='ArrowUp'&&!$('ti').value.includes('\n')){
+      e.preventDefault();
+      if(S.histIdx===-1)S._draftText=$('ti').value;
+      if(S.histIdx<S.promptHistory.length-1){S.histIdx++;$('ti').value=S.promptHistory[S.histIdx];ar($('ti'));}
+    }else if(e.key==='ArrowDown'){
+      e.preventDefault();
+      if(S.histIdx>0){S.histIdx--;$('ti').value=S.promptHistory[S.histIdx];ar($('ti'));}
+      else if(S.histIdx===0){S.histIdx=-1;$('ti').value=S._draftText||'';ar($('ti'));}
+    }
+  }
+});
+
+// ── Endpoint quick-fill ──────────────────────────────────────────────────────
+const ENDPOINT_PRESETS={vercel:{url:'https://ai-gateway.vercel.sh/v1',model:'openai/gpt-4o',key:''},openrouter:{url:'https://openrouter.ai/api/v1',model:'anthropic/claude-3.5-sonnet',key:''},ollama:{url:'http://localhost:11434/v1',model:'llama3',key:''},lmstudio:{url:'http://localhost:1234/v1',model:'local-model',key:''}};
+function fillEndpoint(key){const ep=ENDPOINT_PRESETS[key];if(!ep)return;$('oci-url').value=ep.url;$('oci-model').value=ep.model;if(ep.key)$('oci-key').value=ep.key;saveEnhance();updBadge();toast('Filled: '+key);}
+
+// ── Instruction Presets ──────────────────────────────────────────────────────
+const BUILTIN_PRESETS={react_ts:{instructions:'You are an expert React + TypeScript developer. Write modern functional components with hooks. Use TypeScript strictly (no any). Prefer named exports. Use Tailwind CSS for styling. Follow React best practices.',rules:'Never use class components. Always use const arrow functions. Export types separately. Use React.FC sparingly.',skills:['react','zod','tests','errors']},python:{instructions:'You are an expert Python backend developer. Write clean, idiomatic Python 3.11+. Use type hints everywhere. Prefer FastAPI for APIs, SQLAlchemy for ORM, Pydantic for validation.',rules:'No bare except. Use specific exception types. Add type annotations to all functions.',skills:['tests','errors','security']},go:{instructions:'You are an expert Go developer. Write idiomatic Go. Use explicit error returns, never panic for business logic. Use interfaces for abstraction.',rules:'Always handle errors. No global state. Use context.Context for cancellation. Prefer stdlib.',skills:['go','errors','tests']},security:{instructions:'You are a security expert. Identify vulnerabilities, insecure patterns, and attack surfaces. Reference OWASP Top 10. Provide remediation code with severity labels.',rules:'Flag all hardcoded credentials, injection risks, missing auth checks. Be specific about severity.',skills:['security','errors']},docs:{instructions:'You are a technical writer. Write clear, comprehensive documentation. Include usage examples, parameter descriptions, return values, and edge cases.',rules:'Always include a quick-start example. Use consistent formatting. Explain the why, not just the what.',skills:['docs']},nextjs:{instructions:'You are an expert Next.js + Vercel developer. Use App Router with React Server Components. Deploy to Vercel. Use Tailwind CSS, TypeScript, and modern tooling.',rules:"Prefer Server Components. Add 'use client' only when needed. Use route handlers for APIs. Follow Vercel deployment best practices.",skills:['react','nextjs','zod','perf']},fastapi:{instructions:'You are an expert FastAPI developer. Build async Python APIs with FastAPI, SQLAlchemy 2.0 async, Pydantic v2, and Alembic for migrations.',rules:'Use async/await everywhere. Use Depends() for dependency injection. Write Pydantic models for all request/response bodies. Include proper HTTP status codes.',skills:['tests','errors','security','sql']}};
+function loadPreset(key){if(!key)return;let p;if(key.startsWith('__')){p=BUILTIN_PRESETS[key.slice(2)];}else{try{const s=JSON.parse(localStorage.getItem('df-presets')||'{}');p=s[key];}catch(e){}}if(!p)return;if(p.instructions!==undefined)$('instr-input').value=p.instructions;if(p.rules!==undefined)$('rules-input').value=p.rules;if(p.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=p.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});saveEnhance();toast('Loaded: '+key.replace('__','').replace(/_/g,' '));setTimeout(()=>{$('preset-sel').value='';},0);}
+function savePreset(){const name=$('preset-name').value.trim();if(!name){toast('Enter a preset name',true);return;}const saved=JSON.parse(localStorage.getItem('df-presets')||'{}');saved[name]={instructions:$('instr-input').value,rules:$('rules-input').value,skills:Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value)};localStorage.setItem('df-presets',JSON.stringify(saved));$('preset-name').value='';renderSavedPresets();toast('Saved: '+name);}
+function renderSavedPresets(){try{const saved=JSON.parse(localStorage.getItem('df-presets')||'{}');const g=$('preset-saved-group');if(!g)return;g.innerHTML='';Object.keys(saved).forEach(name=>{const o=document.createElement('option');o.value=name;o.textContent='★ '+name;g.appendChild(o);});}catch(e){}}
+
+// ── Session Memory ────────────────────────────────────────────────────────────
+function memKey(){return S.repo?`df-mem-${S.repo.owner}/${S.repo.repo}`:null;}
+function loadMemory(){const k=memKey();if(!k)return;try{const raw=localStorage.getItem(k);if(!raw)return;const data=JSON.parse(raw);S.memory=data;$('mem-pill').style.display='flex';$('mem-pill').title=`Memory from ${new Date(data.ts).toLocaleDateString()} — click to clear`;}catch(e){S.memory=null;}}
+function saveMemory(){const k=memKey();if(!k||!S.msgs.length)return;const recent=S.msgs.slice(-6);const summary=recent.map(m=>`[${m.role}]: ${m.content.slice(0,400)}`).join('\n\n');localStorage.setItem(k,JSON.stringify({ts:Date.now(),summary,msgs:recent,repo:`${S.repo.owner}/${S.repo.repo}`}));}
+function clearMemory(){const k=memKey();if(k)localStorage.removeItem(k);S.memory=null;$('mem-pill').style.display='none';toast('Session memory cleared');}
+function getMemoryContext(){if(!S.memory)return'';return S.memory.summary||'';}
+
+// ── Chat Export ───────────────────────────────────────────────────────────────
+function exportChat(){if(!S.msgs.length){toast('No messages to export',true);return;}const lines=[`# DevForge Session — ${new Date().toLocaleString()}`,S.repo?`**Repo:** ${S.repo.owner}/${S.repo.repo}`:'','---',''];S.msgs.forEach(m=>{lines.push(`## ${m.role==='user'?'You':'Agent'}`);lines.push(m.content);lines.push('');});const blob=new Blob([lines.join('\n')],{type:'text/markdown'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`devforge-${Date.now()}.md`;a.click();URL.revokeObjectURL(a.href);toast('Exported chat');}
+
+// ── Stop stream ───────────────────────────────────────────────────────────────
+function stopStream(){if(S.abortCtrl){S.abortCtrl.abort();S.abortCtrl=null;}S.streaming=false;$('send-btn').disabled=false;$('stop-btn').style.display='none';toast('Stopped');}
+
+// ── Chat search ───────────────────────────────────────────────────────────────
+let _searchHits=[],_searchIdx=0;
+function toggleChatSearch(){
+  const bar=$('chat-search-bar');
+  if(!bar)return;
+  const shown=bar.style.display==='flex';
+  bar.style.display=shown?'none':'flex';
+  if(!shown){$('chat-search-in').value='';$('chat-search-in').focus();clearChatHighlights();}
+}
+function clearChatHighlights(){$('msgs').querySelectorAll('.search-hi').forEach(el=>{const t=document.createTextNode(el.textContent);el.parentNode.replaceChild(t,el);});_searchHits=[];_searchIdx=0;$('chat-search-count').textContent='';}
+function runChatSearch(q){
+  clearChatHighlights();if(!q.trim())return;
+  const re=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
+  $('msgs').querySelectorAll('.msg-body').forEach(body=>{
+    const walker=document.createTreeWalker(body,NodeFilter.SHOW_TEXT);
+    const nodes=[];let node;while(node=walker.nextNode()){if(node.parentElement?.classList.contains('search-hi'))continue;nodes.push(node);}
+    nodes.forEach(tn=>{const txt=tn.textContent;if(!re.test(txt))return;re.lastIndex=0;const frag=document.createDocumentFragment();let last=0,m;while(m=re.exec(txt)){if(m.index>last)frag.appendChild(document.createTextNode(txt.slice(last,m.index)));const hi=document.createElement('mark');hi.className='search-hi';hi.textContent=m[0];frag.appendChild(hi);_searchHits.push(hi);last=m.index+m[0].length;}if(last<txt.length)frag.appendChild(document.createTextNode(txt.slice(last)));tn.parentNode.replaceChild(frag,tn);re.lastIndex=0;});
+  });
+  $('chat-search-count').textContent=_searchHits.length?`${_searchHits.length} match${_searchHits.length!==1?'es':''}`:'No matches';
+  if(_searchHits.length){_searchIdx=0;_searchHits[0].classList.add('current');_searchHits[0].scrollIntoView({block:'center',behavior:'smooth'});}
+}
+function stepChatSearch(dir){if(!_searchHits.length)return;_searchHits[_searchIdx].classList.remove('current');_searchIdx=(_searchIdx+dir+_searchHits.length)%_searchHits.length;_searchHits[_searchIdx].classList.add('current');_searchHits[_searchIdx].scrollIntoView({block:'center',behavior:'smooth'});}
+
+// ── Prompt enhancement ───────────────────────────────────────────────────────
+async function enhancePrompt(){
+  const ti=$('ti');const txt=(ti.value||'').trim();
+  if(!txt){toast('Type a prompt first',true);return;}
+  const btn=$('enhance-btn');btn.disabled=true;btn.textContent='⏳';
+  try{
+    const body={provider:S.prov,prompt:txt};
+    if(S.prov==='anthropic')body.anthropic_key=$('ak').value;
+    else if(S.prov==='groq')body.groq_key=$('gk').value;
+    else body.hf_token='';
+    const r=await fetch('/api/prompt/enhance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(d.error){toast('Enhance failed: '+d.error,true);}
+    else{ti.value=d.enhanced;ti.dispatchEvent(new Event('input'));toast('✨ Prompt improved!');}
+  }catch(e){toast('Enhance error: '+e.message,true);}
+  finally{btn.disabled=false;btn.textContent='✨';}
+}
+
+// ── Regenerate last response ──────────────────────────────────────────────────
+function regenerate(){
+  if(S.streaming){toast('Stop current stream first',true);return;}
+  // Find last user message
+  let lastUser=null;
+  for(let i=S.msgs.length-1;i>=0;i--){if(S.msgs[i].role==='user'){lastUser=S.msgs[i].content;break;}}
+  if(!lastUser){toast('Nothing to regenerate',true);return;}
+  // Remove last AI message from state (keep the user message)
+  if(S.msgs.length>0&&S.msgs[S.msgs.length-1].role==='assistant')S.msgs.pop();
+  // Remove last AI message bubble from DOM
+  const msgs=$('msgs');const wraps=msgs.querySelectorAll('.msg-wrap');
+  if(wraps.length>0){const last=wraps[wraps.length-1];const av=last.querySelector('.msg-av');if(av&&av.classList.contains('agent'))last.remove();}
+  // Re-send using the textarea content temporarily set to lastUser
+  const ti=$('ti');const saved=ti.value;ti.value=lastUser;send();ti.value=saved;
+}
+
+// ── Test stage toggle ─────────────────────────────────────────────────────────
+function onTestStageToggle(){const tr=$('ma-test-row');if(tr)tr.style.display=$('ma-test-stage').checked?'flex':'none';saveEnhance();}
+
+// ── Batch commit all AI-generated files ──────────────────────────────────────
+function extractFileBlocks(msgBody){const blocks=[];msgBody.querySelectorAll('.cblock').forEach(block=>{const writeBtn=block.querySelector('.cwrite[data-filepath]');if(!writeBtn)return;const path=writeBtn.getAttribute('data-filepath');const code=block.querySelector('code');if(path&&code)blocks.push({path,content:code.textContent});});return blocks;}
+async function batchCommit(blocks,branch,commitMsg){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const files=blocks.map(b=>({path:b.path,content:b.content,message:commitMsg||`Update ${b.path.split('/').pop()}`}));const res=await post('/api/repo/write/batch',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,branch,files});const ok=res.committed?.length||0;const errs=res.errors?.length||0;if(ok)toast(`✅ Committed ${ok} file${ok>1?'s':''}`+(errs?`, ${errs} error(s)`:'')); else toast(`Batch commit failed: ${res.errors?.[0]?.error||'unknown'}`,true);}
+function showBatchPanel(msgWrap){const existing=msgWrap.querySelector('.batch-panel');if(existing){existing.remove();return;}const blocks=extractFileBlocks(msgWrap);if(!blocks.length){toast('No writable files found in this response',true);return;}const branch=S.repo?.branch||'main';const panel=document.createElement('div');panel.className='write-panel batch-panel';panel.style.margin='8px 31px 0';panel.innerHTML=`<div style="font-size:12px;font-weight:600;color:var(--accent2);margin-bottom:8px">📦 Batch Commit ${blocks.length} file${blocks.length>1?'s':''}</div>${blocks.map((b,i)=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><input type="checkbox" checked id="bc-${i}" style="accent-color:var(--accent2)"><label for="bc-${i}" style="font-family:monospace;font-size:11px;color:var(--accent2)">${b.path}</label></div>`).join('')}<div class="wp-row" style="margin-top:8px"><div class="wp-field"><div class="flabel">Branch</div><input class="finput wp-branch" value="${branch}"></div><div class="wp-field"><div class="flabel">Commit message</div><input class="finput wp-msg" value="feat: apply AI-generated changes"></div></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px"><button onclick="this.closest('.batch-panel').remove()" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;padding:6px 12px;border-radius:8px;font-size:11px;font-family:inherit">Cancel</button><button class="wp-commit" onclick="doBatchCommit(this,${JSON.stringify(blocks).replace(/"/g,'&quot;')})">📤 Commit All</button></div>`;msgWrap.querySelector('.msg-inner').appendChild(panel);}
+async function doBatchCommit(btn,allBlocks){const panel=btn.closest('.batch-panel');const branch=panel.querySelector('.wp-branch').value.trim();const msg=panel.querySelector('.wp-msg').value.trim();const selected=allBlocks.filter((_,i)=>panel.querySelector(`#bc-${i}`)?.checked);if(!selected.length){toast('Select at least one file',true);return;}btn.textContent='⏳ Committing…';btn.disabled=true;await batchCommit(selected,branch,msg);panel.remove();}
+
+// ── Token stats ───────────────────────────────────────────────────────────────
+function addTokens(text,precise){const est=precise||(text.split(/\s+/).filter(Boolean).length*1.3|0);S.stats.tokens+=est;S.stats.messages++;const p=$('stat-pill');p.style.display='block';p.textContent=`~${S.stats.tokens>=1000?(S.stats.tokens/1000).toFixed(1)+'k':S.stats.tokens} tok`;}
+
 function toggleSec(lbl){lbl.closest('.s-sec').classList.toggle('closed');}
 function setTheme(t){document.documentElement.setAttribute('data-theme',t);$('ts-light').classList.toggle('on',t==='light');$('ts-dark').classList.toggle('on',t==='dark');$('hljs-theme').href=t==='dark'?'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css':'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';localStorage.setItem('df-theme',t);}
 (()=>{setTheme(localStorage.getItem('df-theme')||'dark');})();
 function saveSession(){if(S.ghToken&&S.ghUser)localStorage.setItem('df-session',JSON.stringify({ghToken:S.ghToken,ghUser:S.ghUser}));}
 function clearSession(){localStorage.removeItem('df-session');}
 function restoreSession(){try{const raw=localStorage.getItem('df-session');if(!raw)return false;const{ghToken,ghUser}=JSON.parse(raw);if(!ghToken||!ghUser)return false;S.ghToken=ghToken;S.ghUser=ghUser;$('gh-av').src=ghUser.avatar_url||'';$('gh-nm').textContent=ghUser.name||ghUser.login;$('gh-lg').textContent='@'+ghUser.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();return true;}catch(e){return false;}}
-function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);const data={prov:S.prov,anthropicKey:$('ak').value||'',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfToken:$('hft').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||''};localStorage.setItem('df-enhance',JSON.stringify(data));}
-function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfToken)$('hft').value=d.hfToken;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=d.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;updBadge();}catch(e){}}
-function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');}
-function expSidebar(){$('sidebar').classList.remove('col');$('exp-btn').classList.remove('show');}
+function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);const ts=$('ma-test-stage');const tt=$('think-toggle');const tb=$('think-budget');const data={prov:S.prov,anthropicKey:$('ak').value||'',anthropicModel:S.anthropicModel||'claude-sonnet-4-6',thinkingMode:tt?tt.checked:false,thinkingBudget:tb?tb.value:'2000',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||'',maTestStage:ts?ts.checked:false,maTestProv:$('ma-test-prov')?$('ma-test-prov').value||'':''};localStorage.setItem('df-enhance',JSON.stringify(data));}
+function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=d.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
+function toggleMoreMenu(){$('more-menu').classList.toggle('open');}
+function closeMoreMenu(){const m=$('more-menu');if(m)m.classList.remove('open');}
+document.addEventListener('click',e=>{if(!e.target.closest('#more-menu')&&!e.target.closest('#more-btn'))closeMoreMenu();});
+function isMob(){return window.innerWidth<=768;}
+function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
+function expSidebar(){$('sidebar').classList.remove('col');if(!isMob())$('exp-btn').classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
 marked.setOptions({breaks:true,gfm:true});
-function rmd(text){const d=document.createElement('div');d.innerHTML=marked.parse(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase();const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" onclick="cp(this)">copy</button>`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{const ce=h.querySelector('code');if(!ce)return;const fp=ce.textContent.trim();if(!/[./]/.test(fp))return;const nx=h.nextElementSibling;if(nx&&nx.classList.contains('cblock')){const hd=nx.querySelector('.cblock-head');if(hd){const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);}}});}return d.innerHTML;}
+function explainCode(btn){const code=btn.closest('.cblock').querySelector('code');if(!code)return;const snippet=code.textContent.slice(0,800);const ti=$('ti');ti.value=`Explain what this code does, step by step:\n\`\`\`\n${snippet}\n\`\`\``;ti.focus();ti.dispatchEvent(new Event('input'));$('msgs').scrollTo(0,$('msgs').scrollHeight);}
+async function createGist(btn,lang){
+  if(!S.ghToken){toast('Connect GitHub first',true);return;}
+  const code=btn.closest('.cblock').querySelector('code');if(!code)return;
+  const content=code.textContent;
+  const ext={js:'js',javascript:'js',typescript:'ts',ts:'ts',python:'py',go:'go',rust:'rs',ruby:'rb',java:'java',cpp:'cpp',c:'c',css:'css',html:'html',json:'json',yaml:'yml',sh:'sh',bash:'sh',sql:'sql',diff:'diff'}[lang]||'txt';
+  const fname=`snippet.${ext}`;
+  btn.textContent='⏳';btn.disabled=true;
+  const d=await post('/api/github/gist/create',{token:S.ghToken,filename:fname,content,description:`DevForge snippet (${lang})`,public:false});
+  if(d.error){toast('Gist failed: '+d.error,true);}
+  else{toast('✓ Gist created!');window.open(d.url,'_blank');}
+  btn.textContent='Gist';btn.disabled=false;
+}
+async function scanCode(btn,lang){
+  const cblock=btn.closest('.cblock');
+  const existing=cblock.querySelector('.scan-panel');
+  if(existing){existing.remove();btn.textContent='🛡️';return;}
+  const code=cblock.querySelector('code');if(!code)return;
+  btn.textContent='⏳';btn.disabled=true;
+  try{
+    const d=await post('/api/code/scan',{code:code.textContent,language:lang});
+    const panel=document.createElement('div');panel.className='scan-panel';
+    if(!d.issues||d.issues.length===0){
+      panel.innerHTML=`<div class="scan-clean">✅ No security issues detected</div>`;
+    }else{
+      const high=d.issues.filter(i=>i.severity==='high').length;
+      const med=d.issues.filter(i=>i.severity==='medium').length;
+      const low=d.issues.filter(i=>i.severity==='low').length;
+      const summary=[high?`${high} high`:'',med?`${med} medium`:'',low?`${low} low`:''].filter(Boolean).join(', ');
+      const issuesText=d.issues.map(i=>`[${i.severity.toUpperCase()}] ${i.pattern}${i.line?' (line '+i.line+')':''}: ${i.message}`).join('\n');
+      const issueHtml=d.issues.map(i=>{
+        const icon=i.severity==='high'?'🔴':i.severity==='medium'?'🟡':'🔵';
+        return`<div class="scan-issue scan-${i.severity}">${icon} <strong>${i.pattern}</strong>${i.line?` <span style="color:var(--muted);font-size:10px">line ${i.line}</span>`:''}<div class="scan-msg">${i.message}</div></div>`;
+      }).join('');
+      const enc=encodeURIComponent(issuesText);
+      panel.innerHTML=`<div class="scan-header"><span class="scan-title">🛡️ Security Scan — ${summary}</span><button class="ccopy" style="border-color:var(--accent-border);color:var(--accent2)" onclick="autoFixCode(this)" data-issues="${enc}" title="Ask AI to fix these issues">🔧 Auto-Fix</button></div><div class="scan-issues">${issueHtml}</div>`;
+    }
+    cblock.appendChild(panel);
+  }catch(e){toast('Scan failed: '+e.message,true);}
+  btn.textContent='🛡️';btn.disabled=false;
+}
+function autoFixCode(btn){
+  const issues=decodeURIComponent(btn.getAttribute('data-issues')||'');
+  const code=btn.closest('.cblock').querySelector('code');
+  const snippet=(code?code.textContent:'').slice(0,1000);
+  const ti=$('ti');
+  ti.value=`Fix all security issues in this code.\n\nIssues found:\n${issues}\n\nCode:\n\`\`\`\n${snippet}\n\`\`\`\n\nRewrite the code with every security issue fixed. Explain each fix briefly.`;
+  ti.focus();ti.dispatchEvent(new Event('input'));
+  $('msgs').scrollTo(0,$('msgs').scrollHeight);
+  toast('🔧 Security fix request ready — click Send');
+}
+function rmd(text){const d=document.createElement('div');d.innerHTML=marked.parse(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase();const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" onclick="cp(this)">copy</button><button class="ccopy" onclick="explainCode(this)" title="Explain this code">?</button><button class="ccopy" onclick="scanCode(this,'${lang}')" title="Scan for security issues">🛡️</button>`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{const ce=h.querySelector('code');if(!ce)return;const fp=ce.textContent.trim();if(!/[./]/.test(fp))return;const nx=h.nextElementSibling;if(nx&&nx.classList.contains('cblock')){const hd=nx.querySelector('.cblock-head');if(hd){const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);}}});}return d.innerHTML;}
 function cp(btn){const c=btn.closest('.cblock').querySelector('code');navigator.clipboard.writeText(c.textContent);btn.textContent='copied!';btn.classList.add('ok');setTimeout(()=>{btn.textContent='copy';btn.classList.remove('ok');},2000);}
 function uploadToArea(input,targetId){const file=input.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{$(targetId).value=e.target.result;saveEnhance();toast(`Loaded ${file.name}`);};r.readAsText(file);input.value='';}
 function uploadContext(input){const files=Array.from(input.files);if(!files.length)return;let done=0;const max=8-S.selFiles.size-S.localFiles.size;if(max<=0){toast('Max 8 files',true);input.value='';return;}const toLoad=files.slice(0,max);if(files.length>max)toast(`Max 8 files — loaded first ${max}`,true);toLoad.forEach(file=>{const r=new FileReader();r.onload=e=>{S.localFiles.set(file.name,e.target.result);done++;if(done===toLoad.length){updCtx();if(!S.streaming)toast(`Added ${done} file${done>1?'s':''}`);}};r.readAsText(file);});input.value='';}
-function showWritePanel(btn){const cblock=btn.closest('.cblock');const fp=btn.getAttribute('data-filepath')||'';const ex=cblock.querySelector('.write-panel');if(ex){ex.remove();return;}const branch=S.repo?.branch||'main';const fname=fp.split('/').pop();const panel=document.createElement('div');panel.className='write-panel';panel.innerHTML=`<div class="wp-row"><div class="wp-field"><div class="flabel">Path</div><input class="finput wp-path" value="${fp.replace(/"/g,'&quot;')}" placeholder="src/file.ts"></div><div class="wp-field" style="max-width:140px"><div class="flabel">Branch</div><input class="finput wp-branch" value="${branch}" placeholder="main"></div></div><div class="wp-row"><div class="wp-field"><div class="flabel">Commit message</div><input class="finput wp-msg" value="Update ${fname}" placeholder="feat: …"></div><button class="wp-commit" onclick="commitFile(this)">📤 Commit</button></div>`;cblock.appendChild(panel);}
-async function commitFile(btn){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const panel=btn.closest('.write-panel');const cblock=panel.closest('.cblock');const path=panel.querySelector('.wp-path').value.trim();const branch=panel.querySelector('.wp-branch').value.trim();const message=panel.querySelector('.wp-msg').value.trim();const code=cblock.querySelector('code');if(!path||!message||!code)return;btn.textContent='⏳ Writing…';btn.disabled=true;const res=await post('/api/repo/write',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,content:code.textContent,message,branch});if(res.error){toast('Write failed: '+res.error,true);btn.textContent='📤 Commit';btn.disabled=false;return;}btn.textContent='✅ Written!';if(res.commit_url){const a=document.createElement('a');a.href=res.commit_url;a.target='_blank';a.className='wp-link';a.textContent='View commit →';btn.after(a);}toast(`✅ Committed to ${branch}: ${path}`);}
+// ── Diff utilities ────────────────────────────────────────────────────────────
+function computeDiff(original,generated){const a=original.split('\n'),b=generated.split('\n');const res=[];let i=0,j=0;while(i<a.length||j<b.length){if(i<a.length&&j<b.length&&a[i]===b[j]){res.push({t:'ctx',v:a[i]});i++;j++;}else if(j<b.length&&(i>=a.length||!a.slice(i,Math.min(i+6,a.length)).includes(b[j]))){res.push({t:'add',v:b[j]});j++;}else{res.push({t:'del',v:a[i]});i++;}}return res;}
+function renderDiff(diff){const adds=diff.filter(l=>l.t==='add').length,dels=diff.filter(l=>l.t==='del').length;const lines=diff.map(l=>`<span class="diff-${l==='ctx'?'ctx':l.t}">${l.t==='add'?'+ ':l.t==='del'?'- ':'  '}${l.v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>`).join('');return{html:lines,adds,dels};}
+
+function showWritePanel(btn){
+  const cblock=btn.closest('.cblock');const fp=btn.getAttribute('data-filepath')||'';
+  const ex=cblock.querySelector('.write-panel');if(ex){ex.remove();return;}
+  const branch=S.repo?.branch||'main';const fname=fp.split('/').pop();
+  const code=cblock.querySelector('code');
+  const panel=document.createElement('div');panel.className='write-panel';
+
+  // Build diff section if we have the original file in context
+  let diffHtml='';
+  const origContent=S.selFiles.get(fp)||S.selFiles.get(fname);
+  if(origContent&&code){
+    const diff=computeDiff(origContent,code.textContent);
+    const{html,adds,dels}=renderDiff(diff);
+    const changed=adds||dels;
+    if(changed){
+      diffHtml=`<div class="diff-hd"><span>Diff vs. current file</span><span class="diff-stat"><span class="add">+${adds}</span> <span class="del">-${dels}</span></span></div><div class="diff-panel"><pre>${html}</pre></div>`;
+    }
+  }
+
+  panel.innerHTML=`${diffHtml}<div class="wp-row"><div class="wp-field"><div class="flabel">Path</div><input class="finput wp-path" value="${fp.replace(/"/g,'&quot;')}" placeholder="src/file.ts"></div><div class="wp-field" style="max-width:140px"><div class="flabel">Branch</div><input class="finput wp-branch" value="${branch}" placeholder="main"></div></div><div class="wp-row"><div class="wp-field"><div class="flabel">Commit message <button onclick="suggestCommitMsg(this.closest('.write-panel'))" style="background:none;border:none;color:var(--purple);cursor:pointer;font-size:11px;padding:0 2px" title="AI: suggest commit message">✨</button></div><input class="finput wp-msg" value="Update ${fname}" placeholder="feat: …"></div><button class="wp-commit" onclick="commitFile(this)">📤 Commit</button></div>`;
+  cblock.appendChild(panel);
+}
+async function commitFile(btn){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const panel=btn.closest('.write-panel');const cblock=panel.closest('.cblock');const path=panel.querySelector('.wp-path').value.trim();const branch=panel.querySelector('.wp-branch').value.trim();const message=panel.querySelector('.wp-msg').value.trim();const code=cblock.querySelector('code');if(!path||!message||!code)return;btn.textContent='⏳ Writing…';btn.disabled=true;const res=await post('/api/repo/write',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,content:code.textContent,message,branch});if(res.error){toast('Write failed: '+res.error,true);btn.textContent='📤 Commit';btn.disabled=false;return;}btn.textContent='✅ Written!';const defaultBranch=S.repo.branch||'main';if(res.commit_url){const a=document.createElement('a');a.href=res.commit_url;a.target='_blank';a.className='wp-link';a.textContent='View commit →';btn.after(a);}if(branch!==defaultBranch){const prBtn=document.createElement('button');prBtn.className='wp-commit';prBtn.style.cssText='background:var(--blue);margin-left:6px';prBtn.textContent='🔀 Create PR';prBtn.onclick=()=>openPRModal(branch);btn.after(prBtn);}toast(`✅ Committed to ${branch}: ${path}`);}
+async function suggestCommitMsg(panel){
+  const path=panel.querySelector('.wp-path')?.value?.trim()||'';
+  const cblock=panel.closest?.('.cblock');const code=cblock?.querySelector('code');
+  const content=(code?.textContent||'').slice(0,1500);
+  const body={provider:S.prov,path,content};
+  if(S.prov==='anthropic')body.anthropic_key=$('ak').value;
+  else if(S.prov==='groq')body.groq_key=$('gk').value;
+  else{toast('Use Anthropic or Groq for AI commit messages',true);return;}
+  const btn=panel.querySelector('.wp-msg')?.previousElementSibling?.querySelector('button');
+  if(btn){btn.textContent='⏳';btn.disabled=true;}
+  try{const d=await post('/api/commit/suggest-message',body);if(d.message){panel.querySelector('.wp-msg').value=d.message;toast('✨ Commit message suggested!');}else{toast('Error: '+(d.error||'Failed'),true);}}catch(e){toast(e.message,true);}
+  if(btn){btn.textContent='✨';btn.disabled=false;}
+}
 async function startOAuth(){const d=await post('/api/github/auth/start',{});if(d.error){toast(d.error,true);return;}S.devCode=d.device_code;const uri=d.verification_uri||'https://github.com/login/device';$('oauth-box').style.display='block';$('oauth-box').innerHTML=`<div class="oauth-box"><div class="oauth-lbl">Enter this code at GitHub</div><div class="oauth-code">${d.user_code}</div><br><a href="${uri}" target="_blank" class="oauth-link"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Open github.com/login/device</a></div>`;$('oauth-check').style.display='block';}
 async function pollOAuth(){if(!S.devCode)return;const d=await post('/api/github/auth/poll',{device_code:S.devCode});if(d.access_token){S.ghToken=d.access_token;const u=await post('/api/github/user',{token:S.ghToken});S.ghUser=u;saveSession();$('gh-av').src=u.avatar_url||'';$('gh-nm').textContent=u.name||u.login;$('gh-lg').textContent='@'+u.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();}else if(d.error==='authorization_pending'){toast('Not authorized yet — approve on GitHub first');}else{toast('Error: '+(d.error_description||d.error||'Unknown'),true);}}
-function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';updCtx();updHint();}
+function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.tabs=[];S.activeTabId=null;$('tab-bar').style.display='none';S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';closeMoreMenu();const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='none';$('commits-panel').style.display='none';$('search-results-panel').style.display='none';const wp=$('workflows-panel');if(wp)wp.style.display='none';updCtx();updHint();}
 async function loadRepos(){$('repo-list').innerHTML='<div class="list-msg">Loading…</div>';const repos=await post('/api/github/repos',{token:S.ghToken});if(!Array.isArray(repos)){$('repo-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';return;}S.allRepos=repos;renderRepoList(repos);}
 function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo('${r.full_name.replace(/'/g,"\\'")}',this)"><div class="li-name">${r.name}</div><div class="li-sub"><span>${r.language||'—'}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
 function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerCase().includes(q.toLowerCase())));}
-async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();updCtx();$('file-tree').innerHTML='';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);updHint();}
+async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};S.tabs=[];S.activeTabId=null;$('mem-pill').style.display='none';$('stat-pill').style.display='none';updCtx();$('file-tree').innerHTML='';$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadBranches();loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='block';updHint();}
 function buildTree(files){const folders={};const root=[];for(const f of files){const p=f.path.split('/');if(p.length===1)root.push(f);else{if(!folders[p[0]])folders[p[0]]=[];folders[p[0]].push(f);}}let h='';for(const f of root)h+=tfn(f);for(const[k,v]of Object.entries(folders))h+=tfd(k,v);$('file-tree').innerHTML=h;}
 function tfd(name,files){const subs={};const direct=[];for(const f of files){const rest=f.path.split('/').slice(1).join('/');const p=rest.split('/');if(p.length===1)direct.push(f);else{const k=p[0];if(!subs[k])subs[k]=[];subs[k].push(f);}}let inner='';for(const[k,v]of Object.entries(subs))inner+=tfd(name+'/'+k,v);for(const f of direct)inner+=tfn(f);return`<div class="tfolder"><div class="tfolder-h" onclick="this.parentElement.classList.toggle('open')"><span class="tarr">▶</span><span>📁</span><span style="font-family:monospace;font-size:12px">${name.split('/').pop()}</span></div><div class="tfolder-c">${inner}</div></div>`;}
-function tfn(f){const sel=S.selFiles.has(f.path);const safe=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" onclick="togF('${safe}')"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF('${safe}')"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.path.split('/').pop()}</span></div>`;}
+function tfn(f){const sel=S.selFiles.has(f.path);const safe=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");const sz=f.size||0;const tok=tokEst(sz);const tc=sz?tokCls(tok):'';const tokHtml=sz?`<span class="tok-badge ${tc}">${tokFmt(tok)}</span>`:'';return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" onclick="togF('${safe}',${sz})"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF('${safe}',${sz})"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${f.path.split('/').pop()}</span>${tokHtml}<button class="peek-btn" onclick="event.stopPropagation();peekFile('${safe}',${sz})" title="Preview file">👁</button></div>`;}
 function tfid(p){return'tf-'+btoa(unescape(encodeURIComponent(p))).replace(/[+=\/]/g,'');}
-async function togF(path){if(S.selFiles.has(path)){S.selFiles.delete(path);updTF(path);updCtx();return;}if(S.selFiles.size+S.localFiles.size>=8){toast('Max 8 files');return;}const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});if(d.error){toast(d.error,true);return;}S.selFiles.set(path,d.content);updTF(path);updCtx();}
+async function togF(path,size=0){if(S.selFiles.has(path)){S.selFiles.delete(path);S.fileSizes.delete(path);updTF(path);updCtx();return;}if(S.selFiles.size+S.localFiles.size>=8){toast('Max 8 files');return;}const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});if(d.error){toast(d.error,true);return;}S.selFiles.set(path,d.content);S.fileSizes.set(path,size||d.content.length);updTF(path);updCtx();}
+
+// ── File peek modal ───────────────────────────────────────────────────────────
+let _peekPath='',_peekSize=0;
+async function peekFile(path,size=0){
+  if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}
+  _peekPath=path;_peekSize=size;
+  $('peek-path').textContent=path;$('peek-icon').textContent=ficon(path);
+  $('peek-body').textContent='Loading…';$('peek-size').textContent='';
+  $('peek-modal').style.display='flex';
+  // Update add-to-context button label
+  const inCtx=S.selFiles.has(path);$('peek-add-btn').textContent=inCtx?'✓ In context':'+ Add to context';
+  $('peek-add-btn').disabled=inCtx;
+  // Fetch if not already in context
+  let content=S.selFiles.get(path)||null;
+  if(!content){
+    const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});
+    if(d.error){$('peek-body').textContent='Error: '+d.error;return;}
+    content=d.content;
+  }
+  $('peek-body').textContent=content;
+  const bytes=content.length;const tok=tokEst(bytes);
+  $('peek-size').textContent=`${tokFmt(tok)} tokens · ${(bytes/1024).toFixed(1)}KB`;
+}
+function peekAddToCtx(){
+  if(!_peekPath||S.selFiles.has(_peekPath))return;
+  const content=$('peek-body').textContent;
+  S.selFiles.set(_peekPath,content);S.fileSizes.set(_peekPath,_peekSize||content.length);
+  updTF(_peekPath);updCtx();
+  $('peek-add-btn').textContent='✓ In context';$('peek-add-btn').disabled=true;
+  toast('Added to context');
+}
 function updTF(path){const el=document.getElementById(tfid(path));if(!el)return;const sel=S.selFiles.has(path);el.classList.toggle('sel',sel);const cb=el.querySelector('input');if(cb)cb.checked=sel;}
-function updCtx(){const n=S.selFiles.size+S.localFiles.size;const cp=$('ctx-pill');cp.style.display=n?'block':'none';cp.textContent=n+' file'+(n!==1?'s':'');const strip=$('ctx-strip');strip.innerHTML='';for(const path of S.selFiles.keys()){const p=document.createElement('div');p.className='cpill';p.innerHTML=`${ficon(path)} ${path.split('/').pop()} <span style="margin-left:3px;opacity:.5">✕</span>`;p.onclick=()=>{S.selFiles.delete(path);updTF(path);updCtx();};strip.appendChild(p);}for(const name of S.localFiles.keys()){const p=document.createElement('div');p.className='cpill local';p.innerHTML=`📎 ${name} <span style="margin-left:3px;opacity:.5">✕</span>`;p.onclick=()=>{S.localFiles.delete(name);updCtx();};strip.appendChild(p);}updHint();}
+
+// ── Snippet library ───────────────────────────────────────────────────────────
+function loadSnippets(){try{return JSON.parse(localStorage.getItem('df-snippets')||'[]');}catch(e){return [];}}
+function saveSnippets(arr){localStorage.setItem('df-snippets',JSON.stringify(arr));renderSnippets();}
+function saveSnippet(){const txt=($('ti')?.value||'').trim();if(!txt){toast('Type a prompt first',true);return;}const label=txt.slice(0,40)+(txt.length>40?'…':'');const arr=loadSnippets();arr.unshift({label,text:txt,ts:Date.now()});if(arr.length>30)arr.splice(30);saveSnippets(arr);toast('Snippet saved');}
+function renderSnippets(){const arr=loadSnippets();const list=$('snip-list');const badge=$('snip-count');if(!list||!badge)return;badge.style.display=arr.length?'inline':'none';badge.textContent=arr.length;if(!arr.length){list.style.display='none';return;}list.style.display='block';list.innerHTML=arr.map((s,i)=>`<div style="display:flex;align-items:center;gap:4px;padding:5px 8px;border-bottom:1px solid var(--border2);cursor:pointer;font-size:11px;transition:background .1s" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''" onclick="loadSnippet(${i})"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${esc(s.label)}</span><button onclick="event.stopPropagation();deleteSnippet(${i})" style="background:none;border:none;color:var(--muted2);cursor:pointer;padding:0 2px;font-size:12px" title="Delete">✕</button></div>`).join('');}
+function loadSnippet(i){const arr=loadSnippets();if(!arr[i])return;const ti=$('ti');if(ti){ti.value=arr[i].text;ti.dispatchEvent(new Event('input'));ti.focus();}$('peek-modal').style.display='none';}
+function deleteSnippet(i){const arr=loadSnippets();arr.splice(i,1);saveSnippets(arr);}
+
+function updCtx(){
+  const n=S.selFiles.size+S.localFiles.size;
+  const cp=$('ctx-pill');cp.style.display=n?'block':'none';cp.textContent=n+' file'+(n!==1?'s':'');
+  const strip=$('ctx-strip');strip.innerHTML='';
+  let totalTok=0;
+  for(const [path] of S.selFiles){
+    const sz=S.fileSizes.get(path)||0;const tok=tokEst(sz);totalTok+=tok;const tc=tokCls(tok);
+    const canSum=tok>4000&&((S.prov==='anthropic'&&$('ak').value)||(S.prov==='groq'&&$('gk').value)||(S.prov==='openai_compat'&&$('oci-url')?.value));
+    const p=document.createElement('div');p.className='cpill';
+    const safePath=path.replace(/'/g,"\\'");
+    p.innerHTML=`${ficon(path)} ${path.split('/').pop()} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span>${canSum?`<button class="sum-btn" onclick="summarizeFile('${safePath}',event)" title="AI Summarize">∑</button>`:''} <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
+    p.onclick=(e)=>{if(e.target.tagName==='BUTTON'||e.target.tagName==='SPAN'&&e.target.style.cursor==='pointer')return;};
+    const rmSpan=p.querySelector('span[style*="cursor"]');if(rmSpan)rmSpan.onclick=()=>{S.selFiles.delete(path);S.fileSizes.delete(path);updTF(path);updCtx();};
+    strip.appendChild(p);
+  }
+  for(const [name,content] of S.localFiles){
+    const tok=tokEst(content.length);totalTok+=tok;const tc=tokCls(tok);
+    const p=document.createElement('div');p.className='cpill local';
+    p.innerHTML=`📎 ${name} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span> <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
+    const rmSpan=p.querySelector('span[style*="cursor"]');if(rmSpan)rmSpan.onclick=()=>{S.localFiles.delete(name);updCtx();};
+    strip.appendChild(p);
+  }
+  const bw=$('budget-wrap');
+  if(bw){
+    bw.style.display=n?'block':'none';
+    const fill=$('budget-fill');const tokLbl=$('budget-tok');
+    if(fill){const pct=Math.min(100,(totalTok/100000)*100);fill.style.width=pct+'%';fill.style.background=pct>80?'var(--red)':pct>50?'#f59e0b':'var(--accent2)';}
+    if(tokLbl)tokLbl.textContent=tokFmt(totalTok)+' tokens';
+  }
+  if(totalTok>80000&&n>0){if(!S._budgetWarned){S._budgetWarned=true;toast('⚠️ Context approaching 100K token limit — consider summarizing large files',true);}}
+  else{S._budgetWarned=false;}
+  updHint();
+}
 function toggleSkill(chip){const cb=chip.querySelector('input');setTimeout(()=>{chip.classList.toggle('checked',cb.checked);saveEnhance();},0);}
+// ── Code search + commit history ──────────────────────────────────────────────
+async function searchCode(){
+  const q=($('repo-search-code')?.value||'').trim();
+  if(!q){return;}if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}
+  const panel=$('search-results-panel');panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">Searching…</div>';panel.style.display='block';
+  const d=await post('/api/repo/search',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,query:q});
+  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${d.error}</div>`;return;}
+  if(!d.items?.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No results found</div>';return;}
+  panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>${d.total} results</span><button onclick="$('search-results-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
+    d.items.map(item=>`<div class="search-result" onclick="loadSearchResult('${item.path.replace(/'/g,"\\'")}')" title="Click to add to context"><div class="sr-path">${ficon(item.path)} ${item.path}</div>${item.snippets.map(s=>`<div class="sr-snippet">${esc(s)}</div>`).join('')}</div>`).join('');
+}
+async function loadSearchResult(path){
+  if(S.selFiles.has(path)){toast('Already in context');return;}
+  if(S.selFiles.size+S.localFiles.size>=8){toast('Max 8 files');return;}
+  const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});
+  if(d.error){toast(d.error,true);return;}
+  S.selFiles.set(path,d.content);S.fileSizes.set(path,d.content.length);updTF(path);updCtx();toast(`Added ${path.split('/').pop()}`);
+}
+async function toggleCommits(){
+  const panel=$('commits-panel');
+  if(panel.style.display==='block'){panel.style.display='none';return;}
+  if(!S.repo||!S.ghToken)return;
+  panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">Loading commits…</div>';panel.style.display='block';
+  const d=await post('/api/repo/commits',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,branch:S.repo.branch});
+  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${d.error}</div>`;return;}
+  if(!d.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No commits found</div>';return;}
+  panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>Recent commits on ${esc(S.repo.branch)}</span><button onclick="$('commits-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
+    d.map(c=>`<div class="commit-item" onclick="window.open('${c.url}','_blank')"><div><span class="ci-sha">${c.sha}</span><span class="ci-msg">${esc(c.message)}</span></div><div class="ci-meta">${esc(c.author)} · ${c.date}</div></div>`).join('');
+}
+
+async function toggleWorkflows(){
+  if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}
+  const panel=$('workflows-panel');
+  if(panel.style.display==='block'){panel.style.display='none';return;}
+  panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">Loading workflow runs…</div>';panel.style.display='block';
+  const d=await post('/api/repo/workflow-runs',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,max_results:15});
+  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${d.error}</div>`;return;}
+  if(!d.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No workflow runs found</div>';return;}
+  const icon=c=>{if(c==='success')return '✅';if(c==='failure')return '❌';if(c==='cancelled')return '⛔';if(c==='skipped')return '⏭️';return '🔄';};
+  panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>GitHub Actions — ${esc(S.repo.owner+'/'+S.repo.repo)}</span><button onclick="$('workflows-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
+    d.map(r=>`<div class="commit-item" onclick="window.open('${r.url}','_blank')" title="${esc(r.conclusion||r.status)}"><div><span style="margin-right:4px">${icon(r.conclusion)}</span><span class="ci-msg">${esc(r.name)}</span></div><div class="ci-meta">${esc(r.branch)} · ${r.sha} · ${r.date}</div></div>`).join('');
+}
+
+// ── PR Review ────────────────────────────────────────────────────────────────
+async function reviewPR(){
+  if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}
+  const num=parseInt($('pr-review-num')?.value||'0');
+  if(!num){toast('Enter a PR number',true);return;}
+  const btn=$('pr-review-num').nextElementSibling;if(btn){btn.disabled=true;btn.textContent='⏳ Loading…';}
+  try{
+    const d=await post('/api/github/pr/diff',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,pr_number:num});
+    if(d.error){toast('PR error: '+d.error,true);return;}
+    // Build context from diff + PR description
+    const ctx=`PR #${d.number}: ${d.title}\nAuthor: ${d.author} | ${d.head} → ${d.base}\nChanged: ${d.changed_files} files, +${d.additions}/-${d.deletions}\n\n${d.body?'Description:\n'+d.body+'\n\n':''}Diff:\n\`\`\`diff\n${d.diff}\n\`\`\``;
+    // Set as local file context named pr-diff.diff
+    S.localFiles.set(`PR#${num}.diff`,ctx);updCtx();
+    // Switch to review agent and pre-fill prompt
+    document.querySelectorAll('.atab').forEach(t=>t.classList.remove('on'));
+    const rt=document.querySelector('.atab[data-agent="review"]');if(rt)rt.classList.add('on');
+    S.agent='review';
+    $('ti').value=`Review PR #${d.number}: ${d.title}\n\nPlease provide a thorough code review of the diff above. Check for:\n- Correctness and logic bugs\n- Security vulnerabilities\n- Performance issues\n- Code quality and style\n- Missing tests or documentation`;
+    $('ti').dispatchEvent(new Event('input'));$('ti').focus();
+    toast(`✓ PR #${num} loaded — ${d.changed_files} files changed`);
+    // Open the file context panel
+    const sidebar=$('sidebar');if(sidebar&&sidebar.classList.contains('col')){expSidebar();}
+  }catch(e){toast('Error: '+e.message,true);}
+  finally{if(btn){btn.disabled=false;btn.textContent='🔍 Review PR';}}
+}
+
+// ── Release Notes ─────────────────────────────────────────────────────────────
+function openReleaseNotes(){
+  if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}
+  $('rn-output').innerHTML='<span style="color:var(--muted)">Configure range above and click Generate…</span>';
+  $('rn-copy-btn').style.display='none';
+  $('relnotes-modal').style.display='flex';
+}
+let _rnAbort=null;
+async function generateReleaseNotes(){
+  if(_rnAbort){_rnAbort.abort();_rnAbort=null;}
+  const since=$('rn-since').value.trim();const until=$('rn-until').value.trim();
+  const maxC=Math.min(parseInt($('rn-max').value)||30,50);
+  const btn=$('rn-gen-btn');btn.disabled=true;btn.textContent='⏳ Generating…';
+  $('rn-copy-btn').style.display='none';
+  $('rn-output').innerHTML='<span style="color:var(--muted)">Fetching commits…</span>';
+  _rnAbort=new AbortController();
+  const body={provider:S.prov,token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,
+    since,until,max_commits:maxC,anthropic_model:S.anthropicModel||'claude-sonnet-4-6'};
+  if(S.prov==='anthropic')body.anthropic_key=$('ak').value;
+  else if(S.prov==='groq')body.groq_key=$('gk').value;
+  let raw='';
+  try{
+    const res=await fetch('/api/repo/release-notes',{method:'POST',headers:{'Content-Type':'application/json'},signal:_rnAbort.signal,body:JSON.stringify(body)});
+    if(!res.ok){$('rn-output').innerHTML=`<span style="color:var(--red)">Error: ${await res.text()}</span>`;return;}
+    $('rn-output').innerHTML='';
+    const out=$('rn-output');
+    const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;try{const ev=JSON.parse(line.slice(5).trim());if(ev.t==='text'){raw+=ev.v;out.innerHTML=marked.parse(raw);}else if(ev.t==='error'){out.innerHTML+=`<span style="color:var(--red)">Error: ${esc(ev.v)}</span>`;}else if(ev.t==='done')break;}catch{}}}
+    if(raw)$('rn-copy-btn').style.display='block';
+  }catch(e){if(e.name!=='AbortError')$('rn-output').innerHTML=`<span style="color:var(--red)">${esc(e.message)}</span>`;}
+  finally{btn.disabled=false;btn.textContent='✨ Generate';_rnAbort=null;}
+}
+function copyReleaseNotes(){const out=$('rn-output');navigator.clipboard.writeText(out.innerText||out.textContent||'');toast('Copied release notes!');}
+
+// ── README Generator ──────────────────────────────────────────────────────────
+let _readmeAbort=null,_readmeRaw='';
+function openReadmeModal(){
+  $('readme-output').innerHTML='<span style="color:var(--muted)">Click Generate to create README from your selected files…</span>';
+  $('readme-copy-btn').style.display='none';$('readme-save-btn').style.display='none';_readmeRaw='';
+  $('readme-modal').style.display='flex';
+}
+async function generateReadme(){
+  if(_readmeAbort){_readmeAbort.abort();_readmeAbort=null;}
+  const fc=bCtx();if(!fc.trim()){toast('Select files first',true);return;}
+  const btn=$('readme-gen-btn');btn.disabled=true;btn.textContent='⏳ Generating…';
+  $('readme-copy-btn').style.display='none';$('readme-save-btn').style.display='none';
+  $('readme-output').innerHTML='<span style="color:var(--muted)">Analyzing files…</span>';
+  _readmeAbort=new AbortController();_readmeRaw='';
+  const body={provider:S.prov,repo_name:S.repo?`${S.repo.owner}/${S.repo.repo}`:'',
+    file_context:fc,anthropic_model:S.anthropicModel||'claude-sonnet-4-6'};
+  if(S.prov==='anthropic')body.anthropic_key=$('ak').value;
+  else if(S.prov==='groq')body.groq_key=$('gk').value;
+  try{
+    const res=await fetch('/api/repo/generate-readme',{method:'POST',headers:{'Content-Type':'application/json'},signal:_readmeAbort.signal,body:JSON.stringify(body)});
+    if(!res.ok){$('readme-output').innerHTML=`<span style="color:var(--red)">Error: ${await res.text()}</span>`;return;}
+    $('readme-output').innerHTML='';
+    const out=$('readme-output');
+    const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;try{const ev=JSON.parse(line.slice(5).trim());if(ev.t==='text'){_readmeRaw+=ev.v;out.innerHTML=marked.parse(_readmeRaw);}else if(ev.t==='error'){out.innerHTML+=`<span style="color:var(--red)">Error: ${esc(ev.v)}</span>`;}else if(ev.t==='done')break;}catch{}}}
+    if(_readmeRaw){$('readme-copy-btn').style.display='block';$('readme-save-btn').style.display='block';}
+  }catch(e){if(e.name!=='AbortError')$('readme-output').innerHTML=`<span style="color:var(--red)">${esc(e.message)}</span>`;}
+  finally{btn.disabled=false;btn.textContent='✨ Generate';_readmeAbort=null;}
+}
+function copyReadme(){navigator.clipboard.writeText(_readmeRaw);toast('Copied README!');}
+function saveReadmeToContext(){if(!_readmeRaw)return;S.localFiles.set('README.md',_readmeRaw);updCtx();toast('Added README.md to context');$('readme-modal').style.display='none';}
+
+// ── Dependency Audit ──────────────────────────────────────────────────────────
+const DEP_FILES_SET=new Set(['requirements.txt','package.json','go.mod','cargo.toml','pyproject.toml']);
+let _depsAuditRaw='';
+function openDepsModal(){
+  const depsEntries=[...S.selFiles.entries(),...S.localFiles.entries()]
+    .filter(([k])=>DEP_FILES_SET.has(k.split('/').pop().toLowerCase()));
+  if(!depsEntries.length){toast('Select a requirements.txt / package.json / go.mod first',true);return;}
+  $('deps-ai-output').innerHTML='<span style="color:var(--muted)">Click Audit to start scanning…</span>';
+  $('deps-pkg-table').innerHTML='';$('deps-copy-btn').style.display='none';_depsAuditRaw='';
+  $('deps-modal').style.display='flex';
+}
+async function runDepsAudit(){
+  const depsEntries=[...S.selFiles.entries(),...S.localFiles.entries()]
+    .filter(([k])=>DEP_FILES_SET.has(k.split('/').pop().toLowerCase()));
+  if(!depsEntries.length){toast('No dependency file in context',true);return;}
+  const [filename,content]=depsEntries[0];
+  const fname=filename.split('/').pop();
+  const btn=$('deps-run-btn');btn.disabled=true;btn.textContent='⏳ Scanning…';
+  const out=$('deps-ai-output');out.innerHTML='<span style="color:var(--muted)">Checking versions…</span>';
+  $('deps-pkg-table').innerHTML='';$('deps-copy-btn').style.display='none';_depsAuditRaw='';
+  try{
+    const body={filename:fname,content,provider:S.prov};
+    if(S.prov==='anthropic')body.anthropic_key=$('ak').value;
+    else if(S.prov==='groq')body.groq_key=$('gk').value;
+    const res=await fetch('/api/repo/scan-deps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!res.ok){const e=await res.json();toast('Scan failed: '+(e.error||res.status),true);return;}
+    const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){
+      const{done,value}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data:'))continue;
+        try{
+          const ev=JSON.parse(line.slice(5).trim());
+          if(ev.t==='packages'){
+            const{ecosystem,packages}=ev.v;
+            const outdated=packages.filter(p=>p.outdated).length;
+            const unpinned=packages.filter(p=>p.unpinned).length;
+            const tbl=`<div style="padding:8px 14px;background:var(--panel2);border-bottom:1px solid var(--border2);font-size:11px;color:var(--muted)">
+              📦 <strong style="color:var(--text)">${packages.length} packages</strong> · ecosystem: ${ecosystem}
+              ${outdated?`· <span style="color:var(--red)">⚠️ ${outdated} outdated</span>`:''}
+              ${unpinned?`· <span style="color:#f59e0b">⚠️ ${unpinned} unpinned</span>`:''}
+            </div>
+            <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'JetBrains Mono',monospace">
+              <thead><tr style="background:var(--panel)"><th style="padding:4px 12px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border2)">Package</th><th style="padding:4px 12px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border2)">Pinned</th><th style="padding:4px 12px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border2)">Latest</th><th style="padding:4px 8px;border-bottom:1px solid var(--border2)"></th></tr></thead>
+              <tbody>${packages.map(p=>{
+                const badge=p.outdated?'<span style="background:var(--red);color:#fff;border-radius:3px;padding:1px 5px;font-size:9px">OUTDATED</span>':p.unpinned?'<span style="background:#f59e0b;color:#000;border-radius:3px;padding:1px 5px;font-size:9px">UNPINNED</span>':'';
+                const pinColor=p.outdated?'color:var(--red)':'color:var(--text)';
+                return`<tr style="border-bottom:1px solid var(--border2)"><td style="padding:3px 12px;color:var(--accent2)">${p.name}</td><td style="padding:3px 12px;${pinColor}">${p.pinned||p.constraint||'—'}</td><td style="padding:3px 12px;color:var(--accent2)">${p.latest||'—'}</td><td style="padding:3px 8px">${badge}</td></tr>`;
+              }).join('')}</tbody>
+            </table></div>`;
+            $('deps-pkg-table').innerHTML=tbl;
+            out.innerHTML='<span style="color:var(--muted)">🤖 AI analyzing security implications…</span>';
+          }else if(ev.t==='text'){
+            if(out.querySelector('span'))out.innerHTML='';
+            _depsAuditRaw+=ev.v;out.innerHTML=marked.parse(_depsAuditRaw);
+          }else if(ev.t==='error'){
+            out.innerHTML+=`<span style="color:var(--red)">Error: ${esc(ev.v)}</span>`;
+          }else if(ev.t==='done'){
+            if(_depsAuditRaw)$('deps-copy-btn').style.display='block';break;
+          }
+        }catch{}
+      }
+    }
+  }catch(e){toast('Audit error: '+e.message,true);}
+  finally{btn.disabled=false;btn.textContent='🔍 Audit';}
+}
+function copyDepsAudit(){navigator.clipboard.writeText(_depsAuditRaw);toast('Copied audit report!');}
+
+function setAnthModel(model){
+  S.anthropicModel=model;
+  ['haiku','sonnet','opus'].forEach(m=>$(`msel-${m}`)?.classList.remove('on'));
+  if(model.includes('haiku'))$('msel-haiku')?.classList.add('on');
+  else if(model.includes('opus'))$('msel-opus')?.classList.add('on');
+  else $('msel-sonnet')?.classList.add('on');
+  const to=$('think-opts');if(to){if(model.includes('opus'))to.classList.add('on');else{to.classList.remove('on');const tt=$('think-toggle');if(tt)tt.checked=false;}}
+  updBadge();saveEnhance();
+}
+async function loadBranches(){
+  if(!S.repo||!S.ghToken)return;
+  const d=await fetch(`/api/repo/branches?token=${encodeURIComponent(S.ghToken)}&owner=${S.repo.owner}&repo=${S.repo.repo}`).then(r=>r.json());
+  if(d.error||!Array.isArray(d))return;
+  const sel=$('branch-select');const wrap=$('branch-sel-wrap');if(!sel||!wrap)return;
+  sel.innerHTML=d.map(b=>`<option value="${esc(b.name)}"${b.name===S.repo.branch?' selected':''}>${esc(b.name)} (${b.sha})</option>`).join('');
+  wrap.style.display='flex';
+  const prw=$('pr-review-wrap');if(prw)prw.style.display='block';
+}
+async function switchBranch(branch){
+  if(!branch||branch===S.repo?.branch)return;
+  const st=$('repo-st');st.textContent='Switching branch…';st.className='sec-st';
+  S.selFiles.clear();S.fileSizes.clear();updCtx();$('file-tree').innerHTML='';
+  const d=await post('/api/repo/connect',{token:S.ghToken,url:`https://github.com/${S.repo.owner}/${S.repo.repo}`,branch});
+  if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}
+  S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';
+  buildTree(d.files);quickScanRepo(d.files);
+  toast(`Switched to ${branch}`);
+}
 function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='anthropic');$('pg').classList.toggle('on',p==='groq');$('ph').classList.toggle('on',p==='hf');$('po').classList.toggle('on',p==='openai_compat');$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
-function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';if(S.prov==='anthropic')$('model-pill').textContent='claude-sonnet-4';else if(S.prov==='groq')$('model-pill').textContent=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')$('model-pill').textContent=($('oci-model')&&$('oci-model').value)||'custom';else $('model-pill').textContent=S.hfModel.split('/').pop();}
+function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';const short=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';$('model-pill').textContent=short;}else if(S.prov==='groq')$('model-pill').textContent=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')$('model-pill').textContent=($('oci-model')&&$('oci-model').value)||'custom';else $('model-pill').textContent=S.hfModel.split('/').pop();}
 let searchTimer=null;
 function debounceSearch(q){clearTimeout(searchTimer);searchTimer=setTimeout(()=>fetchModels(q),400);}
 async function fetchModels(q=''){$('model-list').innerHTML='<div class="list-msg">Searching…</div>';try{const models=await get(`/api/hf/models?q=${encodeURIComponent(q)}&limit=25`);if(models.error){$('model-list').innerHTML=`<div class="list-msg" style="color:var(--red)">${models.error}</div>`;return;}if(!models.length){$('model-list').innerHTML='<div class="list-msg">No models found</div>';return;}$('model-list').innerHTML=models.map(m=>`<div class="list-item${S.hfModel===m.id?' active':''}" onclick="selectModel('${m.id.replace(/'/g,"\\'")}',this)"><div class="li-name">${m.name}</div><div class="li-sub"><span style="color:var(--muted)">${m.author}</span><span>↓${fmt(m.downloads)}</span><span>❤️${fmt(m.likes)}</span>${m.gated?'<span class="li-badge">gated</span>':''}</div></div>`).join('');}catch(e){$('model-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';}}
@@ -398,42 +1449,181 @@ function hk(e){if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();se
 function bCtx(){const p=[];for(const[k,v]of S.selFiles)p.push(`### \`${k}\`\n\`\`\`${fext(k)||'text'}\n${v.slice(0,5000)}\n\`\`\``);for(const[k,v]of S.localFiles)p.push(`### \`${k}\`\n\`\`\`${fext(k)||'text'}\n${v.slice(0,5000)}\n\`\`\``);return p.join('\n\n');}
 async function send(){
   const text=$('ti').value.trim();if(!text||S.streaming)return;
+  pushHistory(text);S.histIdx=-1;S._draftText='';
   if(S.prov==='anthropic'&&!$('ak').value.trim()){toast('Enter your Anthropic key in the sidebar',true);return;}
   if(S.prov==='groq'&&!$('gk').value.trim()){toast('Enter your Groq key in sidebar (free at console.groq.com)',true);return;}
   if(S.prov==='openai_compat'&&!$('oci-url').value.trim()){toast('Enter a base URL for your custom API endpoint',true);return;}
   $('empty').style.display='none';
   S.msgs.push({role:'user',content:text});
   const uw=document.createElement('div');uw.className='msg-wrap';
-  uw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av user">U</div><span class="msg-role">You</span><span class="msg-time">${now()}</span></div><div class="msg-body">${esc(text)}</div></div>`;
+  const uwId='mw'+Date.now();uw.id=uwId;
+  uw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av user">U</div><span class="msg-role">You</span><span class="msg-time">${now()}</span><div class="msg-actions"><button class="msg-act" onclick="cpMsg(this)" title="Copy">copy</button><button class="msg-act del" onclick="delMsg('${uwId}',${S.msgs.length-1})" title="Delete">✕</button></div></div><div class="msg-body">${esc(text)}</div></div>`;
   $('msgs').appendChild(uw);scrollB();$('ti').value='';ar($('ti'));
   const tw=document.createElement('div');tw.className='msg-wrap';
   const multiAgent=$('multi-agent').checked;
-  tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">${multiAgent?'Multi-Agent':'Agent'}</span></div><div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span>${multiAgent?'Planning...':'Working…'}</span></div></div>`;
+  const timerStart=Date.now();const timerId=setInterval(()=>{const el=tw.querySelector('.stream-timer');if(el)el.textContent=((Date.now()-timerStart)/1000).toFixed(1)+'s';},500);
+  tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">${multiAgent?'Multi-Agent':'Agent'}</span></div><div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span>${multiAgent?'Planning...':'Working…'}</span><span class="stream-timer" style="font-size:11px;color:var(--muted2);margin-left:6px">0.0s</span></div></div>`;
   $('msgs').appendChild(tw);scrollB();
-  S.streaming=true;$('send-btn').disabled=true;
+  S.streaming=true;$('send-btn').disabled=true;$('stop-btn').style.display='flex';
+  S.abortCtrl=new AbortController();
   const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);
   const streamId='sb'+Date.now()+Math.random().toString(36).slice(2);
-  let reply='';
+  let reply='';let gotUsage=false;
   try{
-    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:$('hft').value,hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:S.msgs.slice(-10),file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent,ma_plan_provider:$('ma-plan-prov').value||'',ma_code_provider:$('ma-code-prov').value||'',ma_review_provider:$('ma-rev-prov').value||''})});
+    let histMsgs=S.memory?[...S.memory.msgs,...S.msgs.slice(-8)]:S.msgs.slice(-10);
+    // Smart trim: if total estimated tokens > 90K, drop oldest messages
+    const CTX_LIMIT=90000;let totalTok=tokEst(bCtx().length);histMsgs.forEach(m=>totalTok+=tokEst(m.content.length));
+    let trimCount=0;while(totalTok>CTX_LIMIT&&histMsgs.length>1){const dropped=histMsgs.shift();totalTok-=tokEst(dropped.content.length);trimCount++;}
+    if(trimCount>0)toast(`Context trimmed: removed ${trimCount} old message${trimCount>1?'s':''} to fit limit`);
+    const includeTest=$('ma-test-stage')?.checked||false;
+    const thinkToggle=$('think-toggle');const thinkBudget=$('think-budget');
+    const thinkingMode=!!(thinkToggle&&thinkToggle.checked&&(S.anthropicModel||'').includes('opus'));
+    const thinkingBudget=thinkBudget?parseInt(thinkBudget.value)||2000:2000;
+    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},signal:S.abortCtrl?.signal,body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,anthropic_model:S.anthropicModel||'claude-sonnet-4-6',thinking_mode:thinkingMode,thinking_budget:thinkingBudget,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:'',hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:histMsgs,file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent,ma_plan_provider:$('ma-plan-prov').value||'',ma_code_provider:$('ma-code-prov').value||'',ma_test_provider:$('ma-test-prov')?$('ma-test-prov').value||'':'',ma_review_provider:$('ma-rev-prov').value||'',ma_include_test_stage:includeTest,memory:getMemoryContext(),tools:S.tools||[]})});
     if(!res.ok){const err=await res.text();tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${res.status}: ${err.slice(0,300)}</span></div></div>`;S.streaming=false;$('send-btn').disabled=false;return;}
     if(multiAgent){
       tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent" style="color:var(--purple)">Multi-Agent</span><span class="msg-time">${now()}</span></div><div id="${streamId}-wrap"></div></div>`;
       const wrap=document.getElementById(`${streamId}-wrap`);
       let currentBlock=null;let currentBlockBody=null;let currentText='';
       const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
-      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='step'){currentText='';currentBlock=document.createElement('div');currentBlock.className='ma-block';const head=document.createElement('div');head.className=`ma-block-head ${ev.v==='plan'?'plan':ev.v==='code'?'code':'review'}`;head.innerHTML=`${ev.label} <span class="ma-arr">▼</span>`;head.onclick=()=>currentBlock.classList.toggle('collapsed');currentBlockBody=document.createElement('div');currentBlockBody.className='ma-block-body msg-body';currentBlock.appendChild(head);currentBlock.appendChild(currentBlockBody);wrap.appendChild(currentBlock);scrollB();}else if(ev.t==='text'){reply+=ev.v;currentText+=ev.v;if(currentBlockBody){currentBlockBody.innerHTML=rmd(currentText);scrollB();}}else if(ev.t==='error'){if(currentBlockBody)currentBlockBody.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
+      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='step'){currentText='';currentBlock=document.createElement('div');currentBlock.className='ma-block';const head=document.createElement('div');head.className=`ma-block-head ${ev.v==='plan'?'plan':ev.v==='code'?'code':ev.v==='test'?'code':'review'}`;head.innerHTML=`${ev.label} <span class="ma-arr">▼</span>`;head.onclick=()=>currentBlock.classList.toggle('collapsed');currentBlockBody=document.createElement('div');currentBlockBody.className='ma-block-body msg-body';currentBlock.appendChild(head);currentBlock.appendChild(currentBlockBody);wrap.appendChild(currentBlock);scrollB();}else if(ev.t==='text'){reply+=ev.v;currentText+=ev.v;if(currentBlockBody){currentBlockBody.innerHTML=rmd(currentText);scrollB();}}else if(ev.t==='error'){if(currentBlockBody)currentBlockBody.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
     }else{
       tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span><span class="msg-time">${now()}</span></div><div class="msg-body" id="${streamId}"></div></div>`;
       const be=document.getElementById(streamId);
       const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
-      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='text'){reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
+      let thinkBlock=null,thinkBody=null;
+      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='thinking'){if(!thinkBlock){thinkBlock=document.createElement('div');thinkBlock.className='thinking-block';thinkBlock.innerHTML='<div class="think-hd" onclick="this.parentElement.classList.toggle(\'collapsed\')">🧠 Thinking… <span class="think-arr">▼</span></div><div class="think-body"></div>';be.parentElement.insertBefore(thinkBlock,be);thinkBody=thinkBlock.querySelector('.think-body');}thinkBody.textContent+=ev.v;scrollB();}else if(ev.t==='text'){if(thinkBlock){thinkBlock.querySelector('.think-hd').innerHTML='🧠 Thoughts <span class="think-arr">▼</span>';thinkBlock.classList.add('collapsed');}reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='usage'){gotUsage=true;addTokens('',ev.v.input+ev.v.output);}else if(ev.t==='tool_call'){insertToolCallCard(ev.v);}else if(ev.t==='tool_result'){updateToolResultCard(ev.v);}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
     }
-    if(reply)S.msgs.push({role:'assistant',content:reply});
+    if(reply){S.msgs.push({role:'assistant',content:reply});if(!gotUsage)addTokens(reply);
+      // Auto-name the tab from first user message
+      const tab=S.tabs.find(t=>t.id===S.activeTabId);
+      if(tab&&tab.name==='Chat'&&S.msgs.length===2){const first=S.msgs[0].content;tab.name=first.slice(0,28)+(first.length>28?'…':'');renderTabBar();}
+      saveMemory();autoSaveChat();}
+    // Add copy + regenerate actions to the AI message we just rendered
+    if(reply&&!multiAgent){const meta=tw.querySelector('.msg-meta');if(meta&&!meta.querySelector('.msg-actions')){const acts=document.createElement('div');acts.className='msg-actions';acts.innerHTML='<button class="msg-act" onclick="cpMsg(this)">copy</button><button class="msg-act" onclick="regenerate()" title="Regenerate this response">🔄</button>';meta.appendChild(acts);}}
   }catch(e){tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${e.message}</span></div></div>`;}
-  S.streaming=false;$('send-btn').disabled=false;scrollB();
+  clearInterval(timerId);
+  S.streaming=false;$('send-btn').disabled=false;$('stop-btn').style.display='none';S.abortCtrl=null;
+  // Offer batch commit if multiple writable files detected
+  if(reply&&!multiAgent&&S.repo&&S.ghToken){const blocks=extractFileBlocks(tw);if(blocks.length>1){const bBtn=document.createElement('button');bBtn.className='msg-act';bBtn.style.cssText='margin:4px 0 0 31px;padding:4px 12px;display:inline-flex;align-items:center;gap:5px';bBtn.textContent=`📦 Commit ${blocks.length} files`;bBtn.onclick=()=>showBatchPanel(tw);tw.querySelector('.msg-inner').appendChild(bBtn);}}
+  scrollB();
 }
-(function init(){restoreEnhance();if(!restoreSession())expSidebar();})();
+// ── GitHub Issue / PR modals ──────────────────────────────────────────────────
+function openIssueModal(){
+  if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}
+  const lastUser=S.msgs.slice().reverse().find(m=>m.role==='user');
+  const title=lastUser?lastUser.content.slice(0,80):'';
+  const body=S.msgs.map(m=>`**${m.role==='user'?'You':'Agent'}:** ${m.content.slice(0,500)}`).join('\n\n---\n\n');
+  $('issue-title').value=title;$('issue-body').value=body;
+  $('issue-modal').style.display='flex';$('issue-title').focus();
+}
+async function submitIssue(){
+  const title=$('issue-title').value.trim();const body=$('issue-body').value.trim();
+  if(!title){toast('Title required',true);return;}
+  const labels=Array.from(document.querySelectorAll('.lchip input:checked')).map(e=>e.value);
+  $('issue-ok').disabled=true;$('issue-ok').textContent='Creating…';
+  const res=await post('/api/github/issue/create',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,title,body,labels});
+  $('issue-ok').disabled=false;$('issue-ok').textContent='Create Issue';
+  if(res.error){toast('Issue failed: '+res.error,true);return;}
+  $('issue-modal').style.display='none';
+  toast(`✅ Issue #${res.number} created`);
+  if(res.url){const a=document.createElement('a');a.href=res.url;a.target='_blank';a.className='wp-link';a.textContent='View issue →';$('msgs').appendChild(a);}
+}
+async function submitPR(){
+  const title=$('pr-title').value.trim();const body=$('pr-body').value.trim();
+  const head=$('pr-head').value.trim();const base=$('pr-base').value.trim();
+  if(!title||!head){toast('Title and head branch required',true);return;}
+  $('pr-ok').disabled=true;$('pr-ok').textContent='Creating…';
+  const res=await post('/api/github/pr/create',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,title,body,head,base});
+  $('pr-ok').disabled=false;$('pr-ok').textContent='Create PR';
+  if(res.error){toast('PR failed: '+res.error,true);return;}
+  $('pr-modal').style.display='none';
+  toast(`✅ PR #${res.number} created`);
+  if(res.url){window.open(res.url,'_blank');}
+}
+function openPRModal(branch){
+  if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}
+  const base=S.repo.branch||'main';
+  $('pr-head').value=branch||'';$('pr-base').value=base;
+  const lastUser=S.msgs.slice().reverse().find(m=>m.role==='user');
+  $('pr-title').value=lastUser?lastUser.content.slice(0,72):'';
+  $('pr-body').value='## Summary\n\nGenerated by DevForge AI agent.\n\n'+S.msgs.slice(-4).map(m=>`**${m.role==='user'?'Request':'Implementation'}:** ${m.content.slice(0,300)}`).join('\n\n');
+  $('pr-modal').style.display='flex';$('pr-title').focus();
+}
+
+// ── Tool definitions ──────────────────────────────────────────────────────────
+function loadTools(){try{S.tools=JSON.parse(localStorage.getItem('df-tools')||'[]');}catch(e){S.tools=[];}renderToolList();}
+function saveTools(){localStorage.setItem('df-tools',JSON.stringify(S.tools));}
+function renderToolList(){
+  const el=$('tool-list');const badge=$('tool-count-badge');
+  if(!S.tools.length){el.style.display='none';badge.style.display='none';return;}
+  el.style.display='block';badge.textContent=S.tools.length;badge.style.display='inline';
+  el.innerHTML=S.tools.map((t,i)=>`<div class="tool-item"><span class="tool-method">${t.method||'GET'}</span><span class="tool-name-lbl" title="${t.description}">${t.name}</span><button class="tool-del" onclick="editTool(${i})" title="Edit" style="color:var(--muted2);font-size:11px">✏️</button><button class="tool-del" onclick="deleteTool(${i})" title="Remove">✕</button></div>`).join('');
+}
+function openAddTool(){
+  $('tm-edit-idx').value='-1';$('tm-name').value='';$('tm-desc').value='';
+  $('tm-method').value='GET';$('tm-url').value='';$('tm-schema').value='';$('tm-headers').value='';
+  $('tool-modal').style.display='flex';$('tm-name').focus();
+}
+function editTool(i){
+  const t=S.tools[i];if(!t)return;
+  $('tm-edit-idx').value=i;$('tm-name').value=t.name;$('tm-desc').value=t.description;
+  $('tm-method').value=t.method||'GET';$('tm-url').value=t.url;
+  $('tm-schema').value=t.input_schema?JSON.stringify(t.input_schema,null,2):'';
+  $('tm-headers').value=t.headers&&Object.keys(t.headers).length?JSON.stringify(t.headers,null,2):'';
+  $('tool-modal').style.display='flex';$('tm-name').focus();
+}
+function saveTool(){
+  const name=($('tm-name').value||'').trim().replace(/\s+/g,'_');
+  const desc=($('tm-desc').value||'').trim();
+  const url=($('tm-url').value||'').trim();
+  if(!name||!desc||!url){toast('Name, description and URL are required',true);return;}
+  let schema=null;const rawSchema=($('tm-schema').value||'').trim();
+  if(rawSchema){try{schema=JSON.parse(rawSchema);}catch(e){toast('Input schema is not valid JSON',true);return;}}
+  let headers={};const rawHeaders=($('tm-headers').value||'').trim();
+  if(rawHeaders){try{headers=JSON.parse(rawHeaders);}catch(e){toast('Headers is not valid JSON',true);return;}}
+  const tool={name,description:desc,url,method:$('tm-method').value,headers,input_schema:schema};
+  const idx=parseInt($('tm-edit-idx').value);
+  if(idx>=0){S.tools[idx]=tool;}else{S.tools.push(tool);}
+  saveTools();renderToolList();closeToolModal();toast(`Tool "${name}" saved`);
+}
+function deleteTool(i){
+  S.tools.splice(i,1);saveTools();renderToolList();toast('Tool removed');
+}
+function closeToolModal(){$('tool-modal').style.display='none';}
+function insertToolCallCard(data){
+  const chatEl=$('msgs');
+  const card=document.createElement('div');
+  card.className='tool-card';card.id=`tool-card-${data.id}`;
+  const inputStr=data.input&&Object.keys(data.input).length?JSON.stringify(data.input,null,2):'(no parameters)';
+  card.innerHTML=`<div class="tool-card-hd"><span>🔧</span><span class="tc-name">${data.name}</span><span class="tc-status spin">⏳</span></div><pre class="tool-input">${inputStr}</pre>`;
+  chatEl.appendChild(card);chatEl.scrollTop=chatEl.scrollHeight;
+}
+function updateToolResultCard(data){
+  const card=document.getElementById(`tool-card-${data.id}`);if(!card)return;
+  const status=card.querySelector('.tc-status');if(status){status.textContent='✓';status.classList.remove('spin');}
+  const result=document.createElement('pre');result.className='tool-result';
+  const txt=data.result||'(empty response)';result.textContent=txt.length>600?txt.slice(0,600)+'…':txt;
+  card.appendChild(result);card.closest('#msgs')?.scrollTo({top:99999,behavior:'smooth'});
+}
+
+// ── Repo quick-scan ───────────────────────────────────────────────────────────
+const LANG_COLORS={js:'#f7df1e',ts:'#3178c6',jsx:'#61dafb',tsx:'#61dafb',py:'#3776ab',go:'#00add8',rs:'#ce422b',rb:'#cc342d',java:'#b07219',cs:'#239120',cpp:'#f34b7d',c:'#555',md:'#083fa1',json:'#292929',css:'#563d7c',html:'#e44b23',sh:'#89e051',sql:'#e38c00',yaml:'#cb171e',toml:'#9c4221'};
+const FRAMEWORK_HINTS={'package.json':'Node.js / JS','go.mod':'Go Module','requirements.txt':'Python','Cargo.toml':'Rust','pom.xml':'Java/Maven','build.gradle':'Java/Gradle','Dockerfile':'Docker','docker-compose.yml':'Docker Compose','next.config.js':'Next.js','next.config.ts':'Next.js','vite.config.ts':'Vite','pyproject.toml':'Python (PEP 517)','setup.py':'Python','Makefile':'Make','fastapi':'FastAPI'};
+function quickScanRepo(files){
+  const exts={};let totalSize=0;const rootFiles=new Set(files.filter(f=>!f.path.includes('/')).map(f=>f.path));
+  files.forEach(f=>{const e=f.path.split('.').pop()?.toLowerCase()||'other';exts[e]=(exts[e]||0)+1;totalSize+=(f.size||0);});
+  const sorted=Object.entries(exts).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const frameworks=[];Object.keys(FRAMEWORK_HINTS).forEach(k=>{if(rootFiles.has(k)||Array.from(rootFiles).some(f=>f.includes(k)))frameworks.push(FRAMEWORK_HINTS[k]);});
+  const langsHtml=sorted.map(([ext,cnt])=>{const col=LANG_COLORS[ext]||'var(--border)';return`<span class="rs-lang" style="background:${col}22;color:${col};border:1px solid ${col}44">.${ext} ${cnt}</span>`;}).join('');
+  const fw=frameworks.slice(0,3).map(f=>`<span class="rs-badge">${f}</span>`).join('');
+  const sizeStr=totalSize>1e6?(totalSize/1e6).toFixed(1)+'MB':totalSize>1e3?(totalSize/1e3).toFixed(0)+'KB':totalSize+'B';
+  const rs=$('rs-card');if(!rs)return;rs.style.display='block';
+  $('rs-langs').innerHTML=langsHtml;
+  $('rs-info').innerHTML=`${fw}<span style="color:var(--muted2);font-size:10px">${files.length} files · ~${sizeStr}</span>`;
+}
+
+(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();if(!restoreSession())expSidebar();if(isMob())collSidebar();})();
 </script>
 </body>
 </html>

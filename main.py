@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Callable, List, Optional
 import json, os, requests, base64, re, asyncio, threading
+from concurrent.futures import ThreadPoolExecutor, as_completed as _futs_done
 
 from anthropic import Anthropic
 from huggingface_hub import InferenceClient
@@ -23,7 +24,19 @@ AGENT_PROMPTS = {
     "architect": "You are a software architect. Design scalable, maintainable systems. Provide folder structures, interfaces, and tech decisions with clear reasoning.",
     "debug":     "You are a debugging specialist. Find root causes of errors. Provide complete, tested fixes with clear explanations.",
     "docs":      "You are a technical writer. Write clear, comprehensive documentation with usage examples, parameter descriptions, return values, and edge cases.",
+    "refactor":  "You are a refactoring expert. Restructure code to improve readability, maintainability, and performance without changing behavior. Identify code smells, apply SOLID principles, extract methods, reduce complexity, and eliminate duplication. Always show the full file path before code blocks and explain each refactoring decision.",
+    "testgen":   "You are a test generation expert. Write comprehensive test suites that cover all code paths. Include unit tests, integration tests, edge cases, and error conditions. Use the appropriate testing framework for the language. Show full file paths before every test file. Aim for high coverage and clear test names that document behavior.",
 }
+
+SECURITY_FOOTER = (
+    "\n\n## Security Requirements (Non-Negotiable):\n"
+    "• Never use eval(), exec(), os.system(), or any dynamic code execution\n"
+    "• Never hardcode passwords, API keys, tokens, or secrets — use environment variables\n"
+    "• Always validate and sanitize all user inputs before processing or storing\n"
+    "• Use parameterized queries for all database operations — no string concatenation in SQL\n"
+    "• Use HTTPS for all external connections\n"
+    "• Catch specific exceptions — never swallow errors silently with bare except clauses"
+)
 
 SKILL_PROMPTS = {
     "go":       "SKILL - Go/Golang: Write idiomatic Go. Use explicit error returns (never panic for business logic), interfaces for abstraction, goroutines+channels for concurrency. Follow Go naming conventions. Prefer stdlib.",
@@ -34,21 +47,19 @@ SKILL_PROMPTS = {
     "docs":     "SKILL - Documentation: Add complete inline docs. JSDoc for TS/JS, GoDoc for Go, docstrings for Python. Document params, return values, errors, and include usage examples.",
     "perf":     "SKILL - Performance: Choose efficient data structures, minimize allocations, implement caching where beneficial, consider time/space complexity.",
     "solid":    "SKILL - SOLID + Clean Code: Apply SOLID principles. Keep functions small and focused. Prefer composition over inheritance. Use dependency injection.",
+    "react":    "SKILL - React: Write modern functional React components with hooks. Use TypeScript strictly. Prefer named exports. Use React.memo / useMemo / useCallback only when profiling shows a need. Prefer controlled components. Separate concerns: keep UI, state, and side-effects in distinct layers.",
+    "nextjs":   "SKILL - Next.js App Router: Use React Server Components by default. Add 'use client' only when you need interactivity or browser APIs. Use route handlers (app/api/) for API endpoints. Leverage Suspense and streaming. Use next/image, next/link, and next/font. Follow Vercel deployment best practices.",
+    "docker":   "SKILL - Docker: Write minimal, layered Dockerfiles. Use multi-stage builds to keep images small. Pin base image versions. Run as non-root user. Use .dockerignore. Prefer COPY over ADD. Set explicit WORKDIR. Use health checks.",
+    "sql":      "SKILL - SQL / Database: Write efficient, readable SQL. Use indexes on JOIN and WHERE columns. Avoid N+1 queries — use JOINs or batch loads. Use transactions for multi-step writes. Prefer parameterized queries. Add EXPLAIN ANALYZE comments for complex queries.",
 }
 
 MA_PLAN_SYSTEM   = "You are a software architect. Analyze the task and create a clear, concise step-by-step implementation plan. List files to create/modify, key functions, and potential pitfalls. Do NOT write actual code yet."
 MA_CODE_SYSTEM   = "You are an expert coding agent. Implement the task following the provided plan. Write complete, production-ready code with full file paths before every code block."
-MA_REVIEW_SYSTEM = "You are a senior code reviewer. Review the implementation for bugs, security issues, performance problems, missing error handling, and code quality. Be specific and constructive."
+MA_TEST_SYSTEM   = "You are a test engineer. Write comprehensive automated tests for the implementation provided. Include unit tests, edge cases, and error conditions. Show full file paths before every test file. Use the appropriate testing framework for the language (pytest, Jest/Vitest, Go testing, etc.)."
+MA_REVIEW_SYSTEM = "You are a senior code reviewer. Review the implementation and tests for bugs, security issues, performance problems, missing error handling, and code quality. Be specific and constructive."
 
 def build_system(body: "ChatBody") -> str:
-    """Compose the system prompt from agent, skills, rules, and file context.
-
-    Args:
-        body: Validated chat request containing agent mode, skills, rules, and context.
-
-    Returns:
-        Assembled system prompt string ready to pass to any provider.
-    """
+    """Compose the system prompt from agent, skills, rules, file context, and session memory."""
     if getattr(body, 'instructions', '') and body.instructions.strip():
         base = body.instructions.strip()
     else:
@@ -64,18 +75,153 @@ def build_system(body: "ChatBody") -> str:
     rules = (getattr(body, 'rules', '') or '').strip()
     if rules:
         base += f"\n\n## Rules (must follow):\n{rules}"
+    memory = (getattr(body, 'memory', '') or '').strip()
+    if memory:
+        base += f"\n\n## Previous Session Context (from last conversation on this repo):\n{memory}"
+    tools = getattr(body, 'tools', []) or []
+    if tools and body.provider != "anthropic":
+        base += "\n\n## Available Tools:\n"
+        for t in tools:
+            base += f"- **{t.name}**: {t.description} ({t.method} {t.url})\n"
+        base += "\nDescribe needed tool calls in your response; the user will execute them and share results."
+    if body.agent in ("code", "refactor", "testgen", "debug"):
+        base += SECURITY_FOOTER
     fc = (getattr(body, 'file_context', '') or '').strip()
     if fc:
         base += f"\n\n---\n**Repository context:**\n{fc}"
     return base
 
-def _run_anthropic(q, loop, system, messages, api_key):
+def _run_anthropic_thinking(q, loop, system, messages, api_key, model, thinking_budget):
+    """Run Anthropic with extended thinking enabled; emits ('thinking', text) chunks."""
     try:
         client = Anthropic(api_key=api_key)
-        with client.messages.stream(model="claude-sonnet-4-6", max_tokens=4096,
+        actual_model = model or "claude-opus-4-8"
+        budget = max(1024, min(int(thinking_budget or 2000), 16000))
+        max_tokens = budget + 4096
+
+        with client.messages.stream(
+            model=actual_model,
+            max_tokens=max_tokens,
+            system=system,
+            messages=messages,
+            thinking={"type": "enabled", "budget_tokens": budget},
+        ) as stream:
+            for event in stream:
+                etype = getattr(event, 'type', None)
+                if etype == 'content_block_delta':
+                    delta = getattr(event, 'delta', None)
+                    dtype = getattr(delta, 'type', None)
+                    if dtype == 'thinking_delta':
+                        asyncio.run_coroutine_threadsafe(
+                            q.put(("thinking", getattr(delta, 'thinking', ''))), loop
+                        )
+                    elif dtype == 'text_delta':
+                        asyncio.run_coroutine_threadsafe(
+                            q.put(("text", getattr(delta, 'text', ''))), loop
+                        )
+            try:
+                msg = stream.get_final_message()
+                usage = {"input": msg.usage.input_tokens, "output": msg.usage.output_tokens}
+                asyncio.run_coroutine_threadsafe(q.put(("usage", usage)), loop)
+            except Exception:
+                pass
+        asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+    except Exception as e:
+        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+
+def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="claude-sonnet-4-6"):
+    """Run Anthropic with native tool use, executing HTTP calls and looping until done."""
+    try:
+        client = Anthropic(api_key=api_key)
+        anth_tools = [
+            {
+                "name": t.name,
+                "description": t.description,
+                "input_schema": t.input_schema or {"type": "object", "properties": {}},
+            }
+            for t in tools
+        ]
+        current_messages = list(messages)
+        total_usage = {"input": 0, "output": 0}
+
+        for _ in range(5):
+            with client.messages.stream(
+                model=model or "claude-sonnet-4-6",
+                max_tokens=4096,
+                system=system,
+                messages=current_messages,
+                tools=anth_tools,
+            ) as stream:
+                for text in stream.text_stream:
+                    asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                msg = stream.get_final_message()
+                try:
+                    total_usage["input"] += msg.usage.input_tokens
+                    total_usage["output"] += msg.usage.output_tokens
+                except Exception:
+                    pass
+                if msg.stop_reason != "tool_use":
+                    break
+
+            # Serialize assistant content for next turn
+            assistant_content = []
+            for block in msg.content:
+                if block.type == "text":
+                    assistant_content.append({"type": "text", "text": block.text})
+                elif block.type == "tool_use":
+                    assistant_content.append({"type": "tool_use", "id": block.id, "name": block.name, "input": block.input})
+            current_messages.append({"role": "assistant", "content": assistant_content})
+
+            tool_results = []
+            for block in msg.content:
+                if block.type != "tool_use":
+                    continue
+                asyncio.run_coroutine_threadsafe(
+                    q.put(("tool_call", {"id": block.id, "name": block.name, "input": block.input})), loop
+                )
+                tool_def = next((t for t in tools if t.name == block.name), None)
+                if not tool_def:
+                    result_content = f"Error: Tool '{block.name}' not found"
+                else:
+                    try:
+                        hdrs = dict(tool_def.headers or {})
+                        url = tool_def.url
+                        inp = block.input or {}
+                        for k, v in inp.items():
+                            url = url.replace(f"{{{k}}}", str(v))
+                        if tool_def.method.upper() == "GET":
+                            params = {k: v for k, v in inp.items() if f"{{{k}}}" not in tool_def.url}
+                            r = requests.get(url, headers=hdrs, params=params, timeout=15)
+                        else:
+                            hdrs.setdefault("Content-Type", "application/json")
+                            r = requests.request(tool_def.method.upper(), url, headers=hdrs, json=inp, timeout=15)
+                        result_content = r.text[:2000]
+                    except Exception as e:
+                        result_content = f"Error: {e}"
+                asyncio.run_coroutine_threadsafe(
+                    q.put(("tool_result", {"id": block.id, "name": block.name, "result": result_content})), loop
+                )
+                tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": result_content})
+            current_messages.append({"role": "user", "content": tool_results})
+
+        asyncio.run_coroutine_threadsafe(q.put(("usage", total_usage)), loop)
+        asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+    except Exception as e:
+        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+
+def _run_anthropic(q, loop, system, messages, api_key, model="claude-sonnet-4-6"):
+    try:
+        client = Anthropic(api_key=api_key)
+        with client.messages.stream(model=model or "claude-sonnet-4-6", max_tokens=4096,
                 system=system, messages=messages) as stream:
             for text in stream.text_stream:
                 asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+            try:
+                msg = stream.get_final_message()
+                usage = {"input": msg.usage.input_tokens, "output": msg.usage.output_tokens}
+                asyncio.run_coroutine_threadsafe(q.put(("usage", usage)), loop)
+            except Exception:
+                pass
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
@@ -113,15 +259,25 @@ def _run_groq(q, loop, system, messages, api_key, model):
 
 def _run_hf(q, loop, system, messages, token, model):
     try:
-        hf = InferenceClient(model=model, token=token) if token else InferenceClient(model=model)
+        tok = (token or "").strip()
+        if not tok:
+            asyncio.run_coroutine_threadsafe(
+                q.put(("error", "HF_TOKEN is not set. Add it to the Space secrets in HuggingFace settings.")),
+                loop,
+            )
+            return
+        hf = InferenceClient(model=model, token=tok)
         msgs = [{"role": "system", "content": system}] + messages
-        for tok in hf.chat_completion(messages=msgs, max_tokens=4096, stream=True):
-            text = tok.choices[0].delta.content or ""
+        for chunk in hf.chat_completion(messages=msgs, max_tokens=4096, stream=True):
+            text = chunk.choices[0].delta.content or ""
             if text:
                 asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
-        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+        err = str(e)
+        if "401" in err or "Unauthorized" in err or "Invalid username" in err:
+            err = "HuggingFace token is invalid or expired. Update the HF_TOKEN Space secret."
+        asyncio.run_coroutine_threadsafe(q.put(("error", err)), loop)
 
 def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
     """Thread target: stream completions from any OpenAI-compatible endpoint.
@@ -181,7 +337,7 @@ async def stream_one(runner, system: str, messages: list):
     while True:
         try:
             kind, val = await asyncio.wait_for(q.get(), timeout=120)
-            if kind == "text": yield kind, val
+            if kind in ("text", "usage", "tool_call", "tool_result", "thinking"): yield kind, val
             elif kind == "done": break
             else: yield "error", val; break
         except asyncio.TimeoutError:
@@ -280,7 +436,22 @@ def gh_hdrs(token: str) -> dict:
     return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
 
 class RepoBody(BaseModel):
-    token: str; url: str
+    token: str
+    url: str
+    branch: Optional[str] = ""
+
+
+@app.get("/api/repo/branches")
+async def list_branches(token: str = Query(...), owner: str = Query(...), repo: str = Query(...)):
+    """List all branches for a repository."""
+    r = requests.get(
+        f"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100",
+        headers=gh_hdrs(token), timeout=15,
+    )
+    if not r.ok:
+        return JSONResponse({"error": "Failed to fetch branches"}, status_code=400)
+    return [{"name": b["name"], "sha": b["commit"]["sha"][:7]} for b in r.json()]
+
 
 @app.post("/api/repo/connect")
 async def repo_connect(body: RepoBody):
@@ -288,13 +459,14 @@ async def repo_connect(body: RepoBody):
     if not owner: return JSONResponse({"error": "Invalid repository"}, status_code=400)
     r = requests.get(f"https://api.github.com/repos/{owner}/{repo}", headers=gh_hdrs(body.token), timeout=10)
     if not r.ok: return JSONResponse({"error": r.json().get("message", "Not found")}, status_code=400)
-    branch = r.json()["default_branch"]
+    default_branch = r.json()["default_branch"]
+    branch = (body.branch or "").strip() or default_branch
     t = requests.get(f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1",
         headers=gh_hdrs(body.token), timeout=15)
     if not t.ok: return JSONResponse({"error": "Failed to fetch file tree"}, status_code=400)
     files = sorted([{"path": f["path"], "size": f.get("size", 0)} for f in t.json().get("tree", [])
         if f["type"] == "blob" and f.get("size", 999999) < 150000], key=lambda x: x["path"])
-    return {"owner": owner, "repo": repo, "branch": branch, "files": files}
+    return {"owner": owner, "repo": repo, "branch": branch, "default_branch": default_branch, "files": files}
 
 class FileBody(BaseModel):
     token: str; owner: str; repo: str; path: str
@@ -361,6 +533,1069 @@ async def repo_write(body: WriteFileBody):
         "commit_url": commit.get("html_url", ""),
     }
 
+class SuggestFilesBody(BaseModel):
+    provider: str
+    anthropic_key: Optional[str] = ""
+    groq_key: Optional[str] = ""
+    groq_model: Optional[str] = "llama-3.3-70b-versatile"
+    openai_compat_key: Optional[str] = ""
+    openai_compat_base_url: Optional[str] = ""
+    openai_compat_model: Optional[str] = ""
+    hf_token: Optional[str] = ""
+    hf_model: Optional[str] = ""
+    task: str
+    files: List[str]
+    max_suggestions: int = 6
+
+@app.post("/api/repo/suggest-files")
+async def suggest_files(body: SuggestFilesBody):
+    """Use AI to suggest the most relevant files for a given task."""
+    file_list = "\n".join(body.files[:600])
+    prompt = (
+        f'Task: "{body.task}"\n\n'
+        f"From the file list below, pick the {body.max_suggestions} most relevant files.\n"
+        "Return ONLY a JSON array of file paths. No prose, no markdown, just the array.\n"
+        "Example: [\"src/auth.ts\", \"src/middleware.ts\"]\n\n"
+        f"Files:\n{file_list}"
+    )
+    system = "You are a file relevance expert. Return only a valid JSON array of file paths."
+
+    result = ""
+    try:
+        if body.provider == "anthropic" and body.anthropic_key:
+            from anthropic import Anthropic as _Anth
+            client = _Anth(api_key=body.anthropic_key)
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=256,
+                system=system,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            result = msg.content[0].text if msg.content else "[]"
+        elif body.provider == "groq" and body.groq_key:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": body.groq_model or "llama-3.1-8b-instant", "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ], "max_tokens": 256, "stream": False},
+                timeout=20,
+            )
+            result = r.json()["choices"][0]["message"]["content"] if r.ok else "[]"
+        elif body.provider == "openai_compat" and body.openai_compat_base_url:
+            url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
+            hdrs = {"Content-Type": "application/json"}
+            if body.openai_compat_key:
+                hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
+            r = requests.post(url, headers=hdrs, json={
+                "model": body.openai_compat_model or "llama3",
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                "max_tokens": 256, "stream": False,
+            }, timeout=20)
+            result = r.json()["choices"][0]["message"]["content"] if r.ok else "[]"
+        else:
+            return JSONResponse({"error": "No usable provider configured"}, status_code=400)
+
+        # Extract JSON array from result (strip any surrounding text)
+        m = re.search(r'\[.*?\]', result, re.DOTALL)
+        if not m:
+            return JSONResponse({"error": "AI returned non-parseable response"}, status_code=400)
+        suggested = json.loads(m.group(0))
+        # Filter to only files that actually exist in the repo
+        file_set = set(body.files)
+        valid = [f for f in suggested if f in file_set]
+        return {"files": valid[:body.max_suggestions]}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+class SummarizeFileBody(BaseModel):
+    content: str
+    filename: str
+    provider: str
+    anthropic_key: Optional[str] = ""
+    groq_key: Optional[str] = ""
+    groq_model: Optional[str] = "llama-3.3-70b-versatile"
+    openai_compat_key: Optional[str] = ""
+    openai_compat_base_url: Optional[str] = ""
+    openai_compat_model: Optional[str] = ""
+
+
+@app.post("/api/repo/summarize-file")
+async def summarize_file(body: SummarizeFileBody):
+    """Condense a large file to a short AI-generated summary for context injection."""
+    system = "You are a code summarizer. Produce a concise summary (under 400 words) of the file: its purpose, key exports/functions/classes, and important patterns. Be specific and technical."
+    prompt = f"File: {body.filename}\n\n```\n{body.content[:8000]}\n```\n\nSummarize this file for AI context."
+    try:
+        if body.provider == "anthropic" and body.anthropic_key:
+            client = Anthropic(api_key=body.anthropic_key)
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=600,
+                system=system,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            result = msg.content[0].text if msg.content else ""
+        elif body.provider == "groq" and body.groq_key:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.1-8b-instant", "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ], "max_tokens": 600, "stream": False},
+                timeout=20,
+            )
+            result = r.json()["choices"][0]["message"]["content"] if r.ok else ""
+        elif body.provider == "openai_compat" and body.openai_compat_base_url:
+            url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
+            hdrs = {"Content-Type": "application/json"}
+            if body.openai_compat_key:
+                hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
+            r = requests.post(url, headers=hdrs, json={
+                "model": body.openai_compat_model or "llama3",
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                "max_tokens": 600, "stream": False,
+            }, timeout=20)
+            result = r.json()["choices"][0]["message"]["content"] if r.ok else ""
+        else:
+            return JSONResponse({"error": "No usable provider configured"}, status_code=400)
+        if not result:
+            return JSONResponse({"error": "Empty summary returned"}, status_code=400)
+        return {"summary": result}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+class BatchWriteItem(BaseModel):
+    path: str
+    content: str
+    message: str
+
+class BatchWriteBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    branch: str
+    files: List[BatchWriteItem]
+
+@app.post("/api/repo/write/batch")
+async def repo_write_batch(body: BatchWriteBody):
+    """Commit multiple files to the repository, reporting per-file results."""
+    committed, errors = [], []
+    for item in body.files:
+        sha = None
+        existing = requests.get(
+            f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+            headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
+        )
+        if existing.ok:
+            try:
+                sha = existing.json().get("sha")
+            except Exception:
+                pass
+        payload: dict = {
+            "message": item.message,
+            "content": base64.b64encode(item.content.encode("utf-8")).decode("utf-8"),
+            "branch": body.branch,
+        }
+        if sha:
+            payload["sha"] = sha
+        w = requests.put(
+            f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+            headers=gh_hdrs(body.token), json=payload, timeout=15,
+        )
+        if w.ok:
+            data = w.json()
+            committed.append({
+                "path": item.path,
+                "commit_url": data.get("commit", {}).get("html_url", ""),
+            })
+        else:
+            try:
+                err_msg = w.json().get("message", "Write failed")
+            except Exception:
+                err_msg = "Write failed"
+            errors.append({"path": item.path, "error": err_msg})
+    return {"committed": committed, "errors": errors}
+
+
+class GistBody(BaseModel):
+    token: str
+    filename: str
+    content: str
+    description: Optional[str] = ""
+    public: Optional[bool] = False
+
+@app.post("/api/github/gist/create")
+async def create_gist(body: GistBody):
+    """Create a GitHub Gist from a code block."""
+    fname = (body.filename or "snippet.txt").strip() or "snippet.txt"
+    r = requests.post(
+        "https://api.github.com/gists",
+        headers=gh_hdrs(body.token),
+        json={
+            "description": (body.description or f"DevForge snippet: {fname}")[:255],
+            "public": bool(body.public),
+            "files": {fname: {"content": body.content}},
+        },
+        timeout=15,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Failed to create gist")
+        except Exception:
+            err = "Failed to create gist"
+        return JSONResponse({"error": err}, status_code=400)
+    data = r.json()
+    return {"url": data.get("html_url", ""), "id": data.get("id", "")}
+
+
+class IssueBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    title: str
+    body: str
+    labels: Optional[List[str]] = []
+
+@app.post("/api/github/issue/create")
+async def create_issue(body: IssueBody):
+    """Create a GitHub issue in the connected repository."""
+    r = requests.post(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/issues",
+        headers=gh_hdrs(body.token),
+        json={"title": body.title, "body": body.body, "labels": body.labels},
+        timeout=15,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Failed to create issue")
+        except Exception:
+            err = "Failed to create issue"
+        return JSONResponse({"error": err}, status_code=400)
+    data = r.json()
+    return {"url": data.get("html_url", ""), "number": data.get("number")}
+
+
+class PRBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    title: str
+    body: str
+    head: str
+    base: str
+
+@app.post("/api/github/pr/create")
+async def create_pr(body: PRBody):
+    """Create a GitHub pull request from head branch into base branch."""
+    r = requests.post(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls",
+        headers=gh_hdrs(body.token),
+        json={"title": body.title, "body": body.body, "head": body.head, "base": body.base},
+        timeout=15,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Failed to create PR")
+        except Exception:
+            err = "Failed to create PR"
+        return JSONResponse({"error": err}, status_code=400)
+    data = r.json()
+    return {"url": data.get("html_url", ""), "number": data.get("number")}
+
+
+class PRDiffBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    pr_number: int
+
+@app.post("/api/github/pr/diff")
+async def get_pr_diff(body: PRDiffBody):
+    """Fetch a pull request's metadata and unified diff."""
+    # Get PR metadata
+    pr_r = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls/{body.pr_number}",
+        headers=gh_hdrs(body.token),
+        timeout=15,
+    )
+    if not pr_r.ok:
+        return JSONResponse({"error": f"PR #{body.pr_number} not found"}, status_code=404)
+    pr = pr_r.json()
+    # Get diff (cap at 40KB)
+    diff_r = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls/{body.pr_number}",
+        headers={**gh_hdrs(body.token), "Accept": "application/vnd.github.diff"},
+        timeout=20,
+    )
+    diff_text = diff_r.text[:40000] if diff_r.ok else ""
+    return {
+        "number": pr.get("number"),
+        "title": pr.get("title", ""),
+        "body": (pr.get("body") or "")[:1000],
+        "author": pr.get("user", {}).get("login", ""),
+        "head": pr.get("head", {}).get("ref", ""),
+        "base": pr.get("base", {}).get("ref", ""),
+        "changed_files": pr.get("changed_files", 0),
+        "additions": pr.get("additions", 0),
+        "deletions": pr.get("deletions", 0),
+        "diff": diff_text,
+        "url": pr.get("html_url", ""),
+    }
+
+
+class RepoSearchBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    query: str
+    max_results: int = 10
+
+
+@app.post("/api/repo/search")
+async def repo_search(body: RepoSearchBody):
+    """Search code in a repository using GitHub code search API."""
+    if not body.query.strip():
+        return JSONResponse({"error": "Empty query"}, status_code=400)
+    hdrs = {
+        "Authorization": f"token {body.token}",
+        "Accept": "application/vnd.github.v3.text-match+json",
+    }
+    r = requests.get(
+        "https://api.github.com/search/code",
+        headers=hdrs,
+        params={"q": f"{body.query.strip()} repo:{body.owner}/{body.repo}", "per_page": min(body.max_results, 20)},
+        timeout=15,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Search failed")
+        except Exception:
+            err = "Search failed"
+        return JSONResponse({"error": err}, status_code=400)
+    items = []
+    for item in r.json().get("items", []):
+        snippets = []
+        for tm in item.get("text_matches", []):
+            for m in tm.get("matches", []):
+                t = (m.get("text") or "").strip()
+                if t:
+                    snippets.append(t[:120])
+        items.append({
+            "path": item["path"],
+            "sha": (item.get("sha") or "")[:7],
+            "url": item.get("html_url", ""),
+            "snippets": snippets[:3],
+        })
+    return {"items": items, "total": r.json().get("total_count", 0)}
+
+
+class RepoCommitsBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    branch: Optional[str] = "main"
+    max_results: int = 10
+
+
+@app.post("/api/repo/commits")
+async def repo_commits(body: RepoCommitsBody):
+    """Fetch recent commits for a branch."""
+    r = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/commits",
+        headers=gh_hdrs(body.token),
+        params={"sha": body.branch or "main", "per_page": min(body.max_results, 30)},
+        timeout=15,
+    )
+    if not r.ok:
+        return JSONResponse({"error": "Failed to fetch commits"}, status_code=400)
+    return [
+        {
+            "sha": c["sha"][:7],
+            "message": (c["commit"]["message"].split("\n")[0])[:80],
+            "author": c["commit"]["author"]["name"][:30],
+            "date": c["commit"]["author"]["date"][:10],
+            "url": c.get("html_url", ""),
+        }
+        for c in r.json()
+    ]
+
+
+class WorkflowRunsBody(BaseModel):
+    token: str
+    owner: str
+    repo: str
+    max_results: int = 10
+
+
+@app.post("/api/repo/workflow-runs")
+async def repo_workflow_runs(body: WorkflowRunsBody):
+    """Fetch recent GitHub Actions workflow runs."""
+    r = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/actions/runs",
+        headers=gh_hdrs(body.token),
+        params={"per_page": min(body.max_results, 20)},
+        timeout=15,
+    )
+    if not r.ok:
+        return JSONResponse({"error": "Failed to fetch workflow runs"}, status_code=400)
+    runs = r.json().get("workflow_runs", [])
+    return [
+        {
+            "id": run["id"],
+            "name": (run.get("name") or run.get("display_title") or "Workflow")[:60],
+            "status": run.get("status", ""),        # queued / in_progress / completed
+            "conclusion": run.get("conclusion") or "",  # success / failure / cancelled / ...
+            "branch": (run.get("head_branch") or "")[:40],
+            "sha": (run.get("head_sha") or "")[:7],
+            "date": (run.get("updated_at") or "")[:10],
+            "url": run.get("html_url", ""),
+        }
+        for run in runs
+    ]
+
+
+RELEASE_NOTES_SYSTEM = (
+    "You are a technical writer creating release notes for developers. "
+    "Given a list of Git commit messages, generate a concise, well-structured release notes document. "
+    "Group commits into sections: ✨ New Features, 🐛 Bug Fixes, ♻️ Improvements, 🔧 Maintenance. "
+    "Skip merge commits and bumps. Use bullet points. Start with a 1-sentence summary of the release. "
+    "Output Markdown."
+)
+
+class ReleaseNotesBody(BaseModel):
+    provider: str = "anthropic"
+    anthropic_key: Optional[str] = ""
+    groq_key: Optional[str] = ""
+    token: str
+    owner: str
+    repo: str
+    since: Optional[str] = ""   # SHA or tag (exclusive start)
+    until: Optional[str] = ""   # SHA or tag (inclusive end), default HEAD
+    max_commits: int = 50
+    anthropic_model: Optional[str] = "claude-sonnet-4-6"
+
+@app.post("/api/repo/release-notes")
+async def generate_release_notes(body: ReleaseNotesBody):
+    """Stream AI-generated release notes from recent commits."""
+    # Fetch commits
+    params: dict = {"per_page": min(body.max_commits, 50)}
+    if body.until:
+        params["sha"] = body.until
+    r = requests.get(
+        f"https://api.github.com/repos/{body.owner}/{body.repo}/commits",
+        headers=gh_hdrs(body.token),
+        params=params,
+        timeout=15,
+    )
+    if not r.ok:
+        return JSONResponse({"error": "Failed to fetch commits"}, status_code=400)
+    all_commits = r.json()
+    # If since is provided, truncate at that SHA
+    if body.since:
+        since_sha = body.since
+        # Also handle tags — resolve to SHA
+        tag_r = requests.get(
+            f"https://api.github.com/repos/{body.owner}/{body.repo}/git/refs/tags/{since_sha}",
+            headers=gh_hdrs(body.token), timeout=10,
+        )
+        if tag_r.ok:
+            obj = tag_r.json().get("object", {})
+            since_sha = obj.get("sha", since_sha)[:40]
+        trimmed = []
+        for c in all_commits:
+            if c["sha"].startswith(since_sha) or since_sha.startswith(c["sha"][:len(since_sha)]):
+                break
+            trimmed.append(c)
+        all_commits = trimmed
+    if not all_commits:
+        return JSONResponse({"error": "No commits found in range"}, status_code=400)
+    commit_list = "\n".join(
+        f"- {c['sha'][:7]} {c['commit']['message'].split(chr(10))[0][:100]}"
+        for c in all_commits
+        if "Merge" not in c["commit"]["message"][:10]
+    )
+    user_prompt = (
+        f"Repository: {body.owner}/{body.repo}\n"
+        f"Commits ({len(all_commits)} total):\n{commit_list}"
+    )
+    model = (body.anthropic_model or "claude-sonnet-4-6").strip() or "claude-sonnet-4-6"
+
+    async def _stream():
+        if body.provider == "anthropic" and body.anthropic_key:
+            import threading
+            q: asyncio.Queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
+            def _run():
+                try:
+                    client = Anthropic(api_key=body.anthropic_key)
+                    with client.messages.stream(
+                        model=model, max_tokens=1024, system=RELEASE_NOTES_SYSTEM,
+                        messages=[{"role": "user", "content": user_prompt}],
+                    ) as stream:
+                        for text in stream.text_stream:
+                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+                except Exception as e:
+                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+            threading.Thread(target=_run, daemon=True).start()
+            while True:
+                kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                if kind == "text":
+                    yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
+                elif kind == "done":
+                    break
+                else:
+                    yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
+        elif body.provider == "groq" and body.groq_key:
+            r2 = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.3-70b-versatile", "max_tokens": 1024,
+                      "messages": [{"role": "system", "content": RELEASE_NOTES_SYSTEM},
+                                   {"role": "user", "content": user_prompt}]},
+                timeout=30,
+            )
+            if r2.ok:
+                text = r2.json()["choices"][0]["message"]["content"]
+                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
+                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
+            else:
+                yield f"data: {json.dumps({'t':'error','v':r2.text[:200]})}\n\n"
+        else:
+            yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"
+        yield f"data: {json.dumps({'t':'done'})}\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
+COMMIT_MSG_SYSTEM = (
+    "You are a Git commit message expert. Given a file path and its new content (or a diff), "
+    "write a concise conventional commit message (type(scope): description). "
+    "Keep it under 72 characters. Return ONLY the commit message — no explanations, no quotes."
+)
+
+class CommitMsgBody(BaseModel):
+    provider: str = "anthropic"
+    anthropic_key: Optional[str] = ""
+    groq_key: Optional[str] = ""
+    hf_token: Optional[str] = ""
+    path: str
+    content: Optional[str] = ""
+    diff: Optional[str] = ""
+
+@app.post("/api/commit/suggest-message")
+async def suggest_commit_message(body: CommitMsgBody):
+    """Generate a conventional commit message for a file change."""
+    try:
+        snippet = (body.diff or body.content or "")[:2000]
+        user_prompt = f"File: {body.path}\n\n{snippet}"
+        if body.provider == "anthropic" and body.anthropic_key:
+            client = Anthropic(api_key=body.anthropic_key)
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001", max_tokens=80,
+                system=COMMIT_MSG_SYSTEM,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            return {"message": msg.content[0].text.strip()}
+        elif body.provider == "groq" and body.groq_key:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.1-8b-instant", "max_tokens": 80,
+                      "messages": [{"role": "system", "content": COMMIT_MSG_SYSTEM},
+                                   {"role": "user", "content": user_prompt}]},
+                timeout=15,
+            )
+            if not r.ok:
+                return JSONResponse({"error": r.text[:200]}, status_code=400)
+            return {"message": r.json()["choices"][0]["message"]["content"].strip()}
+        else:
+            return JSONResponse({"error": "no provider key"}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+SECURITY_PATTERNS: dict = {
+    "python": [
+        (r'shell\s*=\s*True', "high", "shell=True creates command injection risk — pass args as a list"),
+        (r'hashlib\.(md5|sha1)\b', "medium", "MD5/SHA-1 are weak hash functions — use SHA-256 or stronger"),
+        (r'\brandom\.(random|randint|choice|uniform)\(', "low", "random module is not cryptographically secure — use secrets for tokens"),
+    ],
+    "javascript": [
+        (r'\beval\s*\(', "high", "eval() executes arbitrary code — avoid it entirely"),
+        (r'\.innerHTML\s*=(?!=)', "high", "innerHTML assignment can cause XSS — use textContent or DOMPurify"),
+        (r'document\.write\s*\(', "high", "document.write() can cause XSS"),
+        (r'new\s+Function\s*\(', "high", "new Function() executes arbitrary code"),
+        (r'setTimeout\s*\(\s*["\']', "medium", "setTimeout with string argument is equivalent to eval()"),
+        (r'dangerouslySetInnerHTML', "medium", "dangerouslySetInnerHTML — ensure content is sanitized first"),
+        (r'Math\.random\s*\(', "low", "Math.random() is not cryptographically secure — use crypto.getRandomValues()"),
+        (r'localStorage\.setItem', "low", "localStorage stores data in plaintext — avoid storing sensitive data"),
+    ],
+    "typescript": [
+        (r'\beval\s*\(', "high", "eval() executes arbitrary code — avoid it entirely"),
+        (r'\.innerHTML\s*=(?!=)', "high", "innerHTML assignment can cause XSS — use textContent or DOMPurify"),
+        (r'new\s+Function\s*\(', "high", "new Function() executes arbitrary code"),
+        (r'dangerouslySetInnerHTML', "medium", "dangerouslySetInnerHTML — ensure content is sanitized first"),
+        (r':\s*any\b', "low", "TypeScript 'any' bypasses type safety — use explicit types"),
+        (r'Math\.random\s*\(', "low", "Math.random() is not cryptographically secure — use crypto.getRandomValues()"),
+    ],
+    "sql": [
+        (r'(?:SELECT|INSERT|UPDATE|DELETE)[^;]*["\'].*\+', "high", "String concatenation in SQL — use parameterized queries"),
+        (r'f["\'].*(?:SELECT|INSERT|UPDATE|DELETE).*\{', "high", "f-string SQL query — use parameterized queries"),
+    ],
+    "go": [
+        (r'fmt\.Sprintf.*(?:SELECT|INSERT|UPDATE|DELETE)', "high", "fmt.Sprintf in SQL — use database/sql parameterized queries"),
+        (r'exec\.Command\(.*\+', "high", "String concatenation in exec.Command — validate all inputs"),
+    ],
+    "bash": [
+        (r'\beval\s+', "high", "eval in bash executes arbitrary code — avoid with user-controlled input"),
+        (r'curl\s+.*\|\s*(?:bash|sh)\b', "high", "Piping curl to bash is a security risk — verify script integrity first"),
+    ],
+}
+
+GENERIC_SECURITY_PATTERNS = [
+    (r'(?i)(?:password|passwd|pwd)\s*=\s*["\'][^"\']{3,}["\']', "high", "Hardcoded password — use environment variables"),
+    (r'(?i)(?:secret|api_?key|private_?key)\s*=\s*["\'][^"\']{6,}["\']', "high", "Hardcoded secret/key — use environment variables"),
+    (r'(?i)token\s*=\s*["\'][a-zA-Z0-9_\-]{10,}["\']', "high", "Possible hardcoded token — use environment variables"),
+    (r'http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0)', "low", "Non-HTTPS external URL — use HTTPS for all connections"),
+]
+
+
+class CodeScanBody(BaseModel):
+    code: str
+    language: str = "text"
+
+
+@app.post("/api/code/scan")
+async def scan_code(body: CodeScanBody):
+    """Scan code for security issues using AST analysis (Python) and pattern matching."""
+    import ast as _ast
+    issues: list = []
+    code = (body.code or "").strip()
+    lang = (body.language or "text").lower()
+    if not code:
+        return {"issues": [], "safe": True, "language": lang, "total": 0}
+
+    # Python AST deep scan
+    if lang == "python":
+        try:
+            tree = _ast.parse(code)
+            DANGEROUS_CALLS = {"eval": "high", "exec": "high", "__import__": "medium", "compile": "medium"}
+            DANGEROUS_ATTRS = {
+                ("os", "system"): "high", ("os", "popen"): "high",
+                ("subprocess", "call"): "medium", ("subprocess", "run"): "medium",
+                ("subprocess", "Popen"): "medium",
+                ("pickle", "loads"): "high", ("pickle", "load"): "high",
+            }
+            for node in _ast.walk(tree):
+                ln = getattr(node, "lineno", None)
+                if isinstance(node, _ast.Call):
+                    func = node.func
+                    if isinstance(func, _ast.Name) and func.id in DANGEROUS_CALLS:
+                        sev = DANGEROUS_CALLS[func.id]
+                        issues.append({"severity": sev, "pattern": f"{func.id}()",
+                            "message": f"{func.id}() can execute arbitrary code — avoid or restrict carefully", "line": ln, "source": "ast"})
+                    elif isinstance(func, _ast.Attribute) and isinstance(func.value, _ast.Name):
+                        pair = (func.value.id, func.attr)
+                        if pair in DANGEROUS_ATTRS:
+                            sev = DANGEROUS_ATTRS[pair]
+                            issues.append({"severity": sev, "pattern": f"{pair[0]}.{pair[1]}()",
+                                "message": f"{pair[0]}.{pair[1]}() is a high-risk call — validate all inputs", "line": ln, "source": "ast"})
+                    for kw in node.keywords:
+                        if kw.arg == "shell" and isinstance(kw.value, _ast.Constant) and kw.value.value is True:
+                            issues.append({"severity": "high", "pattern": "shell=True",
+                                "message": "shell=True creates command injection risk — pass args as a list", "line": ln, "source": "ast"})
+                elif isinstance(node, _ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, _ast.Name):
+                            nm = target.id.lower()
+                            if any(kw in nm for kw in ("password", "secret", "api_key", "token", "private_key")):
+                                if isinstance(node.value, _ast.Constant) and isinstance(node.value.value, str) and len(node.value.value) >= 6:
+                                    issues.append({"severity": "high", "pattern": f"{target.id} = '...'",
+                                        "message": f"Hardcoded {target.id} — use os.environ or a secrets manager", "line": ln, "source": "ast"})
+        except SyntaxError as e:
+            issues.append({"severity": "medium", "pattern": "SyntaxError",
+                "message": f"Code has syntax errors: {e.msg}", "line": e.lineno, "source": "ast"})
+
+    # Regex scan — language-specific + generic patterns
+    lang_patterns = SECURITY_PATTERNS.get(lang, [])
+    ast_high_lines = {i["line"] for i in issues if i.get("source") == "ast" and i.get("severity") == "high"}
+    seen: set = set()
+    for lineno, line in enumerate(code.split("\n"), 1):
+        for pat, sev, msg in lang_patterns + GENERIC_SECURITY_PATTERNS:
+            if re.search(pat, line, re.IGNORECASE):
+                key = (lineno, pat[:20])
+                if key not in seen and not (lang == "python" and lineno in ast_high_lines and sev == "high"):
+                    seen.add(key)
+                    clean_pat = re.sub(r'[\\^$.*+?()\[\]{}|]', '', pat)[:30].strip()
+                    issues.append({"severity": sev, "pattern": clean_pat, "message": msg, "line": lineno, "source": "pattern"})
+
+    sev_order = {"high": 0, "medium": 1, "low": 2}
+    issues.sort(key=lambda x: (sev_order.get(x.get("severity", "low"), 3), x.get("line") or 9999))
+    issues = issues[:15]
+    safe = not any(i["severity"] in ("high", "medium") for i in issues)
+    return {"issues": issues, "safe": safe, "language": lang, "total": len(issues)}
+
+
+README_SYSTEM = (
+    "You are a technical writer. Generate a comprehensive, well-structured README.md for the given "
+    "repository based on its code files. Include: project name and one-line description, "
+    "features, tech stack, installation instructions (inferred from code), usage examples, "
+    "API reference if applicable, and contribution guidelines. Use GitHub-flavored Markdown with "
+    "badges where appropriate. Make it professional and developer-friendly."
+)
+
+class ReadmeBody(BaseModel):
+    provider: str = "anthropic"
+    anthropic_key: Optional[str] = ""
+    anthropic_model: Optional[str] = "claude-sonnet-4-6"
+    groq_key: Optional[str] = ""
+    repo_name: Optional[str] = ""
+    file_context: str
+
+@app.post("/api/repo/generate-readme")
+async def generate_readme(body: ReadmeBody):
+    """Stream an AI-generated README.md based on repo file context."""
+    if not (body.file_context or "").strip():
+        return JSONResponse({"error": "file_context required"}, status_code=400)
+    user_prompt = (
+        f"Repository: {body.repo_name or 'Unknown'}\n\n"
+        f"Files:\n{body.file_context[:12000]}"
+    )
+    model = (body.anthropic_model or "claude-sonnet-4-6").strip() or "claude-sonnet-4-6"
+
+    async def _stream():
+        if body.provider == "anthropic" and body.anthropic_key:
+            import threading
+            q: asyncio.Queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
+            def _run():
+                try:
+                    client = Anthropic(api_key=body.anthropic_key)
+                    with client.messages.stream(
+                        model=model, max_tokens=2048, system=README_SYSTEM,
+                        messages=[{"role": "user", "content": user_prompt}],
+                    ) as stream:
+                        for text in stream.text_stream:
+                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+                except Exception as e:
+                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+            threading.Thread(target=_run, daemon=True).start()
+            while True:
+                kind, val = await asyncio.wait_for(q.get(), timeout=90)
+                if kind == "text":
+                    yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
+                elif kind == "done":
+                    break
+                else:
+                    yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
+        elif body.provider == "groq" and body.groq_key:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.3-70b-versatile", "max_tokens": 2048,
+                      "messages": [{"role": "system", "content": README_SYSTEM},
+                                   {"role": "user", "content": user_prompt}]},
+                timeout=45,
+            )
+            if r.ok:
+                text = r.json()["choices"][0]["message"]["content"]
+                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
+                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
+            else:
+                yield f"data: {json.dumps({'t':'error','v':r.text[:200]})}\n\n"
+        else:
+            yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"
+        yield f"data: {json.dumps({'t':'done'})}\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
+DEPS_AUDIT_SYSTEM = (
+    "You are a software security auditor reviewing project dependencies. "
+    "Given a list of packages with their pinned and latest versions, identify: "
+    "known security vulnerabilities (CVEs) in outdated packages, "
+    "packages that are deprecated or unmaintained, supply-chain risks, and update recommendations. "
+    "Group findings by severity: 🔴 Critical, 🟡 Warning, 🟢 Info. "
+    "Be specific about package names and versions. Keep it concise and actionable."
+)
+
+def _pypi_latest(name: str) -> dict:
+    try:
+        r = requests.get(f"https://pypi.org/pypi/{name}/json", timeout=3)
+        if r.ok:
+            return {"name": name, "latest": r.json().get("info", {}).get("version")}
+    except Exception:
+        pass
+    return {"name": name, "latest": None}
+
+def _npm_latest(name: str) -> dict:
+    try:
+        r = requests.get(f"https://registry.npmjs.org/{name}/latest", timeout=3)
+        if r.ok:
+            return {"name": name, "latest": r.json().get("version")}
+    except Exception:
+        pass
+    return {"name": name, "latest": None}
+
+def _parse_requirements(content: str) -> list:
+    pkgs: list = []
+    for line in content.split("\n"):
+        line = line.strip()
+        if not line or line.startswith(("#", "-r", "--", "http", "git+")):
+            continue
+        line = re.sub(r"\[.*?\]", "", line)
+        m = re.match(r"^([A-Za-z0-9_.-]+)\s*([>=<!~^,\s][^\s#]*)?", line)
+        if m:
+            pkgs.append({"name": m.group(1).lower().replace("_", "-"), "constraint": (m.group(2) or "").strip()})
+    return pkgs
+
+def _parse_package_json(content: str) -> list:
+    try:
+        data = json.loads(content)
+        pkgs: list = []
+        for section in ("dependencies", "devDependencies"):
+            for name, ver in (data.get(section) or {}).items():
+                pkgs.append({"name": name, "constraint": str(ver)})
+        return pkgs
+    except Exception:
+        return []
+
+def _parse_go_mod(content: str) -> list:
+    pkgs: list = []
+    in_req = False
+    for line in content.split("\n"):
+        line = line.strip()
+        if line.startswith("require ("):
+            in_req = True; continue
+        if line == ")":
+            in_req = False; continue
+        if in_req or line.startswith("require "):
+            parts = line.replace("require ", "").split()
+            if len(parts) >= 2 and not parts[0].startswith("//"):
+                pkgs.append({"name": parts[0], "constraint": parts[1]})
+    return pkgs
+
+def _parse_cargo_toml(content: str) -> list:
+    pkgs: list = []
+    in_deps = False
+    for line in content.split("\n"):
+        line = line.strip()
+        if re.match(r'^\[(dependencies|dev-dependencies)', line, re.I):
+            in_deps = True; continue
+        if line.startswith("[") and in_deps:
+            in_deps = False
+        if in_deps:
+            m = re.match(r'^([a-zA-Z0-9_-]+)\s*=\s*["\']?([^"\'#\s,}]+)', line)
+            if m:
+                pkgs.append({"name": m.group(1), "constraint": m.group(2).strip()})
+    return pkgs
+
+
+class ScanDepsBody(BaseModel):
+    filename: str
+    content: str
+    provider: str = "anthropic"
+    anthropic_key: Optional[str] = ""
+    groq_key: Optional[str] = ""
+    anthropic_model: Optional[str] = "claude-haiku-4-5-20251001"
+
+
+@app.post("/api/repo/scan-deps")
+async def scan_deps(body: ScanDepsBody):
+    """Parse a dependency file, check latest versions, and stream an AI security audit."""
+    fname = (body.filename or "").lower().strip().split("/")[-1]
+    content = (body.content or "").strip()
+    if not content:
+        return JSONResponse({"error": "content required"}, status_code=400)
+
+    # Detect ecosystem
+    if fname in ("requirements.txt", "pyproject.toml") or fname.endswith("requirements.txt"):
+        ecosystem, packages, checker = "python", _parse_requirements(content), _pypi_latest
+    elif fname == "package.json":
+        ecosystem, packages, checker = "javascript", _parse_package_json(content), _npm_latest
+    elif fname == "go.mod":
+        ecosystem, packages, checker = "go", _parse_go_mod(content), None
+    elif fname == "cargo.toml":
+        ecosystem, packages, checker = "rust", _parse_cargo_toml(content), None
+    else:
+        ecosystem, packages, checker = "unknown", _parse_requirements(content), None
+
+    if not packages:
+        return JSONResponse({"error": "No packages found in file"}, status_code=400)
+
+    # Parallel version checks (top 20 packages, 5 workers, 12s total)
+    to_check = packages[:20]
+    version_map: dict = {}
+    if checker:
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            futs = {ex.submit(checker, p["name"]): p["name"] for p in to_check}
+            for f in _futs_done(futs, timeout=12):
+                try:
+                    rv = f.result()
+                    if rv.get("latest"):
+                        version_map[rv["name"]] = rv["latest"]
+                except Exception:
+                    pass
+
+    def _extract_pinned(constraint: str) -> "str | None":
+        m = re.search(r'==\s*([^\s,;]+)', constraint)
+        return m.group(1) if m else None
+
+    pkg_results = []
+    for p in packages[:20]:
+        pinned = _extract_pinned(p["constraint"])
+        latest = version_map.get(p["name"])
+        pkg_results.append({
+            "name": p["name"], "constraint": p["constraint"],
+            "pinned": pinned, "latest": latest,
+            "outdated": bool(pinned and latest and pinned != latest),
+            "unpinned": not pinned and ecosystem == "python",
+        })
+
+    audit_lines = "\n".join(
+        f"- {p['name']}: {p['pinned'] or p['constraint']} (latest: {p['latest'] or '?'})"
+        + (" ⚠️ OUTDATED" if p["outdated"] else "")
+        + (" ⚠️ UNPINNED" if p["unpinned"] else "")
+        for p in pkg_results
+    )
+    ai_prompt = f"Ecosystem: {ecosystem}\nFile: {body.filename}\n\nPackages:\n{audit_lines}"
+
+    async def _stream():
+        yield f"data: {json.dumps({'t':'packages','v':{'ecosystem':ecosystem,'packages':pkg_results}})}\n\n"
+        if body.provider == "anthropic" and body.anthropic_key:
+            import threading as _th
+            q: asyncio.Queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
+            model = (body.anthropic_model or "claude-haiku-4-5-20251001").strip() or "claude-haiku-4-5-20251001"
+            def _run():
+                try:
+                    client = Anthropic(api_key=body.anthropic_key)
+                    with client.messages.stream(model=model, max_tokens=1024, system=DEPS_AUDIT_SYSTEM,
+                            messages=[{"role": "user", "content": ai_prompt}]) as stream:
+                        for text in stream.text_stream:
+                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+                except Exception as e:
+                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+            _th.Thread(target=_run, daemon=True).start()
+            while True:
+                kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                if kind == "text": yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
+                elif kind == "done": break
+                else: yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
+        elif body.provider == "groq" and body.groq_key:
+            r2 = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.3-70b-versatile", "max_tokens": 1024,
+                      "messages": [{"role": "system", "content": DEPS_AUDIT_SYSTEM},
+                                   {"role": "user", "content": ai_prompt}]}, timeout=30)
+            if r2.ok:
+                text = r2.json()["choices"][0]["message"]["content"]
+                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
+                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
+            else:
+                yield f"data: {json.dumps({'t':'error','v':r2.text[:200]})}\n\n"
+        else:
+            yield f"data: {json.dumps({'t':'error','v':'No provider key for AI analysis'})}\n\n"
+        yield f"data: {json.dumps({'t':'done'})}\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
+class ToolDef(BaseModel):
+    name: str
+    description: str
+    url: str
+    method: str = "GET"
+    headers: Optional[dict] = {}
+    input_schema: Optional[dict] = None
+
+
+class ToolCallBody(BaseModel):
+    url: str
+    method: str = "GET"
+    headers: Optional[dict] = {}
+    body_json: Optional[dict] = None
+
+
+@app.post("/api/tools/call")
+async def call_tool(body: ToolCallBody):
+    """Proxy a user-defined tool HTTP call to avoid CORS issues."""
+    try:
+        hdrs = dict(body.headers or {})
+        if body.method.upper() != "GET":
+            hdrs.setdefault("Content-Type", "application/json")
+        if body.method.upper() == "GET":
+            r = requests.get(body.url, headers=hdrs, timeout=15)
+        else:
+            r = requests.request(body.method.upper(), body.url, headers=hdrs, json=body.body_json, timeout=15)
+        return {"status": r.status_code, "response": r.text[:2000]}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+ENHANCE_SYSTEM = (
+    "You are a prompt engineering expert. The user will give you a coding task description. "
+    "Rewrite it to be more specific, actionable, and complete. Mention relevant files, functions, "
+    "or patterns when implied. Return ONLY the improved prompt text — no preamble, no explanation."
+)
+
+class PromptEnhanceBody(BaseModel):
+    provider: str = "anthropic"
+    anthropic_key: Optional[str] = ""
+    groq_key: Optional[str] = ""
+    hf_token: Optional[str] = ""
+    prompt: str
+
+@app.post("/api/prompt/enhance")
+async def enhance_prompt(body: PromptEnhanceBody):
+    """Use a fast AI model to improve a user's coding prompt."""
+    try:
+        p = (body.prompt or "").strip()
+        if not p:
+            return JSONResponse({"error": "prompt required"}, status_code=400)
+        if body.provider == "anthropic" and body.anthropic_key:
+            client = Anthropic(api_key=body.anthropic_key)
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001", max_tokens=512,
+                system=ENHANCE_SYSTEM,
+                messages=[{"role": "user", "content": p}],
+            )
+            enhanced = msg.content[0].text.strip()
+        elif body.provider == "groq" and body.groq_key:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.1-8b-instant", "max_tokens": 512,
+                      "messages": [{"role": "system", "content": ENHANCE_SYSTEM},
+                                   {"role": "user", "content": p}]},
+                timeout=20,
+            )
+            if not r.ok:
+                return JSONResponse({"error": r.text[:200]}, status_code=400)
+            enhanced = r.json()["choices"][0]["message"]["content"].strip()
+        else:
+            token = (body.hf_token or "").strip() or HF_TOKEN
+            if not token:
+                return JSONResponse({"error": "no provider key"}, status_code=400)
+            hf = InferenceClient(token=token)
+            result = hf.chat_completion(
+                model="meta-llama/Llama-3.1-8B-Instruct", max_tokens=512,
+                messages=[{"role": "system", "content": ENHANCE_SYSTEM},
+                           {"role": "user", "content": p}],
+            )
+            enhanced = result.choices[0].message.content.strip()
+        return {"enhanced": enhanced}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 class Msg(BaseModel):
     role: str; content: str
 
@@ -386,7 +1621,14 @@ class ChatBody(BaseModel):
     # Per-stage provider overrides for multi-agent (empty = use body.provider)
     ma_plan_provider: Optional[str] = ""
     ma_code_provider: Optional[str] = ""
+    ma_test_provider: Optional[str] = ""
     ma_review_provider: Optional[str] = ""
+    ma_include_test_stage: Optional[bool] = False
+    memory: Optional[str] = ""
+    tools: Optional[List[ToolDef]] = []
+    anthropic_model: Optional[str] = "claude-sonnet-4-6"
+    thinking_mode: Optional[bool] = False
+    thinking_budget: Optional[int] = 2000
 
 _PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom"}
 
@@ -402,7 +1644,15 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
     """
     p = provider if provider else body.provider
     if p == "anthropic":
-        return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key)
+        tools = getattr(body, 'tools', []) or []
+        model = (getattr(body, 'anthropic_model', '') or 'claude-sonnet-4-6').strip() or 'claude-sonnet-4-6'
+        thinking = bool(getattr(body, 'thinking_mode', False)) and 'opus' in model
+        thinking_budget = int(getattr(body, 'thinking_budget', 2000) or 2000)
+        if tools:
+            return lambda q, loop, sys, msgs: _run_anthropic_with_tools(q, loop, sys, msgs, body.anthropic_key, tools, model)
+        if thinking:
+            return lambda q, loop, sys, msgs: _run_anthropic_thinking(q, loop, sys, msgs, body.anthropic_key, model, thinking_budget)
+        return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key, model)
     elif p == "groq":
         return lambda q, loop, sys, msgs: _run_groq(q, loop, sys, msgs, body.groq_key, body.groq_model or "llama-3.3-70b-versatile")
     elif p == "openai_compat":
@@ -433,9 +1683,11 @@ async def chat_stream(body: ChatBody):
 
         plan_prov   = body.ma_plan_provider   or body.provider
         code_prov   = body.ma_code_provider   or body.provider
+        test_prov   = body.ma_test_provider   or body.provider
         review_prov = body.ma_review_provider or body.provider
         plan_runner   = get_runner(body, plan_prov)
         code_runner   = get_runner(body, code_prov)
+        test_runner   = get_runner(body, test_prov)
         review_runner = get_runner(body, review_prov)
 
         yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': f'🗺️ Planning · {_PROV_LABEL.get(plan_prov, plan_prov)}'})}\n\n"
@@ -460,6 +1712,16 @@ async def chat_stream(body: ChatBody):
             elif kind == "error":
                 yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
                 return
+
+        if body.ma_include_test_stage:
+            yield f"data: {json.dumps({'t': 'step', 'v': 'test', 'label': f'🧪 Testing · {_PROV_LABEL.get(test_prov, test_prov)}'})}\n\n"
+            test_msgs = [{"role": "user", "content": f"Write comprehensive tests for this implementation:\n\n{code_text}"}]
+            async for kind, val in stream_one(test_runner, MA_TEST_SYSTEM, test_msgs):
+                if kind == "text":
+                    yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
+                elif kind == "error":
+                    yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+                    return
 
         yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': f'🔍 Reviewing · {_PROV_LABEL.get(review_prov, review_prov)}'})}\n\n"
         review_msgs = [{"role": "user", "content": f"Review this implementation for bugs, security issues, missing error handling, and quality:\n\n{code_text}"}]
