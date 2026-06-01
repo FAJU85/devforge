@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Callable, List, Optional
 import json, os, requests, base64, re, asyncio, threading
+from concurrent.futures import ThreadPoolExecutor, as_completed as _futs_done
 
 from anthropic import Anthropic
 from huggingface_hub import InferenceClient
@@ -1300,6 +1301,198 @@ async def generate_readme(body: ReadmeBody):
                 yield f"data: {json.dumps({'t':'error','v':r.text[:200]})}\n\n"
         else:
             yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"
+        yield f"data: {json.dumps({'t':'done'})}\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
+DEPS_AUDIT_SYSTEM = (
+    "You are a software security auditor reviewing project dependencies. "
+    "Given a list of packages with their pinned and latest versions, identify: "
+    "known security vulnerabilities (CVEs) in outdated packages, "
+    "packages that are deprecated or unmaintained, supply-chain risks, and update recommendations. "
+    "Group findings by severity: 🔴 Critical, 🟡 Warning, 🟢 Info. "
+    "Be specific about package names and versions. Keep it concise and actionable."
+)
+
+def _pypi_latest(name: str) -> dict:
+    try:
+        r = requests.get(f"https://pypi.org/pypi/{name}/json", timeout=3)
+        if r.ok:
+            return {"name": name, "latest": r.json().get("info", {}).get("version")}
+    except Exception:
+        pass
+    return {"name": name, "latest": None}
+
+def _npm_latest(name: str) -> dict:
+    try:
+        r = requests.get(f"https://registry.npmjs.org/{name}/latest", timeout=3)
+        if r.ok:
+            return {"name": name, "latest": r.json().get("version")}
+    except Exception:
+        pass
+    return {"name": name, "latest": None}
+
+def _parse_requirements(content: str) -> list:
+    pkgs: list = []
+    for line in content.split("\n"):
+        line = line.strip()
+        if not line or line.startswith(("#", "-r", "--", "http", "git+")):
+            continue
+        line = re.sub(r"\[.*?\]", "", line)
+        m = re.match(r"^([A-Za-z0-9_.-]+)\s*([>=<!~^,\s][^\s#]*)?", line)
+        if m:
+            pkgs.append({"name": m.group(1).lower().replace("_", "-"), "constraint": (m.group(2) or "").strip()})
+    return pkgs
+
+def _parse_package_json(content: str) -> list:
+    try:
+        data = json.loads(content)
+        pkgs: list = []
+        for section in ("dependencies", "devDependencies"):
+            for name, ver in (data.get(section) or {}).items():
+                pkgs.append({"name": name, "constraint": str(ver)})
+        return pkgs
+    except Exception:
+        return []
+
+def _parse_go_mod(content: str) -> list:
+    pkgs: list = []
+    in_req = False
+    for line in content.split("\n"):
+        line = line.strip()
+        if line.startswith("require ("):
+            in_req = True; continue
+        if line == ")":
+            in_req = False; continue
+        if in_req or line.startswith("require "):
+            parts = line.replace("require ", "").split()
+            if len(parts) >= 2 and not parts[0].startswith("//"):
+                pkgs.append({"name": parts[0], "constraint": parts[1]})
+    return pkgs
+
+def _parse_cargo_toml(content: str) -> list:
+    pkgs: list = []
+    in_deps = False
+    for line in content.split("\n"):
+        line = line.strip()
+        if re.match(r'^\[(dependencies|dev-dependencies)', line, re.I):
+            in_deps = True; continue
+        if line.startswith("[") and in_deps:
+            in_deps = False
+        if in_deps:
+            m = re.match(r'^([a-zA-Z0-9_-]+)\s*=\s*["\']?([^"\'#\s,}]+)', line)
+            if m:
+                pkgs.append({"name": m.group(1), "constraint": m.group(2).strip()})
+    return pkgs
+
+
+class ScanDepsBody(BaseModel):
+    filename: str
+    content: str
+    provider: str = "anthropic"
+    anthropic_key: Optional[str] = ""
+    groq_key: Optional[str] = ""
+    anthropic_model: Optional[str] = "claude-haiku-4-5-20251001"
+
+
+@app.post("/api/repo/scan-deps")
+async def scan_deps(body: ScanDepsBody):
+    """Parse a dependency file, check latest versions, and stream an AI security audit."""
+    fname = (body.filename or "").lower().strip().split("/")[-1]
+    content = (body.content or "").strip()
+    if not content:
+        return JSONResponse({"error": "content required"}, status_code=400)
+
+    # Detect ecosystem
+    if fname in ("requirements.txt", "pyproject.toml") or fname.endswith("requirements.txt"):
+        ecosystem, packages, checker = "python", _parse_requirements(content), _pypi_latest
+    elif fname == "package.json":
+        ecosystem, packages, checker = "javascript", _parse_package_json(content), _npm_latest
+    elif fname == "go.mod":
+        ecosystem, packages, checker = "go", _parse_go_mod(content), None
+    elif fname == "cargo.toml":
+        ecosystem, packages, checker = "rust", _parse_cargo_toml(content), None
+    else:
+        ecosystem, packages, checker = "unknown", _parse_requirements(content), None
+
+    if not packages:
+        return JSONResponse({"error": "No packages found in file"}, status_code=400)
+
+    # Parallel version checks (top 20 packages, 5 workers, 12s total)
+    to_check = packages[:20]
+    version_map: dict = {}
+    if checker:
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            futs = {ex.submit(checker, p["name"]): p["name"] for p in to_check}
+            for f in _futs_done(futs, timeout=12):
+                try:
+                    rv = f.result()
+                    if rv.get("latest"):
+                        version_map[rv["name"]] = rv["latest"]
+                except Exception:
+                    pass
+
+    def _extract_pinned(constraint: str) -> "str | None":
+        m = re.search(r'==\s*([^\s,;]+)', constraint)
+        return m.group(1) if m else None
+
+    pkg_results = []
+    for p in packages[:20]:
+        pinned = _extract_pinned(p["constraint"])
+        latest = version_map.get(p["name"])
+        pkg_results.append({
+            "name": p["name"], "constraint": p["constraint"],
+            "pinned": pinned, "latest": latest,
+            "outdated": bool(pinned and latest and pinned != latest),
+            "unpinned": not pinned and ecosystem == "python",
+        })
+
+    audit_lines = "\n".join(
+        f"- {p['name']}: {p['pinned'] or p['constraint']} (latest: {p['latest'] or '?'})"
+        + (" ⚠️ OUTDATED" if p["outdated"] else "")
+        + (" ⚠️ UNPINNED" if p["unpinned"] else "")
+        for p in pkg_results
+    )
+    ai_prompt = f"Ecosystem: {ecosystem}\nFile: {body.filename}\n\nPackages:\n{audit_lines}"
+
+    async def _stream():
+        yield f"data: {json.dumps({'t':'packages','v':{'ecosystem':ecosystem,'packages':pkg_results}})}\n\n"
+        if body.provider == "anthropic" and body.anthropic_key:
+            import threading as _th
+            q: asyncio.Queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
+            model = (body.anthropic_model or "claude-haiku-4-5-20251001").strip() or "claude-haiku-4-5-20251001"
+            def _run():
+                try:
+                    client = Anthropic(api_key=body.anthropic_key)
+                    with client.messages.stream(model=model, max_tokens=1024, system=DEPS_AUDIT_SYSTEM,
+                            messages=[{"role": "user", "content": ai_prompt}]) as stream:
+                        for text in stream.text_stream:
+                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+                except Exception as e:
+                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+            _th.Thread(target=_run, daemon=True).start()
+            while True:
+                kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                if kind == "text": yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
+                elif kind == "done": break
+                else: yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
+        elif body.provider == "groq" and body.groq_key:
+            r2 = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.3-70b-versatile", "max_tokens": 1024,
+                      "messages": [{"role": "system", "content": DEPS_AUDIT_SYSTEM},
+                                   {"role": "user", "content": ai_prompt}]}, timeout=30)
+            if r2.ok:
+                text = r2.json()["choices"][0]["message"]["content"]
+                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
+                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
+            else:
+                yield f"data: {json.dumps({'t':'error','v':r2.text[:200]})}\n\n"
+        else:
+            yield f"data: {json.dumps({'t':'error','v':'No provider key for AI analysis'})}\n\n"
         yield f"data: {json.dumps({'t':'done'})}\n\n"
 
     return StreamingResponse(_stream(), media_type="text/event-stream")

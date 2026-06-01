@@ -2611,3 +2611,47 @@ class TestCodeScanEndpoint:
         high = [i for i in data["issues"] if i["severity"] == "high"]
         assert len(high) >= 1
         assert any("api_key" in i.get("pattern", "").lower() or "hardcoded" in i.get("message", "").lower() for i in high)
+
+
+class TestScanDepsEndpoint:
+    def test_scan_deps_empty_content_returns_400(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "requirements.txt",
+            "content": "   ",
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_scan_deps_parses_requirements_txt(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"info": {"version": "2.0.0"}}
+            from unittest.mock import MagicMock
+            mock_client = MagicMock()
+            mock_ctx = MagicMock()
+            mock_ctx.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_ctx.__exit__ = MagicMock(return_value=False)
+            mock_ctx.text_stream = iter(["✅ All packages look safe."])
+            mock_client.messages.stream.return_value = mock_ctx
+            with patch("main.Anthropic", return_value=mock_client):
+                r = client.post("/api/repo/scan-deps", json={
+                    "filename": "requirements.txt",
+                    "content": "fastapi==0.100.0\nrequests==2.28.0\npydantic==1.10.0",
+                    "provider": "anthropic",
+                    "anthropic_key": "sk-test",
+                })
+        assert r.status_code == 200
+        assert "text/event-stream" in r.headers.get("content-type", "")
+        content = r.text
+        assert "packages" in content
+
+    def test_scan_deps_package_json_parsed(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "package.json",
+            "content": '{"dependencies": {"react": "^18.0.0", "express": "^4.18.0"}}',
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 200
+        content = r.text
+        assert "packages" in content

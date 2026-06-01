@@ -566,7 +566,7 @@ pre::-webkit-scrollbar{height:4px}
       </div>
     </div>
   </div>
-  <div style="max-width:820px;margin:0 auto;width:100%"><div class="ctx-strip" id="ctx-strip"></div><div style="padding:0 0 4px;text-align:right"><button id="gen-readme-btn" onclick="openReadmeModal()" style="display:none;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent2);cursor:pointer;border-radius:6px;padding:3px 10px;font-size:11px;font-family:inherit;transition:all .15s" title="Generate README.md from selected files">📝 Generate README</button></div></div>
+  <div style="max-width:820px;margin:0 auto;width:100%"><div class="ctx-strip" id="ctx-strip"></div><div style="padding:0 0 4px;text-align:right;display:flex;justify-content:flex-end;gap:6px"><button id="scan-deps-btn" onclick="openDepsModal()" style="display:none;background:var(--panel2);border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 10px;font-size:11px;font-family:inherit;transition:all .15s" title="Audit dependencies for vulnerabilities" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted)'">🔍 Scan Deps</button><button id="gen-readme-btn" onclick="openReadmeModal()" style="display:none;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent2);cursor:pointer;border-radius:6px;padding:3px 10px;font-size:11px;font-family:inherit;transition:all .15s" title="Generate README.md from selected files">📝 Generate README</button></div></div>
   <div class="input-wrap">
     <div class="ibox">
       <textarea class="ti" id="ti" placeholder="Describe your task…" onkeydown="hk(event)" oninput="ar(this)" rows="1"></textarea>
@@ -692,6 +692,25 @@ pre::-webkit-scrollbar{height:4px}
       <button class="modal-cancel" id="readme-save-btn" onclick="saveReadmeToContext()" style="display:none">📎 Add to context</button>
       <button class="modal-ok" id="readme-gen-btn" onclick="generateReadme()">✨ Generate</button>
       <button class="modal-cancel" onclick="$('readme-modal').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deps Audit modal -->
+<div class="modal-overlay" id="deps-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:800px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <span style="font-size:15px;font-weight:600;flex:1">🔍 Dependency Vulnerability Audit</span>
+      <button onclick="$('deps-modal').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0 2px">✕</button>
+    </div>
+    <div id="deps-pkg-table" style="max-height:180px;overflow-y:auto;border-bottom:1px solid var(--border2)"></div>
+    <div id="deps-ai-output" style="padding:14px 16px;overflow-y:auto;max-height:320px;font-size:13px;line-height:1.75;color:var(--text);min-height:60px">
+      <span style="color:var(--muted)">Click Audit to start scanning…</span>
+    </div>
+    <div style="padding:8px 16px;border-top:1px solid var(--border2);display:flex;justify-content:flex-end;gap:8px">
+      <button class="modal-cancel" id="deps-copy-btn" onclick="copyDepsAudit()" style="display:none">📋 Copy Report</button>
+      <button class="modal-ok" id="deps-run-btn" onclick="runDepsAudit()">🔍 Audit</button>
+      <button class="modal-cancel" onclick="$('deps-modal').style.display='none'">Close</button>
     </div>
   </div>
 </div>
@@ -858,7 +877,7 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}}
+  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}}
   if((e.metaKey||e.ctrlKey)&&e.key==='f'&&!e.target?.matches('input,textarea')){e.preventDefault();toggleChatSearch();}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key==='Backspace'){e.preventDefault();if($('ti'))$('ti').value='';}
@@ -1164,6 +1183,10 @@ function updCtx(){
   // Show README generate button when files are selected and provider is available
   const hasKey=S.prov==='anthropic'?!!$('ak')?.value:S.prov==='groq'?!!$('gk')?.value:false;
   const rnBtn=$('gen-readme-btn');if(rnBtn)rnBtn.style.display=(n>0&&hasKey)?'block':'none';
+  // Show Scan Deps button when a known dependency file is in context
+  const DEP_FILES=new Set(['requirements.txt','package.json','go.mod','cargo.toml','pyproject.toml']);
+  const hasDep=[...S.selFiles.keys(),...S.localFiles.keys()].some(k=>DEP_FILES.has(k.split('/').pop().toLowerCase()));
+  const sdBtn=$('scan-deps-btn');if(sdBtn)sdBtn.style.display=hasDep?'block':'none';
   updHint();
 }
 function toggleSkill(chip){const cb=chip.querySelector('input');setTimeout(()=>{chip.classList.toggle('checked',cb.checked);saveEnhance();},0);}
@@ -1302,6 +1325,75 @@ async function generateReadme(){
 }
 function copyReadme(){navigator.clipboard.writeText(_readmeRaw);toast('Copied README!');}
 function saveReadmeToContext(){if(!_readmeRaw)return;S.localFiles.set('README.md',_readmeRaw);updCtx();toast('Added README.md to context');$('readme-modal').style.display='none';}
+
+// ── Dependency Audit ──────────────────────────────────────────────────────────
+const DEP_FILES_SET=new Set(['requirements.txt','package.json','go.mod','cargo.toml','pyproject.toml']);
+let _depsAuditRaw='';
+function openDepsModal(){
+  const depsEntries=[...S.selFiles.entries(),...S.localFiles.entries()]
+    .filter(([k])=>DEP_FILES_SET.has(k.split('/').pop().toLowerCase()));
+  if(!depsEntries.length){toast('Select a requirements.txt / package.json / go.mod first',true);return;}
+  $('deps-ai-output').innerHTML='<span style="color:var(--muted)">Click Audit to start scanning…</span>';
+  $('deps-pkg-table').innerHTML='';$('deps-copy-btn').style.display='none';_depsAuditRaw='';
+  $('deps-modal').style.display='flex';
+}
+async function runDepsAudit(){
+  const depsEntries=[...S.selFiles.entries(),...S.localFiles.entries()]
+    .filter(([k])=>DEP_FILES_SET.has(k.split('/').pop().toLowerCase()));
+  if(!depsEntries.length){toast('No dependency file in context',true);return;}
+  const [filename,content]=depsEntries[0];
+  const fname=filename.split('/').pop();
+  const btn=$('deps-run-btn');btn.disabled=true;btn.textContent='⏳ Scanning…';
+  const out=$('deps-ai-output');out.innerHTML='<span style="color:var(--muted)">Checking versions…</span>';
+  $('deps-pkg-table').innerHTML='';$('deps-copy-btn').style.display='none';_depsAuditRaw='';
+  try{
+    const body={filename:fname,content,provider:S.prov};
+    if(S.prov==='anthropic')body.anthropic_key=$('ak').value;
+    else if(S.prov==='groq')body.groq_key=$('gk').value;
+    const res=await fetch('/api/repo/scan-deps',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!res.ok){const e=await res.json();toast('Scan failed: '+(e.error||res.status),true);return;}
+    const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){
+      const{done,value}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data:'))continue;
+        try{
+          const ev=JSON.parse(line.slice(5).trim());
+          if(ev.t==='packages'){
+            const{ecosystem,packages}=ev.v;
+            const outdated=packages.filter(p=>p.outdated).length;
+            const unpinned=packages.filter(p=>p.unpinned).length;
+            const tbl=`<div style="padding:8px 14px;background:var(--panel2);border-bottom:1px solid var(--border2);font-size:11px;color:var(--muted)">
+              📦 <strong style="color:var(--text)">${packages.length} packages</strong> · ecosystem: ${ecosystem}
+              ${outdated?`· <span style="color:var(--red)">⚠️ ${outdated} outdated</span>`:''}
+              ${unpinned?`· <span style="color:#f59e0b">⚠️ ${unpinned} unpinned</span>`:''}
+            </div>
+            <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'JetBrains Mono',monospace">
+              <thead><tr style="background:var(--panel)"><th style="padding:4px 12px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border2)">Package</th><th style="padding:4px 12px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border2)">Pinned</th><th style="padding:4px 12px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border2)">Latest</th><th style="padding:4px 8px;border-bottom:1px solid var(--border2)"></th></tr></thead>
+              <tbody>${packages.map(p=>{
+                const badge=p.outdated?'<span style="background:var(--red);color:#fff;border-radius:3px;padding:1px 5px;font-size:9px">OUTDATED</span>':p.unpinned?'<span style="background:#f59e0b;color:#000;border-radius:3px;padding:1px 5px;font-size:9px">UNPINNED</span>':'';
+                const pinColor=p.outdated?'color:var(--red)':'color:var(--text)';
+                return`<tr style="border-bottom:1px solid var(--border2)"><td style="padding:3px 12px;color:var(--accent2)">${p.name}</td><td style="padding:3px 12px;${pinColor}">${p.pinned||p.constraint||'—'}</td><td style="padding:3px 12px;color:var(--accent2)">${p.latest||'—'}</td><td style="padding:3px 8px">${badge}</td></tr>`;
+              }).join('')}</tbody>
+            </table></div>`;
+            $('deps-pkg-table').innerHTML=tbl;
+            out.innerHTML='<span style="color:var(--muted)">🤖 AI analyzing security implications…</span>';
+          }else if(ev.t==='text'){
+            if(out.querySelector('span'))out.innerHTML='';
+            _depsAuditRaw+=ev.v;out.innerHTML=marked.parse(_depsAuditRaw);
+          }else if(ev.t==='error'){
+            out.innerHTML+=`<span style="color:var(--red)">Error: ${esc(ev.v)}</span>`;
+          }else if(ev.t==='done'){
+            if(_depsAuditRaw)$('deps-copy-btn').style.display='block';break;
+          }
+        }catch{}
+      }
+    }
+  }catch(e){toast('Audit error: '+e.message,true);}
+  finally{btn.disabled=false;btn.textContent='🔍 Audit';}
+}
+function copyDepsAudit(){navigator.clipboard.writeText(_depsAuditRaw);toast('Copied audit report!');}
 
 function setAnthModel(model){
   S.anthropicModel=model;
