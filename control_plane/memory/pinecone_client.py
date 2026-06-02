@@ -26,6 +26,29 @@ def _client_and_index():
     return _pc_client, _pc_index
 
 
+def upsert_text(text: str, metadata: dict | None = None, namespace: str = "default") -> bool:
+    """Embed *text* and upsert it into Pinecone. Returns True on success, False otherwise."""
+    if not PINECONE_API_KEY:
+        return False
+    try:
+        import uuid
+        pc, index = _client_and_index()
+        embeddings = pc.inference.embed(
+            model="multilingual-e5-large",
+            inputs=[text],
+            parameters={"input_type": "passage", "truncate": "END"},
+        )
+        vector = embeddings[0].values
+        doc_id = str(uuid.uuid4())
+        meta = {"text": text, **(metadata or {})}
+        index.upsert(vectors=[{"id": doc_id, "values": vector, "metadata": meta}], namespace=namespace)
+        logger.debug("upsert_text: stored doc %s (%d chars)", doc_id, len(text))
+        return True
+    except Exception as exc:
+        logger.warning("upsert_text: Pinecone error — %s", exc)
+        return False
+
+
 def query_context(task: str, top_k: int = 3) -> str:
     """Return relevant context passages for *task* from the Pinecone vector store.
 

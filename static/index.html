@@ -418,6 +418,7 @@ pre::-webkit-scrollbar{height:4px}
           <button class="prov-btn" id="pg" onclick="setProv('groq')">⚡ Groq</button>
           <button class="prov-btn" id="ph" onclick="setProv('hf')">🤗 HF</button>
           <button class="prov-btn" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
+          <button class="prov-btn" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
         </div>
         <div class="pfields" id="pf-a" style="flex-direction:column">
           <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" oninput="saveEnhance()"></div>
@@ -455,6 +456,19 @@ pre::-webkit-scrollbar{height:4px}
             <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off"></div>
           </div>
         </div>
+        <div id="pf-al" style="display:none">
+          <div class="prov-note">Run any HuggingFace model locally with minimal GPU memory — layers stream from disk to GPU via <strong>AirLLM</strong>. Requires <code>pip install airllm</code>.</div>
+          <div style="padding:0 10px 8px;display:flex;gap:5px;flex-wrap:wrap">
+            <button class="qfill-btn" onclick="fillAirLLM('meta-llama/Llama-2-7b-chat-hf')">🦙 Llama-2 7B</button>
+            <button class="qfill-btn" onclick="fillAirLLM('mistralai/Mistral-7B-Instruct-v0.2')">✨ Mistral 7B</button>
+            <button class="qfill-btn" onclick="fillAirLLM('Qwen/Qwen2.5-7B-Instruct')">🌟 Qwen2.5 7B</button>
+            <button class="qfill-btn" onclick="fillAirLLM('microsoft/Phi-3-mini-4k-instruct')">💡 Phi-3 Mini</button>
+          </div>
+          <div class="pfields">
+            <div><div class="flabel">HuggingFace Model ID</div><input class="finput" id="al-model" placeholder="meta-llama/Llama-2-7b-chat-hf" autocomplete="off" oninput="updBadge();saveEnhance()"></div>
+            <div><div class="flabel">Max new tokens</div><input class="finput" id="al-tokens" type="number" min="1" max="4096" value="512" oninput="saveEnhance()"></div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="s-sec">
@@ -463,11 +477,11 @@ pre::-webkit-scrollbar{height:4px}
         <div class="ma-row"><div><div class="ma-label">Multi-Agent Pipeline</div><div class="ma-sub">Plan → Implement → Review</div></div><div><input type="checkbox" id="multi-agent" class="toggle-input" onchange="updBadge();$('ma-stages').style.display=this.checked?'block':'none'"><label for="multi-agent" class="toggle-label"></label></div></div>
         <div id="ma-stages" style="display:none;padding-bottom:4px">
           <div style="padding:2px 16px 6px;font-size:10px;color:var(--muted2)">Per-stage provider (optional):</div>
-          <div class="ma-stage-row"><div class="ma-stage-lbl">🗺️ Plan</div><select class="finput" id="ma-plan-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
-          <div class="ma-stage-row"><div class="ma-stage-lbl">⚙️ Code</div><select class="finput" id="ma-code-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
-          <div class="ma-stage-row"><div class="ma-stage-lbl">🔍 Review</div><select class="finput" id="ma-rev-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
+          <div class="ma-stage-row"><div class="ma-stage-lbl">🗺️ Plan</div><select class="finput" id="ma-plan-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
+          <div class="ma-stage-row"><div class="ma-stage-lbl">⚙️ Code</div><select class="finput" id="ma-code-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
+          <div class="ma-stage-row"><div class="ma-stage-lbl">🔍 Review</div><select class="finput" id="ma-rev-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
           <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 6px"><input type="checkbox" id="ma-test-stage" class="toggle-input" onchange="onTestStageToggle()"><label for="ma-test-stage" class="toggle-label" style="flex-shrink:0"></label><div><div style="font-size:11px;color:var(--text)">🧪 Include Test stage</div><div style="font-size:10px;color:var(--muted2)">Plan → Code → Test → Review</div></div></div>
-          <div class="ma-stage-row" id="ma-test-row" style="display:none"><div class="ma-stage-lbl">🧪 Test</div><select class="finput" id="ma-test-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
+          <div class="ma-stage-row" id="ma-test-row" style="display:none"><div class="ma-stage-lbl">🧪 Test</div><select class="finput" id="ma-test-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
         </div>
         <div style="padding:0 16px 4px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between"><span>Skills</span><span style="font-weight:400;color:var(--muted2);font-size:10px">Stacks ↓</span></div>
         <div class="skills-grid">
@@ -525,6 +539,17 @@ pre::-webkit-scrollbar{height:4px}
         <div id="tool-list" style="margin:0 10px 6px;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;display:none"></div>
         <div style="padding:0 10px">
           <button onclick="openAddTool()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+ Define Tool</button>
+        </div>
+      </div>
+    </div>
+    <div class="s-sec closed">
+      <div class="s-lbl" onclick="toggleSec(this)">🤖 Agent Pipeline <span class="s-arr">▼</span></div>
+      <div class="s-content" style="padding-bottom:6px">
+        <div style="padding:4px 10px 6px;font-size:11px;color:var(--muted)">Run a task through the LangGraph pipeline: retrieve → plan → execute → synthesize.</div>
+        <div style="padding:0 10px 8px">
+          <textarea id="agent-task" class="side-textarea" placeholder="Describe a task for the agent pipeline…" style="resize:vertical;min-height:60px;margin-bottom:6px"></textarea>
+          <button onclick="runAgentPipeline()" style="width:100%;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent2);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-weight:600;font-family:inherit;transition:all .15s">&#9654; Run Pipeline</button>
+          <div id="agent-progress" style="display:none;margin-top:8px;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;color:var(--muted);max-height:200px;overflow-y:auto;word-break:break-word"></div>
         </div>
       </div>
     </div>
@@ -1016,8 +1041,8 @@ function setTheme(t){document.documentElement.setAttribute('data-theme',t);$('ts
 function saveSession(){if(S.ghToken&&S.ghUser)localStorage.setItem('df-session',JSON.stringify({ghToken:S.ghToken,ghUser:S.ghUser}));}
 function clearSession(){localStorage.removeItem('df-session');}
 function restoreSession(){try{const raw=localStorage.getItem('df-session');if(!raw)return false;const{ghToken,ghUser}=JSON.parse(raw);if(!ghToken||!ghUser)return false;S.ghToken=ghToken;S.ghUser=ghUser;$('gh-av').src=ghUser.avatar_url||'';$('gh-nm').textContent=ghUser.name||ghUser.login;$('gh-lg').textContent='@'+ghUser.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();return true;}catch(e){return false;}}
-function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);const ts=$('ma-test-stage');const tt=$('think-toggle');const tb=$('think-budget');const data={prov:S.prov,anthropicKey:$('ak').value||'',anthropicModel:S.anthropicModel||'claude-sonnet-4-6',thinkingMode:tt?tt.checked:false,thinkingBudget:tb?tb.value:'2000',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||'',maTestStage:ts?ts.checked:false,maTestProv:$('ma-test-prov')?$('ma-test-prov').value||'':''};localStorage.setItem('df-enhance',JSON.stringify(data));}
-function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=d.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
+function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);const ts=$('ma-test-stage');const tt=$('think-toggle');const tb=$('think-budget');const data={prov:S.prov,anthropicKey:$('ak').value||'',anthropicModel:S.anthropicModel||'claude-sonnet-4-6',thinkingMode:tt?tt.checked:false,thinkingBudget:tb?tb.value:'2000',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',alModel:$('al-model')?$('al-model').value||'':'',alTokens:$('al-tokens')?$('al-tokens').value||'512':'512',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||'',maTestStage:ts?ts.checked:false,maTestProv:$('ma-test-prov')?$('ma-test-prov').value||'':''};localStorage.setItem('df-enhance',JSON.stringify(data));}
+function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.alModel&&$('al-model'))$('al-model').value=d.alModel;if(d.alTokens&&$('al-tokens'))$('al-tokens').value=d.alTokens;if(d.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=d.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
 function toggleMoreMenu(){$('more-menu').classList.toggle('open');}
 function closeMoreMenu(){const m=$('more-menu');if(m)m.classList.remove('open');}
 document.addEventListener('click',e=>{if(!e.target.closest('#more-menu')&&!e.target.closest('#more-btn'))closeMoreMenu();});
@@ -1439,8 +1464,9 @@ async function switchBranch(branch){
   buildTree(d.files);quickScanRepo(d.files);
   toast(`Switched to ${branch}`);
 }
-function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='anthropic');$('pg').classList.toggle('on',p==='groq');$('ph').classList.toggle('on',p==='hf');$('po').classList.toggle('on',p==='openai_compat');$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
-function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';const short=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';$('model-pill').textContent=short;}else if(S.prov==='groq')$('model-pill').textContent=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')$('model-pill').textContent=($('oci-model')&&$('oci-model').value)||'custom';else $('model-pill').textContent=S.hfModel.split('/').pop();}
+function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='anthropic');$('pg').classList.toggle('on',p==='groq');$('ph').classList.toggle('on',p==='hf');$('po').classList.toggle('on',p==='openai_compat');$('pal').classList.toggle('on',p==='airllm');$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';$('pf-al').style.display=p==='airllm'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
+function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';const short=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';$('model-pill').textContent=short;}else if(S.prov==='groq')$('model-pill').textContent=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')$('model-pill').textContent=($('oci-model')&&$('oci-model').value)||'custom';else if(S.prov==='airllm')$('model-pill').textContent=(($('al-model')&&$('al-model').value)||'airllm').split('/').pop();else $('model-pill').textContent=S.hfModel.split('/').pop();}
+function fillAirLLM(model){$('al-model').value=model;updBadge();saveEnhance();toast('AirLLM model: '+model.split('/').pop());}
 let searchTimer=null;
 function debounceSearch(q){clearTimeout(searchTimer);searchTimer=setTimeout(()=>fetchModels(q),400);}
 async function fetchModels(q=''){$('model-list').innerHTML='<div class="list-msg">Searching…</div>';try{const models=await get(`/api/hf/models?q=${encodeURIComponent(q)}&limit=25`);if(models.error){$('model-list').innerHTML=`<div class="list-msg" style="color:var(--red)">${esc(String(models.error))}</div>`;return;}if(!models.length){$('model-list').innerHTML='<div class="list-msg">No models found</div>';return;}$('model-list').innerHTML=models.map(m=>`<div class="list-item${S.hfModel===m.id?' active':''}" data-id="${escA(m.id)}" onclick="selectModel(this.dataset.id,this)"><div class="li-name">${esc(m.name||'')}</div><div class="li-sub"><span style="color:var(--muted)">${esc(m.author||'')}</span><span>↓${fmt(m.downloads)}</span><span>❤️${fmt(m.likes)}</span>${m.gated?'<span class="li-badge">gated</span>':''}</div></div>`).join('');}catch(e){$('model-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';}}
@@ -1483,7 +1509,7 @@ async function send(){
     const thinkToggle=$('think-toggle');const thinkBudget=$('think-budget');
     const thinkingMode=!!(thinkToggle&&thinkToggle.checked&&(S.anthropicModel||'').includes('opus'));
     const thinkingBudget=thinkBudget?parseInt(thinkBudget.value)||2000:2000;
-    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},signal:S.abortCtrl?.signal,body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,anthropic_model:S.anthropicModel||'claude-sonnet-4-6',thinking_mode:thinkingMode,thinking_budget:thinkingBudget,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:'',hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:histMsgs,file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent,ma_plan_provider:$('ma-plan-prov').value||'',ma_code_provider:$('ma-code-prov').value||'',ma_test_provider:$('ma-test-prov')?$('ma-test-prov').value||'':'',ma_review_provider:$('ma-rev-prov').value||'',ma_include_test_stage:includeTest,memory:getMemoryContext(),tools:S.tools||[]})});
+    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},signal:S.abortCtrl?.signal,body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,anthropic_model:S.anthropicModel||'claude-sonnet-4-6',thinking_mode:thinkingMode,thinking_budget:thinkingBudget,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:'',hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:histMsgs,file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent,ma_plan_provider:$('ma-plan-prov').value||'',ma_code_provider:$('ma-code-prov').value||'',ma_test_provider:$('ma-test-prov')?$('ma-test-prov').value||'':'',ma_review_provider:$('ma-rev-prov').value||'',ma_include_test_stage:includeTest,memory:getMemoryContext(),tools:S.tools||[],airllm_model:$('al-model')?($('al-model').value||'meta-llama/Llama-2-7b-chat-hf'):'meta-llama/Llama-2-7b-chat-hf',airllm_max_tokens:$('al-tokens')?parseInt($('al-tokens').value)||512:512})});
     if(!res.ok){const err=await res.text();tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${res.status}: ${esc(err.slice(0,300))}</span></div></div>`;S.streaming=false;$('send-btn').disabled=false;return;}
     if(multiAgent){
       tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent" style="color:var(--purple)">Multi-Agent</span><span class="msg-time">${now()}</span></div><div id="${streamId}-wrap"></div></div>`;
@@ -1613,6 +1639,44 @@ function updateToolResultCard(data){
   const result=document.createElement('pre');result.className='tool-result';
   const txt=data.result||'(empty response)';result.textContent=txt.length>600?txt.slice(0,600)+'…':txt;
   card.appendChild(result);card.closest('#msgs')?.scrollTo({top:99999,behavior:'smooth'});
+}
+
+// ── Agent Pipeline ────────────────────────────────────────────────────────────
+async function runAgentPipeline(){
+  const task=($('agent-task').value||'').trim();
+  if(!task){toast('Enter a task for the agent pipeline',true);return;}
+  const prog=$('agent-progress');
+  prog.style.display='block';
+  prog.innerHTML='<div style="color:var(--muted2)">&#9203; Starting pipeline&#8230;</div>';
+  try{
+    const resp=await fetch('/api/agent/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
+    if(!resp.ok){const j=await resp.json().catch(()=>({}));prog.innerHTML=`<div style="color:var(--red)">&#10005; ${esc(j.error||resp.statusText)}</div>`;return;}
+    const reader=resp.body.getReader();const dec=new TextDecoder();
+    let buf='',answer='';
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');buf=lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data:'))continue;
+        const raw=line.slice(5).trim();
+        if(!raw||raw==='[DONE]')continue;
+        try{
+          const ev=JSON.parse(raw);
+          if(ev.t==='node'){prog.innerHTML+=`<div style="color:var(--blue);margin-top:4px">&#9679; ${esc(ev.label||ev.v)}</div>`;}
+          else if(ev.t==='text'){answer+=ev.v;}
+          else if(ev.t==='warn'){prog.innerHTML+=`<div style="color:var(--muted2);font-size:10px">&#9888; ${esc(ev.v)}</div>`;}
+          else if(ev.t==='error'){prog.innerHTML+=`<div style="color:var(--red)">&#10005; ${esc(ev.v)}</div>`;reader.cancel();return;}
+          else if(ev.t==='done'){
+            if(answer)prog.innerHTML+=`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);color:var(--text);white-space:pre-wrap;font-size:12px">${esc(answer)}</div>`;
+            prog.innerHTML+=`<div style="color:var(--accent2);margin-top:4px">&#10003; Done</div>`;
+          }
+        }catch(e){}
+      }
+    }
+    prog.scrollTop=prog.scrollHeight;
+  }catch(e){prog.innerHTML=`<div style="color:var(--red)">&#10005; ${esc(String(e))}</div>`;}
 }
 
 // ── Repo quick-scan ───────────────────────────────────────────────────────────

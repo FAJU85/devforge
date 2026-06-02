@@ -11,6 +11,20 @@ from concurrent.futures import ThreadPoolExecutor, as_completed as _futs_done
 from anthropic import Anthropic
 from huggingface_hub import InferenceClient
 
+# Optional: control-plane (LangGraph + Pinecone + Go data-plane integration)
+try:
+    from control_plane.graph import build_graph as _build_langgraph
+    from control_plane.memory.pinecone_client import (
+        query_context as _pinecone_query,
+        upsert_text as _pinecone_upsert,
+    )
+    _CONTROL_PLANE_AVAILABLE = True
+except Exception:
+    _CONTROL_PLANE_AVAILABLE = False
+    def _build_langgraph(): return None  # noqa: E301
+    def _pinecone_query(q: str, top_k: int = 3) -> str: return ""  # noqa: E301
+    def _pinecone_upsert(text: str, metadata=None) -> bool: return False  # noqa: E301
+
 app = FastAPI(title="DevForge")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -91,6 +105,68 @@ def build_system(body: "ChatBody") -> str:
     if fc:
         base += f"\n\n---\n**Repository context:**\n{fc}"
     return base
+
+_airllm_cache: dict = {}
+
+def _run_airllm(q, loop, system: str, messages: list, model_id: str, max_new_tokens: int = 512):
+    """Thread target: run local inference via AirLLM (streams model layers from disk/CPU to GPU)."""
+    try:
+        try:
+            from airllm import AutoModel
+            import torch
+        except ImportError:
+            asyncio.run_coroutine_threadsafe(
+                q.put(("error", "airllm not installed — run: pip install airllm")), loop
+            )
+            return
+
+        if model_id not in _airllm_cache:
+            asyncio.run_coroutine_threadsafe(
+                q.put(("text", f"⏳ Loading **{model_id}** — first run downloads and caches the model, may take several minutes…\n\n")), loop
+            )
+            device = "cuda:0" if torch.cuda.is_available() else "cpu"
+            _airllm_cache[model_id] = AutoModel.from_pretrained(model_id, device=device)
+
+        model = _airllm_cache[model_id]
+        tokenizer = model.tokenizer
+        device = next(iter(model.parameters())).device if hasattr(model, "parameters") else "cpu"
+
+        # Build the prompt using the model's chat template when available
+        chat_msgs = [{"role": "system", "content": system}] + messages
+        if hasattr(tokenizer, "apply_chat_template") and getattr(tokenizer, "chat_template", None):
+            prompt = tokenizer.apply_chat_template(chat_msgs, tokenize=False, add_generation_prompt=True)
+        else:
+            # Llama-2 style fallback
+            prompt = f"[INST] <<SYS>>\n{system}\n<</SYS>>\n\n"
+            for m in messages:
+                if m["role"] == "user":
+                    prompt += f"{m['content']} [/INST] "
+                elif m["role"] == "assistant":
+                    prompt += f"{m['content']} [INST] "
+
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
+        input_ids = inputs["input_ids"].to(device)
+        input_len = input_ids.shape[-1]
+
+        generation_output = model.generate(
+            input_ids,
+            max_new_tokens=max(1, min(int(max_new_tokens), 4096)),
+            use_cache=True,
+            return_dict_in_generate=True,
+        )
+
+        new_ids = generation_output.sequences[0][input_len:]
+        result = tokenizer.decode(new_ids, skip_special_tokens=True).strip()
+
+        # Simulate token-level streaming in small chunks
+        for i in range(0, max(len(result), 1), 8):
+            chunk = result[i:i + 8]
+            if chunk:
+                asyncio.run_coroutine_threadsafe(q.put(("text", chunk)), loop)
+
+        asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+    except Exception as e:
+        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
 
 def _run_anthropic_thinking(q, loop, system, messages, api_key, model, thinking_budget):
     """Run Anthropic with extended thinking enabled; emits ('thinking', text) chunks."""
@@ -1702,8 +1778,10 @@ class ChatBody(BaseModel):
     anthropic_model: Optional[str] = "claude-sonnet-4-6"
     thinking_mode: Optional[bool] = False
     thinking_budget: Optional[int] = Field(default=2000, ge=1000, le=100_000)
+    airllm_model: Optional[str] = Field(default="meta-llama/Llama-2-7b-chat-hf", max_length=200)
+    airllm_max_tokens: Optional[int] = Field(default=512, ge=1, le=4096)
 
-_PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom"}
+_PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom", "airllm": "AirLLM"}
 
 def get_runner(body: ChatBody, provider: str = "") -> Callable:
     """Return a thread-target callable bound to the chosen provider's run function.
@@ -1738,6 +1816,10 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
             oc_url,
             body.openai_compat_model or "llama3",
         )
+    elif p == "airllm":
+        al_model = (getattr(body, 'airllm_model', '') or 'meta-llama/Llama-2-7b-chat-hf').strip() or 'meta-llama/Llama-2-7b-chat-hf'
+        al_max_tokens = int(getattr(body, 'airllm_max_tokens', 512) or 512)
+        return lambda q, loop, sys, msgs: _run_airllm(q, loop, sys, msgs, al_model, al_max_tokens)
     else:
         token = (body.hf_token or "").strip() or HF_TOKEN
         return lambda q, loop, sys, msgs: _run_hf(q, loop, sys, msgs, token, body.hf_model)
@@ -1820,3 +1902,111 @@ async def chat_stream(body: ChatBody):
     gen = multi_agent_stream() if body.multi_agent else single_stream()
     return StreamingResponse(gen, media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ── Agent Pipeline (LangGraph + Pinecone + Go data-plane) ────────────────────
+
+_AGENT_NODE_LABELS: dict = {
+    "retrieve":  "🔍 Retrieving context",
+    "reasoning": "🧠 Planning tool calls",
+    "execution": "⚡ Executing tools",
+    "synthesis": "✍️ Synthesizing answer",
+}
+
+_AGENT_INITIAL_STATE: dict = {
+    "messages": [],
+    "rag_context": "",
+    "tool_plan": None,
+    "tool_results": None,
+    "final_answer": "",
+    "error": None,
+    "retry_count": 0,
+}
+
+
+class AgentRunBody(BaseModel):
+    task: str = Field(..., min_length=1, max_length=4000)
+
+
+@app.post("/api/agent/run")
+async def agent_run(body: AgentRunBody):
+    if not _CONTROL_PLANE_AVAILABLE:
+        return JSONResponse({"error": "control plane dependencies not installed"}, status_code=503)
+
+    state = {**_AGENT_INITIAL_STATE, "task": body.task}
+
+    async def event_stream():
+        try:
+            graph = _build_langgraph()
+            async for update in graph.astream(state):
+                for node_name, node_update in update.items():
+                    label = _AGENT_NODE_LABELS.get(node_name, node_name)
+                    yield f"data: {json.dumps({'t': 'node', 'v': node_name, 'label': label})}\n\n"
+                    if node_name == "synthesis":
+                        answer = (node_update or {}).get("final_answer") or ""
+                        for i in range(0, max(len(answer), 1), 8):
+                            chunk = answer[i:i + 8]
+                            if chunk:
+                                yield f"data: {json.dumps({'t': 'text', 'v': chunk})}\n\n"
+                    err = (node_update or {}).get("error")
+                    if err:
+                        yield f"data: {json.dumps({'t': 'warn', 'v': str(err)})}\n\n"
+            yield f"data: {json.dumps({'t': 'done'})}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'t': 'error', 'v': str(exc)})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+class MemoryQueryBody(BaseModel):
+    q: str = Field(..., min_length=1, max_length=2000)
+    top_k: int = Field(default=3, ge=1, le=20)
+
+
+@app.post("/api/memory/query")
+async def memory_query(body: MemoryQueryBody):
+    if not _CONTROL_PLANE_AVAILABLE:
+        return JSONResponse({"error": "control plane dependencies not installed"}, status_code=503)
+    context = _pinecone_query(body.q, top_k=body.top_k)
+    return {"context": context, "found": bool(context)}
+
+
+class MemoryUpsertBody(BaseModel):
+    text: str = Field(..., min_length=1, max_length=10_000)
+    metadata: Optional[dict] = Field(default=None)
+
+
+@app.post("/api/memory/upsert")
+async def memory_upsert(body: MemoryUpsertBody):
+    if not _CONTROL_PLANE_AVAILABLE:
+        return JSONResponse({"error": "control plane dependencies not installed"}, status_code=503)
+    ok = _pinecone_upsert(body.text, body.metadata)
+    if ok:
+        return {"stored": True}
+    return JSONResponse({"stored": False, "error": "Pinecone not configured or upsert failed"}, status_code=503)
+
+
+class GoToolsBody(BaseModel):
+    task_id: str = Field(..., min_length=1, max_length=100)
+    calls: List[dict] = Field(..., min_length=1, max_length=20)
+
+
+@app.post("/api/tools/dispatch")
+async def tools_dispatch(body: GoToolsBody):
+    """Proxy a BatchRequest to the Go data-plane service."""
+    go_url = os.environ.get("GO_DATA_PLANE_URL", "http://localhost:8080")
+    if not re.match(r"^https?://", go_url):
+        return JSONResponse({"error": "GO_DATA_PLANE_URL must be http:// or https://"}, status_code=400)
+    timeout = int(os.environ.get("GO_CALL_TIMEOUT", "30"))
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient(timeout=float(timeout)) as http:
+            resp = await http.post(f"{go_url}/tools/execute", json=body.model_dump())
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)

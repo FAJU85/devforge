@@ -228,6 +228,16 @@ class TestGetRunner:
         runner = main.get_runner(body)
         assert callable(runner)
 
+    def test_airllm_provider_returns_callable(self):
+        body = _body(provider="airllm", airllm_model="meta-llama/Llama-2-7b-chat-hf", airllm_max_tokens=256)
+        runner = main.get_runner(body)
+        assert callable(runner)
+
+    def test_airllm_provider_default_model_when_empty(self):
+        body = _body(provider="airllm", airllm_model="", airllm_max_tokens=512)
+        runner = main.get_runner(body)
+        assert callable(runner)
+
 
 # ---------------------------------------------------------------------------
 # AGENT_PROMPTS / SKILL_PROMPTS completeness
@@ -3566,3 +3576,425 @@ class TestChatStreamOpenAICompatSSRF:
         })
         assert r.status_code == 400
         assert "error" in r.json()
+
+
+# ---------------------------------------------------------------------------
+# AirLLM provider
+# ---------------------------------------------------------------------------
+
+class TestRunAirLLM:
+    """Tests for _run_airllm thread target and the AirLLM get_runner path."""
+
+    def test_airllm_missing_import_emits_error(self):
+        """When airllm is not installed, _run_airllm emits an error event."""
+        import builtins
+        real_import = builtins.__import__
+
+        def _block(name, *args, **kwargs):
+            if name == "airllm":
+                raise ImportError("No module named 'airllm'")
+            return real_import(name, *args, **kwargs)
+
+        results = []
+
+        async def _collect():
+            q = asyncio.Queue()
+            loop = asyncio.get_running_loop()
+            import threading
+            with patch("builtins.__import__", side_effect=_block):
+                t = threading.Thread(
+                    target=main._run_airllm,
+                    args=(q, loop, "sys", [{"role": "user", "content": "hi"}], "test-model", 64),
+                    daemon=True,
+                )
+                t.start()
+                while True:
+                    kind, val = await asyncio.wait_for(q.get(), timeout=5)
+                    results.append((kind, val))
+                    if kind in ("done", "error"):
+                        break
+                t.join(timeout=3)
+
+        asyncio.get_event_loop().run_until_complete(_collect())
+        assert any(k == "error" for k, _ in results)
+        err = next(v for k, v in results if k == "error")
+        assert "airllm" in err.lower()
+
+    def test_airllm_get_runner_returns_callable(self):
+        body = _body(provider="airllm", airllm_model="meta-llama/Llama-2-7b-chat-hf", airllm_max_tokens=256)
+        runner = main.get_runner(body)
+        assert callable(runner)
+
+    def test_airllm_get_runner_default_model_when_empty(self):
+        body = _body(provider="airllm", airllm_model="", airllm_max_tokens=512)
+        runner = main.get_runner(body)
+        assert callable(runner)
+
+    def test_airllm_chat_stream_returns_sse(self):
+        with patch("main.stream_one", side_effect=_mock_stream_text):
+            r = client.post("/api/chat/stream", json={
+                "provider": "airllm",
+                "airllm_model": "meta-llama/Llama-2-7b-chat-hf",
+                "airllm_max_tokens": 128,
+                "messages": [{"role": "user", "content": "hello"}],
+            })
+        assert r.status_code == 200
+        assert "text/event-stream" in r.headers.get("content-type", "")
+        assert "streamed text" in r.text
+
+    def test_airllm_model_field_rejects_oversized_id(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "airllm",
+            "airllm_model": "x" * 201,
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert r.status_code == 422
+
+    def test_airllm_max_tokens_rejects_zero(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "airllm",
+            "airllm_model": "meta-llama/Llama-2-7b-chat-hf",
+            "airllm_max_tokens": 0,
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert r.status_code == 422
+
+    def test_airllm_max_tokens_rejects_over_limit(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "airllm",
+            "airllm_model": "meta-llama/Llama-2-7b-chat-hf",
+            "airllm_max_tokens": 4097,
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert r.status_code == 422
+
+    def test_prov_label_includes_airllm(self):
+        assert "airllm" in main._PROV_LABEL
+        assert main._PROV_LABEL["airllm"] == "AirLLM"
+
+
+# ---------------------------------------------------------------------------
+# /api/agent/run — LangGraph pipeline endpoint
+# ---------------------------------------------------------------------------
+
+class TestAgentRunEndpoint:
+    def test_returns_503_when_control_plane_unavailable(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = False
+            r = client.post("/api/agent/run", json={"task": "ping example.com"})
+            assert r.status_code == 503
+            assert "error" in r.json()
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_rejects_empty_task(self):
+        r = client.post("/api/agent/run", json={"task": ""})
+        assert r.status_code == 422
+
+    def test_rejects_task_exceeding_max_length(self):
+        r = client.post("/api/agent/run", json={"task": "x" * 4001})
+        assert r.status_code == 422
+
+    def test_returns_sse_stream_when_mocked(self):
+        async def _fake_astream(state):
+            yield {"retrieve": {"rag_context": "some context"}}
+            yield {"synthesis": {"final_answer": "done"}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream = _fake_astream
+
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._build_langgraph", return_value=mock_graph):
+                r = client.post("/api/agent/run", json={"task": "fetch example.com"})
+            assert r.status_code == 200
+            assert "text/event-stream" in r.headers.get("content-type", "")
+            assert "retrieve" in r.text
+            assert "done" in r.text
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_streams_node_events_for_all_nodes(self):
+        async def _fake_astream(state):
+            for node in ("retrieve", "reasoning", "execution", "synthesis"):
+                yield {node: {"rag_context": ""} if node == "retrieve" else
+                              {"tool_plan": None} if node == "reasoning" else
+                              {"tool_results": None} if node == "execution" else
+                              {"final_answer": "answer text"}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream = _fake_astream
+
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._build_langgraph", return_value=mock_graph):
+                r = client.post("/api/agent/run", json={"task": "test"})
+            body = r.text
+            assert "retrieve" in body
+            assert "reasoning" in body
+            assert "execution" in body
+            assert "synthesis" in body
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_streams_final_answer_as_text_chunks(self):
+        async def _fake_astream(state):
+            yield {"synthesis": {"final_answer": "Hello world from agent"}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream = _fake_astream
+
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._build_langgraph", return_value=mock_graph):
+                r = client.post("/api/agent/run", json={"task": "hi"})
+            # Answer is split into 8-char chunks; verify at least one text event is present
+            assert '"t": "text"' in r.text
+            assert "Hello wo" in r.text  # first 8-char chunk of "Hello world from agent"
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_emits_warn_event_for_node_error(self):
+        async def _fake_astream(state):
+            yield {"execution": {"error": "connection refused", "retry_count": 1}}
+            yield {"synthesis": {"final_answer": "fallback"}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream = _fake_astream
+
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._build_langgraph", return_value=mock_graph):
+                r = client.post("/api/agent/run", json={"task": "test error"})
+            assert "warn" in r.text
+            assert "connection refused" in r.text
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_emits_error_event_on_exception(self):
+        async def _raise(state):
+            raise RuntimeError("graph exploded")
+            yield  # make it a generator
+
+        mock_graph = MagicMock()
+        mock_graph.astream = _raise
+
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._build_langgraph", return_value=mock_graph):
+                r = client.post("/api/agent/run", json={"task": "crash"})
+            assert "error" in r.text
+            assert "graph exploded" in r.text
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_node_labels_dict_covers_pipeline_nodes(self):
+        for node in ("retrieve", "reasoning", "execution", "synthesis"):
+            assert node in main._AGENT_NODE_LABELS
+
+
+# ---------------------------------------------------------------------------
+# /api/memory/query — Pinecone RAG query
+# ---------------------------------------------------------------------------
+
+class TestMemoryQueryEndpoint:
+    def test_returns_503_when_control_plane_unavailable(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = False
+            r = client.post("/api/memory/query", json={"q": "some task"})
+            assert r.status_code == 503
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_rejects_empty_query(self):
+        r = client.post("/api/memory/query", json={"q": ""})
+        assert r.status_code == 422
+
+    def test_rejects_top_k_zero(self):
+        r = client.post("/api/memory/query", json={"q": "test", "top_k": 0})
+        assert r.status_code == 422
+
+    def test_rejects_top_k_over_limit(self):
+        r = client.post("/api/memory/query", json={"q": "test", "top_k": 21})
+        assert r.status_code == 422
+
+    def test_returns_context_when_available(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._pinecone_query", return_value="relevant passage here"):
+                r = client.post("/api/memory/query", json={"q": "example task", "top_k": 3})
+            assert r.status_code == 200
+            body = r.json()
+            assert body["context"] == "relevant passage here"
+            assert body["found"] is True
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_found_false_when_no_context(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._pinecone_query", return_value=""):
+                r = client.post("/api/memory/query", json={"q": "obscure task"})
+            assert r.status_code == 200
+            assert r.json()["found"] is False
+            assert r.json()["context"] == ""
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_default_top_k_is_three(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            captured = {}
+            def _capture(q, top_k=3):
+                captured["top_k"] = top_k
+                return ""
+            with patch("main._pinecone_query", side_effect=_capture):
+                client.post("/api/memory/query", json={"q": "task"})
+            assert captured.get("top_k") == 3
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+
+# ---------------------------------------------------------------------------
+# /api/memory/upsert — Pinecone memory store
+# ---------------------------------------------------------------------------
+
+class TestMemoryUpsertEndpoint:
+    def test_returns_503_when_control_plane_unavailable(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = False
+            r = client.post("/api/memory/upsert", json={"text": "hello world"})
+            assert r.status_code == 503
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_rejects_empty_text(self):
+        r = client.post("/api/memory/upsert", json={"text": ""})
+        assert r.status_code == 422
+
+    def test_rejects_text_over_limit(self):
+        r = client.post("/api/memory/upsert", json={"text": "x" * 10_001})
+        assert r.status_code == 422
+
+    def test_returns_stored_true_on_success(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._pinecone_upsert", return_value=True):
+                r = client.post("/api/memory/upsert", json={"text": "important context here"})
+            assert r.status_code == 200
+            assert r.json()["stored"] is True
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_returns_503_when_upsert_fails(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._pinecone_upsert", return_value=False):
+                r = client.post("/api/memory/upsert", json={"text": "some text"})
+            assert r.status_code == 503
+            assert r.json()["stored"] is False
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_passes_metadata_to_upsert(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            captured = {}
+            def _capture(text, metadata=None):
+                captured["metadata"] = metadata
+                return True
+            with patch("main._pinecone_upsert", side_effect=_capture):
+                client.post("/api/memory/upsert", json={"text": "ctx", "metadata": {"source": "test"}})
+            assert captured.get("metadata") == {"source": "test"}
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+
+# ---------------------------------------------------------------------------
+# /api/tools/dispatch — Go data-plane proxy
+# ---------------------------------------------------------------------------
+
+class TestToolsDispatchEndpoint:
+    def _valid_body(self):
+        return {
+            "task_id": "test-task-1",
+            "calls": [{"call_id": "c1", "tool": "ping", "args": {"host": "1.1.1.1"}}],
+        }
+
+    def test_rejects_empty_task_id(self):
+        r = client.post("/api/tools/dispatch", json={"task_id": "", "calls": [{"call_id": "c1", "tool": "ping", "args": {}}]})
+        assert r.status_code == 422
+
+    def test_rejects_empty_calls_list(self):
+        r = client.post("/api/tools/dispatch", json={"task_id": "t1", "calls": []})
+        assert r.status_code == 422
+
+    def test_rejects_calls_list_over_20(self):
+        calls = [{"call_id": f"c{i}", "tool": "ping", "args": {}} for i in range(21)]
+        r = client.post("/api/tools/dispatch", json={"task_id": "t1", "calls": calls})
+        assert r.status_code == 422
+
+    def test_returns_400_for_invalid_go_url(self):
+        import os
+        original = os.environ.get("GO_DATA_PLANE_URL")
+        try:
+            os.environ["GO_DATA_PLANE_URL"] = "ftp://bad-scheme"
+            r = client.post("/api/tools/dispatch", json=self._valid_body())
+            assert r.status_code == 400
+            assert "error" in r.json()
+        finally:
+            if original is None:
+                os.environ.pop("GO_DATA_PLANE_URL", None)
+            else:
+                os.environ["GO_DATA_PLANE_URL"] = original
+
+    def test_returns_502_when_go_service_unreachable(self):
+        import httpx as _httpx
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.post = AsyncMock(side_effect=_httpx.ConnectError("refused"))
+            mock_cls.return_value = mock_client
+            r = client.post("/api/tools/dispatch", json=self._valid_body())
+        assert r.status_code == 502
+        assert "error" in r.json()
+
+    def test_returns_go_response_on_success(self):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json = MagicMock(return_value={
+            "task_id": "test-task-1",
+            "results": [{"call_id": "c1", "tool": "ping", "ok": True, "data": {}, "duration_ms": 5}],
+            "duration_ms": 10,
+        })
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.post = AsyncMock(return_value=mock_resp)
+            mock_cls.return_value = mock_client
+            r = client.post("/api/tools/dispatch", json=self._valid_body())
+
+        assert r.status_code == 200
+        assert r.json()["task_id"] == "test-task-1"
+        assert len(r.json()["results"]) == 1
+
+    def test_agent_initial_state_has_required_keys(self):
+        required = {"messages", "rag_context", "tool_plan", "tool_results", "final_answer", "error", "retry_count"}
+        assert required.issubset(set(main._AGENT_INITIAL_STATE.keys()))
