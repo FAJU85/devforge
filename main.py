@@ -431,6 +431,58 @@ def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
 
+async def _stream_ai_sse(body, system: str, user_prompt: str, max_tokens: int = 1024, timeout: int = 60):
+    """Async generator yielding SSE chunks for Anthropic (streaming) and Groq (chunked) providers.
+
+    Yields raw `data: ...\\n\\n` strings; caller should prepend any initial events (e.g. 'packages').
+    """
+    if body.provider == "anthropic" and body.anthropic_key:
+        q: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+        model = (getattr(body, 'anthropic_model', '') or 'claude-haiku-4-5-20251001').strip() or 'claude-haiku-4-5-20251001'
+
+        def _run():
+            try:
+                client = Anthropic(api_key=body.anthropic_key)
+                with client.messages.stream(model=model, max_tokens=max_tokens, system=system,
+                        messages=[{"role": "user", "content": user_prompt}]) as stream:
+                    for text in stream.text_stream:
+                        asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+            except Exception as e:
+                asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+
+        threading.Thread(target=_run, daemon=True).start()
+        while True:
+            try:
+                kind, val = await asyncio.wait_for(q.get(), timeout=timeout)
+            except asyncio.TimeoutError:
+                yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; return
+            if kind == "text":
+                yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
+            elif kind == "done":
+                break
+            else:
+                yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; return
+    elif body.provider == "groq" and body.groq_key:
+        r = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+            json={"model": getattr(body, 'groq_model', '') or "llama-3.3-70b-versatile", "max_tokens": max_tokens,
+                  "messages": [{"role": "system", "content": system},
+                               {"role": "user", "content": user_prompt}]},
+            timeout=max(30, timeout // 2),
+        )
+        if r.ok:
+            text = r.json()["choices"][0]["message"]["content"]
+            for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
+                yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
+        else:
+            yield f"data: {json.dumps({'t':'error','v':r.text[:200]})}\n\n"; return
+    else:
+        yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"; return
+    yield f"data: {json.dumps({'t':'done'})}\n\n"
+
 async def stream_one(runner, system: str, messages: list):
     q: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
@@ -1134,56 +1186,10 @@ async def generate_release_notes(body: ReleaseNotesBody):
         f"Repository: {body.owner}/{body.repo}\n"
         f"Commits ({len(all_commits)} total):\n{commit_list}"
     )
-    model = (body.anthropic_model or "claude-sonnet-4-6").strip() or "claude-sonnet-4-6"
-
-    async def _stream():
-        if body.provider == "anthropic" and body.anthropic_key:
-            q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_running_loop()
-            def _run():
-                try:
-                    client = Anthropic(api_key=body.anthropic_key)
-                    with client.messages.stream(
-                        model=model, max_tokens=1024, system=RELEASE_NOTES_SYSTEM,
-                        messages=[{"role": "user", "content": user_prompt}],
-                    ) as stream:
-                        for text in stream.text_stream:
-                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
-                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
-                except Exception as e:
-                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
-            threading.Thread(target=_run, daemon=True).start()
-            while True:
-                try:
-                    kind, val = await asyncio.wait_for(q.get(), timeout=60)
-                except asyncio.TimeoutError:
-                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
-                if kind == "text":
-                    yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
-                elif kind == "done":
-                    break
-                else:
-                    yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
-        elif body.provider == "groq" and body.groq_key:
-            r2 = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.3-70b-versatile", "max_tokens": 1024,
-                      "messages": [{"role": "system", "content": RELEASE_NOTES_SYSTEM},
-                                   {"role": "user", "content": user_prompt}]},
-                timeout=30,
-            )
-            if r2.ok:
-                text = r2.json()["choices"][0]["message"]["content"]
-                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
-                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
-            else:
-                yield f"data: {json.dumps({'t':'error','v':r2.text[:200]})}\n\n"
-        else:
-            yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"
-        yield f"data: {json.dumps({'t':'done'})}\n\n"
-
-    return StreamingResponse(_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        _stream_ai_sse(body, RELEASE_NOTES_SYSTEM, user_prompt, max_tokens=1024, timeout=60),
+        media_type="text/event-stream",
+    )
 
 
 COMMIT_MSG_SYSTEM = (
@@ -1367,56 +1373,10 @@ async def generate_readme(body: ReadmeBody):
         f"Repository: {body.repo_name or 'Unknown'}\n\n"
         f"Files:\n{body.file_context[:12000]}"
     )
-    model = (body.anthropic_model or "claude-sonnet-4-6").strip() or "claude-sonnet-4-6"
-
-    async def _stream():
-        if body.provider == "anthropic" and body.anthropic_key:
-            q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_running_loop()
-            def _run():
-                try:
-                    client = Anthropic(api_key=body.anthropic_key)
-                    with client.messages.stream(
-                        model=model, max_tokens=2048, system=README_SYSTEM,
-                        messages=[{"role": "user", "content": user_prompt}],
-                    ) as stream:
-                        for text in stream.text_stream:
-                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
-                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
-                except Exception as e:
-                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
-            threading.Thread(target=_run, daemon=True).start()
-            while True:
-                try:
-                    kind, val = await asyncio.wait_for(q.get(), timeout=90)
-                except asyncio.TimeoutError:
-                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
-                if kind == "text":
-                    yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
-                elif kind == "done":
-                    break
-                else:
-                    yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
-        elif body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.3-70b-versatile", "max_tokens": 2048,
-                      "messages": [{"role": "system", "content": README_SYSTEM},
-                                   {"role": "user", "content": user_prompt}]},
-                timeout=45,
-            )
-            if r.ok:
-                text = r.json()["choices"][0]["message"]["content"]
-                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
-                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
-            else:
-                yield f"data: {json.dumps({'t':'error','v':r.text[:200]})}\n\n"
-        else:
-            yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"
-        yield f"data: {json.dumps({'t':'done'})}\n\n"
-
-    return StreamingResponse(_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        _stream_ai_sse(body, README_SYSTEM, user_prompt, max_tokens=2048, timeout=90),
+        media_type="text/event-stream",
+    )
 
 
 DEPS_AUDIT_SYSTEM = (
@@ -1613,44 +1573,8 @@ async def scan_deps(body: ScanDepsBody):
 
     async def _stream():
         yield f"data: {json.dumps({'t':'packages','v':{'ecosystem':ecosystem,'packages':pkg_results}})}\n\n"
-        if body.provider == "anthropic" and body.anthropic_key:
-            q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_running_loop()
-            model = (body.anthropic_model or "claude-haiku-4-5-20251001").strip() or "claude-haiku-4-5-20251001"
-            def _run():
-                try:
-                    client = Anthropic(api_key=body.anthropic_key)
-                    with client.messages.stream(model=model, max_tokens=1024, system=DEPS_AUDIT_SYSTEM,
-                            messages=[{"role": "user", "content": ai_prompt}]) as stream:
-                        for text in stream.text_stream:
-                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
-                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
-                except Exception as e:
-                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
-            threading.Thread(target=_run, daemon=True).start()
-            while True:
-                try:
-                    kind, val = await asyncio.wait_for(q.get(), timeout=60)
-                except asyncio.TimeoutError:
-                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
-                if kind == "text": yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
-                elif kind == "done": break
-                else: yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
-        elif body.provider == "groq" and body.groq_key:
-            r2 = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.3-70b-versatile", "max_tokens": 1024,
-                      "messages": [{"role": "system", "content": DEPS_AUDIT_SYSTEM},
-                                   {"role": "user", "content": ai_prompt}]}, timeout=30)
-            if r2.ok:
-                text = r2.json()["choices"][0]["message"]["content"]
-                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
-                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
-            else:
-                yield f"data: {json.dumps({'t':'error','v':r2.text[:200]})}\n\n"
-        else:
-            yield f"data: {json.dumps({'t':'error','v':'No provider key for AI analysis'})}\n\n"
-        yield f"data: {json.dumps({'t':'done'})}\n\n"
+        async for chunk in _stream_ai_sse(body, DEPS_AUDIT_SYSTEM, ai_prompt, max_tokens=1024, timeout=60):
+            yield chunk
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
 
@@ -1702,6 +1626,10 @@ class PromptEnhanceBody(BaseModel):
     provider: str = "anthropic"
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
+    groq_model: Optional[str] = ""
+    openai_compat_key: Optional[str] = ""
+    openai_compat_base_url: Optional[str] = ""
+    openai_compat_model: Optional[str] = ""
     hf_token: Optional[str] = ""
     prompt: str = Field(max_length=4000)
 
@@ -1712,26 +1640,11 @@ async def enhance_prompt(body: PromptEnhanceBody):
         p = (body.prompt or "").strip()
         if not p:
             return JSONResponse({"error": "prompt required"}, status_code=400)
-        if body.provider == "anthropic" and body.anthropic_key:
-            client = Anthropic(api_key=body.anthropic_key)
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001", max_tokens=512,
-                system=ENHANCE_SYSTEM,
-                messages=[{"role": "user", "content": p}],
-            )
-            enhanced = msg.content[0].text.strip()
-        elif body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.1-8b-instant", "max_tokens": 512,
-                      "messages": [{"role": "system", "content": ENHANCE_SYSTEM},
-                                   {"role": "user", "content": p}]},
-                timeout=20,
-            )
-            if not r.ok:
-                return JSONResponse({"error": r.text[:200]}, status_code=400)
-            enhanced = r.json()["choices"][0]["message"]["content"].strip()
+        if body.provider in ("anthropic", "groq", "openai_compat"):
+            success, result = _call_ai_provider(body, ENHANCE_SYSTEM, p, max_tokens=512)
+            if not success:
+                return JSONResponse({"error": result}, status_code=400)
+            return {"enhanced": result.strip()}
         else:
             token = (body.hf_token or "").strip() or HF_TOKEN
             if not token:
@@ -1742,8 +1655,7 @@ async def enhance_prompt(body: PromptEnhanceBody):
                 messages=[{"role": "system", "content": ENHANCE_SYSTEM},
                            {"role": "user", "content": p}],
             )
-            enhanced = result.choices[0].message.content.strip()
-        return {"enhanced": enhanced}
+            return {"enhanced": result.choices[0].message.content.strip()}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
