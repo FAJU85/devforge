@@ -1196,7 +1196,10 @@ class CommitMsgBody(BaseModel):
     provider: str = "anthropic"
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
-    hf_token: Optional[str] = ""
+    groq_model: Optional[str] = ""
+    openai_compat_key: Optional[str] = ""
+    openai_compat_base_url: Optional[str] = ""
+    openai_compat_model: Optional[str] = ""
     path: str = Field(max_length=1000)
     content: Optional[str] = Field(default="", max_length=50_000)
     diff: Optional[str] = Field(default="", max_length=50_000)
@@ -1207,28 +1210,10 @@ async def suggest_commit_message(body: CommitMsgBody):
     try:
         snippet = (body.diff or body.content or "")[:2000]
         user_prompt = f"File: {body.path}\n\n{snippet}"
-        if body.provider == "anthropic" and body.anthropic_key:
-            client = Anthropic(api_key=body.anthropic_key)
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001", max_tokens=80,
-                system=COMMIT_MSG_SYSTEM,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
-            return {"message": msg.content[0].text.strip()}
-        elif body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.1-8b-instant", "max_tokens": 80,
-                      "messages": [{"role": "system", "content": COMMIT_MSG_SYSTEM},
-                                   {"role": "user", "content": user_prompt}]},
-                timeout=15,
-            )
-            if not r.ok:
-                return JSONResponse({"error": r.text[:200]}, status_code=400)
-            return {"message": r.json()["choices"][0]["message"]["content"].strip()}
-        else:
-            return JSONResponse({"error": "no provider key"}, status_code=400)
+        success, result = _call_ai_provider(body, COMMIT_MSG_SYSTEM, user_prompt, max_tokens=80)
+        if not success:
+            return JSONResponse({"error": result}, status_code=400)
+        return {"message": result.strip()}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
