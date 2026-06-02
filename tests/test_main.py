@@ -2098,13 +2098,19 @@ class TestRepoSearchEndpoint:
             mock_get.return_value.ok = True
             mock_get.return_value.json.return_value = {"total_count": 0, "items": []}
             r = client.post("/api/repo/search", json={
-                "token": "tok", "owner": "user", "repo": "myrepo", "query": "test", "max_results": 100,
+                "token": "tok", "owner": "user", "repo": "myrepo", "query": "test", "max_results": 20,
             })
         assert r.status_code == 200
         # Verify per_page was capped at 20
         call_args = mock_get.call_args
         params = call_args[1].get("params", {})
         assert params.get("per_page", 0) <= 20
+
+    def test_search_rejects_max_results_exceeding_limit(self):
+        r = client.post("/api/repo/search", json={
+            "token": "tok", "owner": "user", "repo": "myrepo", "query": "test", "max_results": 100,
+        })
+        assert r.status_code == 422
 
 
 class TestRepoCommitsEndpoint:
@@ -2145,12 +2151,18 @@ class TestRepoCommitsEndpoint:
             mock_get.return_value.ok = True
             mock_get.return_value.json.return_value = []
             r = client.post("/api/repo/commits", json={
-                "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 200,
+                "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 30,
             })
         assert r.status_code == 200
         call_args = mock_get.call_args
         params = call_args[1].get("params", {})
         assert params.get("per_page", 0) <= 30
+
+    def test_commits_rejects_max_results_exceeding_limit(self):
+        r = client.post("/api/repo/commits", json={
+            "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 200,
+        })
+        assert r.status_code == 422
 
 
 class TestExtendedThinking:
@@ -2399,12 +2411,18 @@ class TestWorkflowRunsEndpoint:
             mock_get.return_value.ok = True
             mock_get.return_value.json.return_value = {"workflow_runs": []}
             r = client.post("/api/repo/workflow-runs", json={
-                "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 999,
+                "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 20,
             })
         assert r.status_code == 200
         call_args = mock_get.call_args
         params = call_args[1].get("params", {})
         assert params.get("per_page", 0) <= 20
+
+    def test_workflow_runs_rejects_max_results_exceeding_limit(self):
+        r = client.post("/api/repo/workflow-runs", json={
+            "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 999,
+        })
+        assert r.status_code == 422
 
 
 class TestCommitSuggestMessage:

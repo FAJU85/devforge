@@ -863,10 +863,10 @@ async def get_pr_diff(body: PRDiffBody):
 
 class RepoSearchBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    query: str
-    max_results: int = 10
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    query: str = Field(max_length=500)
+    max_results: int = Field(default=10, ge=1, le=30)
 
 
 @app.post("/api/repo/search")
@@ -909,10 +909,10 @@ async def repo_search(body: RepoSearchBody):
 
 class RepoCommitsBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    branch: Optional[str] = "main"
-    max_results: int = 10
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    branch: Optional[str] = Field(default="main", max_length=255)
+    max_results: int = Field(default=10, ge=1, le=50)
 
 
 @app.post("/api/repo/commits")
@@ -940,9 +940,9 @@ async def repo_commits(body: RepoCommitsBody):
 
 class WorkflowRunsBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    max_results: int = 10
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    max_results: int = Field(default=10, ge=1, le=50)
 
 
 @app.post("/api/repo/workflow-runs")
