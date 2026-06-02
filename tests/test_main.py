@@ -4044,3 +4044,26 @@ class TestConfigEndpoint:
         monkeypatch.setenv("ENVIRONMENT", "staging")
         r = client.get("/api/config")
         assert r.json()["environment"] == "staging"
+
+
+class TestSecurityHeaders:
+    """Every response must carry the mandatory security headers."""
+
+    def _check(self, r):
+        assert r.headers.get("x-content-type-options") == "nosniff"
+        assert r.headers.get("x-frame-options") == "DENY"
+        assert r.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+        assert r.headers.get("x-xss-protection") == "0"
+        assert r.headers.get("permissions-policy") == "geolocation=(), microphone=(), camera=()"
+
+    def test_get_root_has_security_headers(self):
+        r = client.get("/")
+        self._check(r)
+
+    def test_api_config_has_security_headers(self):
+        r = client.get("/api/config")
+        self._check(r)
+
+    def test_json_endpoint_has_security_headers(self):
+        r = client.get("/api/tools/list")
+        self._check(r)
