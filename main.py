@@ -662,6 +662,50 @@ class SuggestFilesBody(BaseModel):
     files: List[str]
     max_suggestions: int = Field(default=6, ge=1, le=20)
 
+def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> tuple[bool, str]:
+    """Call an AI provider with the given system prompt and user prompt.
+
+    Returns: (success: bool, result: str)
+    """
+    try:
+        if body.provider == "anthropic" and body.anthropic_key:
+            client = Anthropic(api_key=body.anthropic_key)
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=max_tokens,
+                system=system,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return True, msg.content[0].text if msg.content else ""
+        elif body.provider == "groq" and body.groq_key:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": body.groq_model or "llama-3.1-8b-instant", "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ], "max_tokens": max_tokens, "stream": False},
+                timeout=20,
+            )
+            return r.ok, r.json()["choices"][0]["message"]["content"] if r.ok else ""
+        elif body.provider == "openai_compat" and body.openai_compat_base_url:
+            if not _valid_http_url(body.openai_compat_base_url):
+                return False, "openai_compat_base_url must be http:// or https://"
+            url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
+            hdrs = {"Content-Type": "application/json"}
+            if body.openai_compat_key:
+                hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
+            r = requests.post(url, headers=hdrs, json={
+                "model": body.openai_compat_model or "llama3",
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                "max_tokens": max_tokens, "stream": False,
+            }, timeout=20)
+            return r.ok, r.json()["choices"][0]["message"]["content"] if r.ok else ""
+        else:
+            return False, "No usable provider configured"
+    except Exception as e:
+        return False, str(e)
+
 @app.post("/api/repo/suggest-files")
 async def suggest_files(body: SuggestFilesBody):
     """Use AI to suggest the most relevant files for a given task."""
@@ -675,44 +719,11 @@ async def suggest_files(body: SuggestFilesBody):
     )
     system = "You are a file relevance expert. Return only a valid JSON array of file paths."
 
-    result = ""
-    try:
-        if body.provider == "anthropic" and body.anthropic_key:
-            client = Anthropic(api_key=body.anthropic_key)
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=256,
-                system=system,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            result = msg.content[0].text if msg.content else "[]"
-        elif body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": body.groq_model or "llama-3.1-8b-instant", "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": prompt},
-                ], "max_tokens": 256, "stream": False},
-                timeout=20,
-            )
-            result = r.json()["choices"][0]["message"]["content"] if r.ok else "[]"
-        elif body.provider == "openai_compat" and body.openai_compat_base_url:
-            if not _valid_http_url(body.openai_compat_base_url):
-                return JSONResponse({"error": "openai_compat_base_url must be http:// or https://"}, status_code=400)
-            url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
-            hdrs = {"Content-Type": "application/json"}
-            if body.openai_compat_key:
-                hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
-            r = requests.post(url, headers=hdrs, json={
-                "model": body.openai_compat_model or "llama3",
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-                "max_tokens": 256, "stream": False,
-            }, timeout=20)
-            result = r.json()["choices"][0]["message"]["content"] if r.ok else "[]"
-        else:
-            return JSONResponse({"error": "No usable provider configured"}, status_code=400)
+    success, result = _call_ai_provider(body, system, prompt, max_tokens=256)
+    if not success:
+        return JSONResponse({"error": result}, status_code=400)
 
+    try:
         # Extract JSON array from result (strip any surrounding text)
         m = re.search(r'\[.*?\]', result, re.DOTALL)
         if not m:
@@ -743,47 +754,13 @@ async def summarize_file(body: SummarizeFileBody):
     """Condense a large file to a short AI-generated summary for context injection."""
     system = "You are a code summarizer. Produce a concise summary (under 400 words) of the file: its purpose, key exports/functions/classes, and important patterns. Be specific and technical."
     prompt = f"File: {body.filename}\n\n```\n{body.content[:8000]}\n```\n\nSummarize this file for AI context."
-    try:
-        if body.provider == "anthropic" and body.anthropic_key:
-            client = Anthropic(api_key=body.anthropic_key)
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=600,
-                system=system,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            result = msg.content[0].text if msg.content else ""
-        elif body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.1-8b-instant", "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": prompt},
-                ], "max_tokens": 600, "stream": False},
-                timeout=20,
-            )
-            result = r.json()["choices"][0]["message"]["content"] if r.ok else ""
-        elif body.provider == "openai_compat" and body.openai_compat_base_url:
-            if not _valid_http_url(body.openai_compat_base_url):
-                return JSONResponse({"error": "openai_compat_base_url must be http:// or https://"}, status_code=400)
-            url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
-            hdrs = {"Content-Type": "application/json"}
-            if body.openai_compat_key:
-                hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
-            r = requests.post(url, headers=hdrs, json={
-                "model": body.openai_compat_model or "llama3",
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-                "max_tokens": 600, "stream": False,
-            }, timeout=20)
-            result = r.json()["choices"][0]["message"]["content"] if r.ok else ""
-        else:
-            return JSONResponse({"error": "No usable provider configured"}, status_code=400)
-        if not result:
-            return JSONResponse({"error": "Empty summary returned"}, status_code=400)
-        return {"summary": result}
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+
+    success, result = _call_ai_provider(body, system, prompt, max_tokens=600)
+    if not success:
+        return JSONResponse({"error": result}, status_code=400)
+    if not result:
+        return JSONResponse({"error": "Empty summary returned"}, status_code=400)
+    return {"summary": result}
 
 
 class BatchWriteItem(BaseModel):
