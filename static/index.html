@@ -469,7 +469,7 @@ pre::-webkit-scrollbar{height:4px}
         </div>
         <!-- Provider-specific fields (hidden except when selected) -->
         <div id="pf-a" style="flex-direction:column;margin-top:8px">
-          <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" oninput="saveEnhance()"></div>
+          <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" oninput="saveEnhance()"></div>
           <div class="model-selector" role="radiogroup" aria-label="Claude model">
             <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
             <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
@@ -482,8 +482,8 @@ pre::-webkit-scrollbar{height:4px}
         </div>
         <div id="pf-g" style="display:none;margin-top:8px">
           <div class="prov-note green">✓ <strong>Free tier</strong> — <a href="https://console.groq.com" target="_blank">console.groq.com</a></div>
-          <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off"></div>
-          <div><div class="flabel">Model</div><select class="finput" id="gm" onchange="updBadge()"><option value="llama-3.3-70b-versatile">Llama 3.3 70B — Best</option><option value="llama-3.1-8b-instant">Llama 3.1 8B — Fast</option><option value="mixtral-8x7b-32768">Mixtral 8x7B</option><option value="gemma2-9b-it">Gemma 2 9B</option><option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B</option><option value="qwen-qwq-32b">Qwen QwQ 32B</option></select></div></div>
+          <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off" aria-label="Groq API key"></div>
+          <div><div class="flabel">Model</div><select class="finput" id="gm" aria-label="Groq model" onchange="updBadge()"><option value="llama-3.3-70b-versatile">Llama 3.3 70B — Best</option><option value="llama-3.1-8b-instant">Llama 3.1 8B — Fast</option><option value="mixtral-8x7b-32768">Mixtral 8x7B</option><option value="gemma2-9b-it">Gemma 2 9B</option><option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B</option><option value="qwen-qwq-32b">Qwen QwQ 32B</option></select></div></div>
         </div>
         <div id="pf-h" style="display:none;margin-top:8px">
           <div class="prov-note green">✓ <strong>Token pre-configured</strong> — HF_TOKEN set via Space secrets.</div>
@@ -499,9 +499,9 @@ pre::-webkit-scrollbar{height:4px}
             <button class="qfill-btn" onclick="fillEndpoint('lmstudio')">🖥 LM Studio</button>
           </div>
           <div class="pfields">
-            <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" oninput="updBadge()"></div>
-            <div><div class="flabel">Model</div><input class="finput" id="oci-model" placeholder="llama3" autocomplete="off" oninput="updBadge()"></div>
-            <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off"></div>
+            <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" aria-label="OpenAI-compatible base URL" oninput="updBadge()"></div>
+            <div><div class="flabel">Model</div><input class="finput" id="oci-model" placeholder="llama3" autocomplete="off" aria-label="OpenAI-compatible model name" oninput="updBadge()"></div>
+            <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off" aria-label="OpenAI-compatible API key (optional)"></div>
           </div>
         </div>
         <div id="pf-al" style="display:none;margin-top:8px">
@@ -819,7 +819,7 @@ const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new 
 const $=id=>document.getElementById(id);
 const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
 const get=p=>fetch(p).then(r=>r.json());
-function toast(m,err=false){document.querySelectorAll('.toast').forEach(t=>t.remove());const t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),4500);}
+function toast(m,err=false){document.querySelectorAll('.toast').forEach(t=>t.remove());const t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=m;t.setAttribute('role',err?'alert':'status');t.setAttribute('aria-live',err?'assertive':'polite');document.body.appendChild(t);setTimeout(()=>t.remove(),4500);}
 function ar(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,180)+'px';}
 function now(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
 function fext(p){const e=p.split('.');return e.length>1?e.pop().toLowerCase():'';}
@@ -1159,7 +1159,7 @@ function autoFixCode(btn){
   $('msgs').scrollTo(0,$('msgs').scrollHeight);
   toast('🔧 Security fix request ready — click Send');
 }
-function rmd(text){const d=document.createElement('div');d.innerHTML=marked.parse(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase().replace(/[^a-z0-9+#._-]/g,'');const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';const gistBtn=S.ghToken?`<button class="ccopy" onclick="createGist(this,'${lang}')" title="Save as GitHub Gist">Gist</button>`:'';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" onclick="cp(this)">copy</button><button class="ccopy" onclick="explainCode(this)" title="Explain this code">?</button><button class="ccopy" onclick="scanCode(this,'${lang}')" title="Scan for security issues">🛡️</button>${gistBtn}`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{const ce=h.querySelector('code');if(!ce)return;const fp=ce.textContent.trim();if(!/[./]/.test(fp))return;const nx=h.nextElementSibling;if(nx&&nx.classList.contains('cblock')){const hd=nx.querySelector('.cblock-head');if(hd){const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);}}});}return d.innerHTML;}
+function rmd(text){const d=document.createElement('div');d.innerHTML=marked.parse(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase().replace(/[^a-z0-9+#._-]/g,'');const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';const gistBtn=S.ghToken?`<button class="ccopy" aria-label="Save as GitHub Gist" onclick="createGist(this,'${lang}')" title="Save as GitHub Gist">Gist</button>`:'';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" aria-label="Copy code" onclick="cp(this)">copy</button><button class="ccopy" aria-label="Explain this code" onclick="explainCode(this)" title="Explain this code">?</button><button class="ccopy" aria-label="Scan for security issues" onclick="scanCode(this,'${lang}')" title="Scan for security issues">🛡️</button>${gistBtn}`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{const ce=h.querySelector('code');if(!ce)return;const fp=ce.textContent.trim();if(!/[./]/.test(fp))return;const nx=h.nextElementSibling;if(nx&&nx.classList.contains('cblock')){const hd=nx.querySelector('.cblock-head');if(hd){const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);}}});}return d.innerHTML;}
 function cp(btn){const c=btn.closest('.cblock').querySelector('code');navigator.clipboard.writeText(c.textContent);btn.textContent='copied!';btn.classList.add('ok');setTimeout(()=>{btn.textContent='copy';btn.classList.remove('ok');},2000);}
 function uploadToArea(input,targetId){const file=input.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{$(targetId).value=e.target.result;saveEnhance();toast(`Loaded ${file.name}`);};r.readAsText(file);input.value='';}
 function uploadContext(input){const files=Array.from(input.files);if(!files.length)return;let done=0;const max=8-S.selFiles.size-S.localFiles.size;if(max<=0){toast('Max 8 files',true);input.value='';return;}const toLoad=files.slice(0,max);if(files.length>max)toast(`Max 8 files — loaded first ${max}`,true);toLoad.forEach(file=>{const r=new FileReader();r.onload=e=>{S.localFiles.set(file.name,e.target.result);done++;if(done===toLoad.length){updCtx();if(!S.streaming)toast(`Added ${done} file${done>1?'s':''}`);}};r.readAsText(file);});input.value='';}
