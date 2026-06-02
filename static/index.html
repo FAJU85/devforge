@@ -1531,7 +1531,7 @@ async function submitIssue(){
   if(res.error){toast('Issue failed: '+res.error,true);return;}
   $('issue-modal').style.display='none';
   toast(`✅ Issue #${res.number} created`);
-  if(res.url){const a=document.createElement('a');a.href=res.url;a.target='_blank';a.className='wp-link';a.textContent='View issue →';$('msgs').appendChild(a);}
+  if(res.url&&/^https?:\/\//.test(res.url)){const a=document.createElement('a');a.href=res.url;a.target='_blank';a.className='wp-link';a.textContent='View issue →';$('msgs').appendChild(a);}
 }
 async function submitPR(){
   const title=$('pr-title').value.trim();const body=$('pr-body').value.trim();

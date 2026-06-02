@@ -985,11 +985,11 @@ class ReleaseNotesBody(BaseModel):
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
     token: str
-    owner: str
-    repo: str
-    since: Optional[str] = ""   # SHA or tag (exclusive start)
-    until: Optional[str] = ""   # SHA or tag (inclusive end), default HEAD
-    max_commits: int = 50
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    since: Optional[str] = Field(default="", max_length=255)
+    until: Optional[str] = Field(default="", max_length=255)
+    max_commits: int = Field(default=50, ge=1, le=100)
     anthropic_model: Optional[str] = "claude-sonnet-4-6"
 
 @app.post("/api/repo/release-notes")
@@ -1269,8 +1269,8 @@ class ReadmeBody(BaseModel):
     anthropic_key: Optional[str] = ""
     anthropic_model: Optional[str] = "claude-sonnet-4-6"
     groq_key: Optional[str] = ""
-    repo_name: Optional[str] = ""
-    file_context: str
+    repo_name: Optional[str] = Field(default="", max_length=200)
+    file_context: str = Field(max_length=500_000)
 
 @app.post("/api/repo/generate-readme")
 async def generate_readme(body: ReadmeBody):
