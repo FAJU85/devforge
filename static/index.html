@@ -1425,7 +1425,7 @@ async function loadBranches(){
   const d=await fetch(`/api/repo/branches?token=${encodeURIComponent(S.ghToken)}&owner=${S.repo.owner}&repo=${S.repo.repo}`).then(r=>r.json());
   if(d.error||!Array.isArray(d))return;
   const sel=$('branch-select');const wrap=$('branch-sel-wrap');if(!sel||!wrap)return;
-  sel.innerHTML=d.map(b=>`<option value="${esc(b.name)}"${b.name===S.repo.branch?' selected':''}>${esc(b.name)} (${esc(String(b.sha||'').slice(0,7))})</option>`).join('');
+  sel.innerHTML=d.map(b=>`<option value="${escA(b.name)}"${b.name===S.repo.branch?' selected':''}>${esc(b.name)} (${esc(String(b.sha||'').slice(0,7))})</option>`).join('');
   wrap.style.display='flex';
   const prw=$('pr-review-wrap');if(prw)prw.style.display='block';
 }

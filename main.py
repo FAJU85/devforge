@@ -480,7 +480,10 @@ async def repo_connect(body: RepoBody):
     return {"owner": owner, "repo": repo, "branch": branch, "default_branch": default_branch, "files": files}
 
 class FileBody(BaseModel):
-    token: str; owner: str; repo: str; path: str
+    token: str
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    path: str = Field(max_length=1000)
 
 @app.post("/api/repo/file")
 async def repo_file(body: FileBody):
@@ -495,12 +498,12 @@ async def repo_file(body: FileBody):
 
 class WriteFileBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    path: str
-    content: str
-    message: str
-    branch: str
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    path: str = Field(max_length=1000)
+    content: str = Field(max_length=2_000_000)
+    message: str = Field(max_length=500)
+    branch: str = Field(max_length=255)
 
 @app.post("/api/repo/write")
 async def repo_write(body: WriteFileBody):
@@ -689,9 +692,9 @@ class BatchWriteItem(BaseModel):
 
 class BatchWriteBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    branch: str
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    branch: str = Field(max_length=255)
     files: List[BatchWriteItem]
 
 @app.post("/api/repo/write/batch")
