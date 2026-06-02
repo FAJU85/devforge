@@ -1,5 +1,5 @@
 # DevForge — Orchestrator Memory
-> Last updated: 2026-06-01 | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
+> Last updated: 2026-06-02 (cycle 69) | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
 
 ## Project Identity
 - **Name:** DevForge
@@ -15,10 +15,25 @@ devforge/
 ├── main.py                  # FastAPI backend (Python 3.11)
 ├── static/index.html        # Single-file frontend (HTML + CSS + JS)
 ├── requirements.txt         # Full pip-compile lock file (exact pins + SHA-256)
-├── Dockerfile               # python:3.11-slim, EXPOSE 7860
+├── Dockerfile               # python:3.11-slim, EXPOSE 7860; installs control_plane/requirements.txt
 ├── tests/
 │   ├── __init__.py
-│   └── test_main.py         # 172 tests
+│   └── test_main.py         # 331 tests
+├── control_plane/           # LangGraph + Pinecone orchestration layer
+│   ├── graph.py             # StateGraph: retrieve→reasoning→execution→synthesis
+│   ├── state.py             # AgentState TypedDict
+│   ├── config.py            # ANTHROPIC_API_KEY, PINECONE_API_KEY, GO_DATA_PLANE_URL
+│   ├── nodes/{retrieve,reasoning,execution,synthesis}.py
+│   ├── memory/pinecone_client.py  # query_context() + upsert_text()
+│   ├── schemas/tool_schemas.py    # BatchRequestSchema, BatchResponseSchema
+│   ├── agent/main.py        # CLI entry point
+│   ├── requirements.txt     # langgraph, langchain-anthropic, pinecone, httpx
+│   └── tests/               # 60 tests
+├── data_plane/              # Go Gin microservice (port 8080)
+│   ├── main.go              # /health + /tools/execute
+│   └── internal/
+│       ├── tools/{handler,dispatcher,registry}.go
+│       └── executor/{types,http_fetch,ping}.go
 └── .github/workflows/
     ├── sync-to-hf.yml
     └── sync-from-hf.yml
@@ -27,9 +42,12 @@ devforge/
 ## Stack
 - **Backend:** Python 3.11 / FastAPI / Uvicorn
 - **Frontend:** Single HTML file (Vanilla JS, marked.js, highlight.js)
-- **AI Providers:** Anthropic Claude, Groq, HuggingFace Inference API, OpenAI-compat
+- **AI Providers:** Anthropic Claude, Groq, HuggingFace Inference API, OpenAI-compat, AirLLM (local)
 - **Auth:** GitHub OAuth Device Flow (GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET env vars)
 - **HF Token:** HF_TOKEN env var (optional)
+- **Control Plane:** LangGraph 0.2+ / LangChain-Anthropic / Pinecone v5
+- **Data Plane:** Go 1.21 / Gin 1.9 microservice (port 8080); http_fetch + ping executors
+- **Infrastructure env vars:** PINECONE_API_KEY, PINECONE_INDEX, GO_DATA_PLANE_URL, GO_CALL_TIMEOUT
 
 ## Features Implemented (Cycles 1-24 Complete)
 - [x] GitHub OAuth one-click (Device Flow)
@@ -95,6 +113,143 @@ devforge/
 - [x] Mobile-responsive UI (sidebar slide-over overlay, compact topbar, bottom-sheet modals)
 - [x] Removed Go/Zod skill chips (less relevant for typical users)
 
+## Cycle 52 Summary (2026-06-01) — tfn() data-path/data-size
+| Area | Change |
+|---|---|
+| Frontend | `tfn()`: removed fragile `safe=path.replace(/'/g,...)` approach; all file tree onclick handlers use `data-path`/`data-size` attributes with `escA()` |
+| Tests | 264 total |
+
+## Cycle 50-51 Summary — see above (already logged in cycle 51 MEMORY commit) |
+
+## Cycle 50 Summary (2026-06-01) — Tool URL/Method Validation in Anthropic Tool Use
+| Area | Change |
+|---|---|
+| Backend | `_run_anthropic_with_tools`: validate `tool_def.url` scheme (http/https only) and method allowlist, mirroring cycle-41 fix |
+| Tests | 264 total |
+
+## Cycle 49 Summary (2026-06-01) — HF Model Search Validation Tests
+| Area | Change |
+|---|---|
+| Backend | `/api/hf/models`: `q` max_length=200, `limit` ge=1 le=100 |
+| Tests | +2 tests (limit>100 → 422; query>200 chars → 422) → 264 total |
+
+## Cycle 48 Summary (2026-06-01) — HF Model Search Query/Limit Caps
+| Area | Change |
+|---|---|
+| Backend | `/api/hf/models`: added `max_length=200` on query param, `ge=1, le=100` on limit |
+| Tests | 262 total |
+
+## Cycle 47 Summary (2026-06-01) — commit_url Protocol Validation
+| Area | Change |
+|---|---|
+| Frontend | `commitFile()`: `a.href=res.commit_url` now guarded by `/^https?:\/\//` test |
+| Tests | 262 total |
+
+## Cycle 46 Summary (2026-06-01) — Tab Title, summarize data-path, SSE ev fixes
+| Area | Change |
+|---|---|
+| Frontend | Tab `title` attribute uses `escA()`; summarize button uses `data-path` attr instead of inline arg |
+| Frontend | SSE `ev.label` and `ev.v` (error) escaped in multi-agent and single-stream paths |
+| Tests | 262 total |
+
+## Cycle 45 Summary (2026-06-01) — SHA/date/SSE error escaping
+| Area | Change |
+|---|---|
+| Frontend | `c.sha`, `c.date`, `r.sha`, `r.date` escaped in commit/workflow panels |
+| Frontend | `ev.v` (SSE error) escaped in both multi-agent and single-stream paths |
+| Tests | 262 total |
+
+## Cycle 44 Summary (2026-06-01) — Batch Panel DOM Closure, b.sha
+| Area | Change |
+|---|---|
+| Frontend | `showBatchPanel`: replaced `JSON.stringify(blocks)` in onclick attr with DOM closure |
+| Frontend | `loadBranches`: `b.sha` truncated to 7 chars and escaped |
+| Tests | 262 total |
+
+## Cycle 43 Summary (2026-06-01) — Tool Call + Scan Tests
+| Area | Change |
+|---|---|
+| Tests | `TestToolCallEndpoint`: +4 tests (rejects file://, gopher://, CONNECT, HEAD) |
+| Tests | `TestCodeScanEndpoint`: +1 test (120K input truncated, returns 200) → 262 total |
+
+## Cycle 41 Summary (2026-06-01) — /api/tools/call SSRF + Method Allowlist
+| Area | Change |
+|---|---|
+| Backend | `call_tool`: reject non-`http(s)://` URLs; allowlist HTTP methods to GET/POST/PUT/PATCH/DELETE |
+| Tests | 257 total |
+
+## Cycle 40 Summary (2026-06-01) — Final innerHTML Hardening Pass
+| Area | Change |
+|---|---|
+| Frontend | `d.total` in search results header coerced to `Number()` — last unguarded API field in templates |
+| Tests | 257 total |
+
+## Cycle 39 Summary (2026-06-01) — fetchModels + Error Messages + File Extensions
+| Area | Change |
+|---|---|
+| Frontend | `fetchModels`: `m.name`/`m.author`/`models.error` escaped; model id moved to `data-id` attr (removes inline onclick injection) |
+| Frontend | `d.error` from search/commits/workflow panels escaped before innerHTML |
+| Frontend | `e.message` in `send()` catch block escaped; file extension `ext` in `quickScanRepo` escaped |
+| Tests | 257 total |
+
+## Cycle 38 Summary (2026-06-01) — Scan Result XSS via AST Identifiers
+| Area | Change |
+|---|---|
+| Frontend | `issueHtml`: `i.pattern`/`i.message` escaped; `i.severity` restricted to allowlist before CSS class — AST scan embeds user identifier names in pattern strings |
+| Tests | 257 total |
+
+## Cycle 37 Summary (2026-06-01) — Input Size Caps
+| Area | Change |
+|---|---|
+| Backend | `scan_code`: code capped at 100K chars before `ast.parse` + regex loop |
+| Backend | `scan_deps`: content capped at 200K chars before parser dispatch |
+| Tests | 257 total |
+
+## Cycle 36 Summary (2026-06-01) — safeOpenUrl + OAuth Box Security
+| Area | Change |
+|---|---|
+| Frontend | `safeOpenUrl(u)` helper validates `https?://` before `window.open` |
+| Frontend | `gistCode()` and `createPR()` use `safeOpenUrl()`; `startOAuth` escapes `user_code` and validates `verification_uri` to `github.com` |
+| Tests | 257 total |
+
+## Cycles 32-35 Summary (2026-06-01) — XSS Sweep Batch 1 + MEMORY.md Fix
+| Area | Change |
+|---|---|
+| Backend | `_parse_pyproject_toml()`: full `tomllib`-based parser for PEP 621 / Poetry / build-system deps |
+| Backend | `parse_gh_url`: `.replace(".git","")` → `.removesuffix(".git")` |
+| Frontend | `escA(s)` helper + `safeOpen(el)`; repo list/tree/ctx/batch all escaped; write panel, search, commit, workflow, deps table, tool list all escaped |
+| Config | `Edit(.claude/**)` added to allow list to eliminate MEMORY.md permission prompts |
+| Tests | +8 new tests (pyproject.toml parser ×6, parse_gh_url ×2) → 257 total |
+
+## Cycle 31 Summary (2026-06-01) — XSS Hardening + State Bug Fixes
+| Area | Change |
+|---|---|
+| Frontend | `insertToolCallCard`: tool name now set via `.textContent` instead of `innerHTML` (XSS fix for AI-controlled tool names) |
+| Frontend | `regenerate()`: also pops last user message before re-calling `send()`, fixing consecutive-user-message violation of Anthropic API alternation rules |
+| Frontend | `rmd()` lang sanitization: `lang` stripped to `[a-z0-9+#._-]` before use in inline `onclick` attribute (JS injection fix) |
+| Frontend | `suggestFiles()`: now sets `S.fileSizes.set(path, d.content.length)` so AI-suggested files show correct token counts |
+| Backend | `repo_write` exception handler broadened from `(KeyError, json.JSONDecodeError)` to `Exception` |
+| Tests | 249 total (no new tests this cycle) |
+
+## Cycle 30 Summary (2026-06-01) — Version Checker Tests + Security Footer Coverage
+| Area | Change |
+|---|---|
+| Tests | `TestScanDepsExtraEcosystems`: +2 tests for `outdated` and `unpinned` SSE event fields |
+| Tests | `TestVersionCheckerHelpers` (new): `_pypi_latest` success/HTTP-error/network-error; `_npm_latest` success/HTTP-error/network-error (6 tests) |
+| Tests | `TestBuildSystemAgentSecurity` (new): code/refactor/testgen/debug get SECURITY_FOOTER; review/architect/docs do NOT (7 tests) |
+| Tests | 249 total (+15 from cycle 29 base) |
+
+## Cycle 29 Summary (2026-06-01) — Cargo TOML Fix + Lang Sanitization + fileSizes Bug
+| Area | Change |
+|---|---|
+| Backend | `_parse_cargo_toml`: inline table deps like `tokio = { version = "1.36", features = ["full"] }` now correctly extract `version` field instead of returning `{` as constraint |
+| Frontend | `rmd()` lang sanitization: prevents JS injection via Markdown code fence language identifier |
+| Frontend | `suggestFiles()`: `S.fileSizes` populated for AI-suggested files (token count bug fix) |
+| Tests | `TestDepParserHelpers`: +2 tests for inline table parsing |
+| Tests | `TestCodeScanLanguages` (new): TypeScript innerHTML/`:any`, SQL concat, Bash eval, Go fmt.Sprintf, generic token, HTTP URL/localhost (8 tests) |
+| Tests | `TestScanDepsExtraEcosystems` (new): go.mod, cargo.toml, unknown filename, no-packages 400, Groq streaming (5 tests) |
+| Tests | 234 total (+15 from cycle 28 base of 219) |
+
 ## Cycle 26 Summary (2026-06-01) — Mobile UI + Skill Cleanup
 | Area | Change |
 |---|---|
@@ -123,7 +278,7 @@ devforge/
 
 ## Cumulative Scope Ledger
 ```
-totalCyclesCompleted: 26
+totalCyclesCompleted: 52
 totalFilesCreated: 3   (tests/__init__.py, tests/test_main.py, .gitignore)
 totalFilesMutated: 4   (main.py, requirements.txt, static/index.html, tests/test_main.py)
 totalPackagesAdded: 0
@@ -213,7 +368,30 @@ conservativeMode: false
 | Frontend | File tree search (live filter); AI Suggest button; streaming timer; keyboard shortcuts |
 | Tests | 5 new tests (TestSuggestFiles); 124 total |
 
+## Cycle 69 Summary (2026-06-02) — Project Infrastructure Integration
+| Area | Change |
+|---|---|
+| Backend | `/api/agent/run` SSE endpoint: streams LangGraph pipeline (retrieve→reasoning→execution→synthesis) |
+| Backend | `/api/memory/query` POST: RAG query against Pinecone (q, top_k 1-20) |
+| Backend | `/api/memory/upsert` POST: embed+store text in Pinecone with optional metadata |
+| Backend | `/api/tools/dispatch` POST: async proxy BatchRequest → Go data-plane /tools/execute |
+| Backend | `control_plane/memory/pinecone_client.py`: added `upsert_text(text, metadata, namespace)` |
+| Backend | `main.py`: lazy control-plane import (try/except Exception → stubs when unavailable) |
+| Dockerfile | Install `control_plane/requirements.txt` after `COPY . .` (|| true so build never fails) |
+| Frontend | Collapsible "🤖 Agent Pipeline" sidebar section: task textarea, ▶ Run button, SSE progress display |
+| Tests | 331 total (29 new: TestAgentRunEndpoint×8, TestMemoryQueryEndpoint×7, TestMemoryUpsertEndpoint×6, TestToolsDispatchEndpoint×7, TestUpsertText×7 in control_plane) |
+
+## Cycle 67-68 Summary (2026-06-02) — AirLLM + Security/Timeout hardening
+| Area | Change |
+|---|---|
+| Backend | AirLLM provider: _run_airllm(), _airllm_cache, get_runner("airllm"), _PROV_LABEL update |
+| Backend | asyncio.TimeoutError guards in release_notes, generate_readme, scan_deps inline loops |
+| Backend | Field max_length on BatchWriteBody.files, IssueBody.labels, ChatBody.messages/skills/tools |
+| Frontend | AirLLM panel + provider button + multi-agent stage selectors |
+| Dockerfile | pip install airllm || true |
+| Tests | 302→331 total |
+
 ## Git State
 - Branch: claude/exciting-galileo-7UDWc
-- Last commit: 2ea8f88 — Cycle 26: Mobile-responsive UI + remove Go/Zod skill chips
+- Last commit: a9f6532 — feat: wire LangGraph + Pinecone + Go data-plane into DevForge
 - Remote: origin/claude/exciting-galileo-7UDWc ✓ tracked

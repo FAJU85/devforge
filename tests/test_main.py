@@ -95,6 +95,17 @@ class TestParseGhUrl:
         assert owner is None
         assert repo is None
 
+    def test_git_in_middle_of_name_not_stripped(self):
+        """Repo name 'my-git-repo.git' should become 'my-git-repo', not 'my-repo.'."""
+        owner, repo = main.parse_gh_url("https://github.com/acme/my-git-repo.git")
+        assert owner == "acme"
+        assert repo == "my-git-repo"
+
+    def test_shorthand_git_in_middle_of_name(self):
+        owner, repo = main.parse_gh_url("acme/widget.git-tools.git")
+        assert owner == "acme"
+        assert repo == "widget.git-tools"
+
 
 # ---------------------------------------------------------------------------
 # gh_hdrs
@@ -214,6 +225,16 @@ class TestGetRunner:
 
     def test_groq_runner_uses_default_model_when_none(self):
         body = _body(provider="groq", groq_key="k", groq_model=None)
+        runner = main.get_runner(body)
+        assert callable(runner)
+
+    def test_airllm_provider_returns_callable(self):
+        body = _body(provider="airllm", airllm_model="meta-llama/Llama-2-7b-chat-hf", airllm_max_tokens=256)
+        runner = main.get_runner(body)
+        assert callable(runner)
+
+    def test_airllm_provider_default_model_when_empty(self):
+        body = _body(provider="airllm", airllm_model="", airllm_max_tokens=512)
         runner = main.get_runner(body)
         assert callable(runner)
 
@@ -470,6 +491,15 @@ class TestSearchHfModels:
         with patch("main.requests.get", side_effect=ConnectionError("down")):
             resp = client.get("/api/hf/models")
         assert resp.status_code == 500
+
+    def test_rejects_limit_over_100(self):
+        resp = client.get("/api/hf/models?limit=500")
+        assert resp.status_code == 422
+
+    def test_rejects_query_over_200_chars(self):
+        long_q = "a" * 201
+        resp = client.get(f"/api/hf/models?q={long_q}")
+        assert resp.status_code == 422
 
 
 class TestGithubAuthStart:
@@ -1656,6 +1686,79 @@ class TestToolCallEndpoint:
         assert r.status_code == 200
         assert r.json()["status"] == 404
 
+    def test_tool_call_rejects_file_url(self):
+        r = client.post("/api/tools/call", json={"url": "file:///etc/passwd", "method": "GET"})
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_tool_call_rejects_gopher_url(self):
+        r = client.post("/api/tools/call", json={"url": "gopher://evil.example.com/", "method": "GET"})
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_tool_call_rejects_invalid_method(self):
+        r = client.post("/api/tools/call", json={"url": "https://example.com/", "method": "CONNECT"})
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_tool_call_rejects_head_method(self):
+        r = client.post("/api/tools/call", json={"url": "https://example.com/", "method": "HEAD"})
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+
+class TestOpenAICompatBaseUrlValidation:
+    def test_suggest_files_rejects_file_scheme_base_url(self):
+        payload = {
+            "provider": "openai_compat",
+            "openai_compat_base_url": "file:///etc/passwd",
+            "openai_compat_model": "llama3",
+            "task": "add tests",
+            "files": ["main.py"],
+        }
+        r = client.post("/api/repo/suggest-files", json=payload)
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_suggest_files_rejects_gopher_scheme_base_url(self):
+        payload = {
+            "provider": "openai_compat",
+            "openai_compat_base_url": "gopher://evil/exploit",
+            "openai_compat_model": "llama3",
+            "task": "add tests",
+            "files": ["main.py"],
+        }
+        r = client.post("/api/repo/suggest-files", json=payload)
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_summarize_file_rejects_file_scheme_base_url(self):
+        payload = {
+            "provider": "openai_compat",
+            "openai_compat_base_url": "file:///etc/shadow",
+            "openai_compat_model": "llama3",
+            "filename": "README.md",
+            "content": "some content",
+        }
+        r = client.post("/api/repo/summarize-file", json=payload)
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_valid_http_url_helper_accepts_http(self):
+        assert main._valid_http_url("http://localhost:11434/v1") is True
+
+    def test_valid_http_url_helper_accepts_https(self):
+        assert main._valid_http_url("https://api.example.com/v1") is True
+
+    def test_valid_http_url_helper_rejects_file(self):
+        assert main._valid_http_url("file:///etc/passwd") is False
+
+    def test_valid_http_url_helper_rejects_empty(self):
+        assert main._valid_http_url("") is False
+
+    def test_valid_http_url_helper_rejects_none_coerced(self):
+        assert main._valid_http_url(None) is False
+
 
 class TestChatBodyWithTools:
     def test_chat_body_accepts_tools(self):
@@ -2005,13 +2108,19 @@ class TestRepoSearchEndpoint:
             mock_get.return_value.ok = True
             mock_get.return_value.json.return_value = {"total_count": 0, "items": []}
             r = client.post("/api/repo/search", json={
-                "token": "tok", "owner": "user", "repo": "myrepo", "query": "test", "max_results": 100,
+                "token": "tok", "owner": "user", "repo": "myrepo", "query": "test", "max_results": 20,
             })
         assert r.status_code == 200
         # Verify per_page was capped at 20
         call_args = mock_get.call_args
         params = call_args[1].get("params", {})
         assert params.get("per_page", 0) <= 20
+
+    def test_search_rejects_max_results_exceeding_limit(self):
+        r = client.post("/api/repo/search", json={
+            "token": "tok", "owner": "user", "repo": "myrepo", "query": "test", "max_results": 100,
+        })
+        assert r.status_code == 422
 
 
 class TestRepoCommitsEndpoint:
@@ -2052,12 +2161,18 @@ class TestRepoCommitsEndpoint:
             mock_get.return_value.ok = True
             mock_get.return_value.json.return_value = []
             r = client.post("/api/repo/commits", json={
-                "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 200,
+                "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 30,
             })
         assert r.status_code == 200
         call_args = mock_get.call_args
         params = call_args[1].get("params", {})
         assert params.get("per_page", 0) <= 30
+
+    def test_commits_rejects_max_results_exceeding_limit(self):
+        r = client.post("/api/repo/commits", json={
+            "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 200,
+        })
+        assert r.status_code == 422
 
 
 class TestExtendedThinking:
@@ -2306,12 +2421,18 @@ class TestWorkflowRunsEndpoint:
             mock_get.return_value.ok = True
             mock_get.return_value.json.return_value = {"workflow_runs": []}
             r = client.post("/api/repo/workflow-runs", json={
-                "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 999,
+                "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 20,
             })
         assert r.status_code == 200
         call_args = mock_get.call_args
         params = call_args[1].get("params", {})
         assert params.get("per_page", 0) <= 20
+
+    def test_workflow_runs_rejects_max_results_exceeding_limit(self):
+        r = client.post("/api/repo/workflow-runs", json={
+            "token": "tok", "owner": "user", "repo": "myrepo", "max_results": 999,
+        })
+        assert r.status_code == 422
 
 
 class TestCommitSuggestMessage:
@@ -2598,6 +2719,17 @@ class TestCodeScanEndpoint:
         assert any("eval" in p for p in patterns)
         assert any(i["severity"] == "high" for i in data["issues"])
 
+    def test_scan_large_input_is_rejected(self):
+        large_code = "x = 1\n" * 20_000  # ~120K chars, exceeds 100K limit
+        r = client.post("/api/code/scan", json={"code": large_code, "language": "python"})
+        assert r.status_code == 422
+
+    def test_scan_at_limit_is_accepted(self):
+        at_limit_code = "x = 1\n" * 16_000  # ~96K chars, within 100K limit
+        r = client.post("/api/code/scan", json={"code": at_limit_code, "language": "python"})
+        assert r.status_code == 200
+        assert "issues" in r.json()
+
     def test_scan_clean_code_returns_safe(self):
         r = client.post("/api/code/scan", json={
             "code": "def add(a: int, b: int) -> int:\n    return a + b\n\nresult = add(1, 2)",
@@ -2619,6 +2751,67 @@ class TestCodeScanEndpoint:
         high = [i for i in data["issues"] if i["severity"] == "high"]
         assert len(high) >= 1
         assert any("api_key" in i.get("pattern", "").lower() or "hardcoded" in i.get("message", "").lower() for i in high)
+
+    def test_scan_detects_os_system_via_ast(self):
+        r = client.post("/api/code/scan", json={
+            "code": "import os\nos.system('ls -la')",
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["pattern"] == "os.system()" and i["severity"] == "high" for i in data["issues"])
+        assert any(i.get("source") == "ast" for i in data["issues"])
+
+    def test_scan_detects_pickle_loads(self):
+        r = client.post("/api/code/scan", json={
+            "code": "import pickle\ndata = pickle.loads(untrusted_bytes)",
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["pattern"] == "pickle.loads()" for i in data["issues"])
+
+    def test_scan_detects_shell_true(self):
+        r = client.post("/api/code/scan", json={
+            "code": "import subprocess\nsubprocess.run('ls', shell=True)",
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any("shell=True" in i.get("pattern", "") for i in data["issues"])
+
+    def test_scan_javascript_eval(self):
+        r = client.post("/api/code/scan", json={
+            "code": "const result = eval(userInput);",
+            "language": "javascript",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["safe"] is False
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_empty_code_returns_safe(self):
+        r = client.post("/api/code/scan", json={"code": "", "language": "python"})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["safe"] is True
+        assert data["total"] == 0
+
+    def test_scan_syntax_error_returns_medium(self):
+        r = client.post("/api/code/scan", json={
+            "code": "def foo(\n    return 1",
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["pattern"] == "SyntaxError" for i in data["issues"])
+
+    def test_scan_results_capped_at_15(self):
+        many_evals = "\n".join(f"eval(x{i})" for i in range(30))
+        r = client.post("/api/code/scan", json={"code": many_evals, "language": "python"})
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data["issues"]) <= 15
 
 
 class TestScanDepsEndpoint:
@@ -2663,3 +2856,1145 @@ class TestScanDepsEndpoint:
         assert r.status_code == 200
         content = r.text
         assert "packages" in content
+
+
+class TestCallToolEndpoint:
+    def test_get_request_success(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = '{"ok":true}'
+            r = client.post("/api/tools/call", json={
+                "url": "https://api.example.com/data",
+                "method": "GET",
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == 200
+        assert "ok" in data["response"]
+
+    def test_post_request_success(self):
+        with patch("requests.request") as mock_req:
+            mock_req.return_value.status_code = 201
+            mock_req.return_value.text = '{"id":1}'
+            r = client.post("/api/tools/call", json={
+                "url": "https://api.example.com/items",
+                "method": "POST",
+                "body_json": {"name": "test"},
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == 201
+
+    def test_network_error_returns_500(self):
+        with patch("requests.get", side_effect=Exception("connection refused")):
+            r = client.post("/api/tools/call", json={
+                "url": "https://api.example.com/fail",
+                "method": "GET",
+            })
+        assert r.status_code == 500
+        assert "error" in r.json()
+
+    def test_response_truncated_at_2000_chars(self):
+        long_body = "x" * 5000
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = long_body
+            r = client.post("/api/tools/call", json={
+                "url": "https://api.example.com/big",
+                "method": "GET",
+            })
+        assert r.status_code == 200
+        assert len(r.json()["response"]) <= 2000
+
+
+class TestSuggestCommitMessage:
+    def test_anthropic_returns_message(self):
+        mock_client = MagicMock()
+        mock_msg = MagicMock()
+        mock_msg.content = [MagicMock(text="feat(api): add commit suggest endpoint")]
+        mock_client.messages.create.return_value = mock_msg
+        with patch("main.Anthropic", return_value=mock_client):
+            r = client.post("/api/commit/suggest-message", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "path": "main.py",
+                "diff": "def new_func(): pass",
+            })
+        assert r.status_code == 200
+        data = r.json()
+        assert "message" in data
+        assert data["message"] == "feat(api): add commit suggest endpoint"
+
+    def test_groq_returns_message(self):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = True
+            mock_post.return_value.json.return_value = {
+                "choices": [{"message": {"content": "fix(auth): handle expired token"}}]
+            }
+            r = client.post("/api/commit/suggest-message", json={
+                "provider": "groq",
+                "groq_key": "gk-test",
+                "path": "auth.py",
+                "content": "token = refresh()",
+            })
+        assert r.status_code == 200
+        assert r.json()["message"] == "fix(auth): handle expired token"
+
+    def test_no_key_returns_400(self):
+        r = client.post("/api/commit/suggest-message", json={
+            "provider": "anthropic",
+            "anthropic_key": "",
+            "path": "README.md",
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_groq_api_error_returns_400(self):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = False
+            mock_post.return_value.text = "rate limit exceeded"
+            r = client.post("/api/commit/suggest-message", json={
+                "provider": "groq",
+                "groq_key": "gk-test",
+                "path": "main.py",
+                "diff": "removed old code",
+            })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_uses_diff_over_content(self):
+        """diff takes precedence — snippet is taken from body.diff when both present."""
+        mock_client = MagicMock()
+        mock_msg = MagicMock()
+        mock_msg.content = [MagicMock(text="refactor(core): simplify logic")]
+        mock_client.messages.create.return_value = mock_msg
+        with patch("main.Anthropic", return_value=mock_client) as _:
+            r = client.post("/api/commit/suggest-message", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "path": "core.py",
+                "diff": "-old_code\n+new_code",
+                "content": "new_code",
+            })
+        assert r.status_code == 200
+        call_args = mock_client.messages.create.call_args
+        user_content = call_args.kwargs["messages"][0]["content"]
+        assert "-old_code" in user_content
+
+
+class TestDepParserHelpers:
+    """Unit tests for the dependency file parser helpers."""
+
+    def test_parse_requirements_basic(self):
+        content = "fastapi==0.110.0\nrequests>=2.28.0\npydantic"
+        pkgs = main._parse_requirements(content)
+        names = [p["name"] for p in pkgs]
+        assert "fastapi" in names
+        assert "requests" in names
+        assert "pydantic" in names
+
+    def test_parse_requirements_skips_comments_and_flags(self):
+        content = "# comment\n-r base.txt\n--extra-index-url https://example.com\nflask==3.0.0"
+        pkgs = main._parse_requirements(content)
+        names = [p["name"] for p in pkgs]
+        assert "flask" in names
+        assert len(names) == 1
+
+    def test_parse_requirements_normalises_underscores(self):
+        content = "my_package==1.0.0"
+        pkgs = main._parse_requirements(content)
+        assert pkgs[0]["name"] == "my-package"
+
+    def test_parse_requirements_strips_extras(self):
+        content = "uvicorn[standard]==0.29.0"
+        pkgs = main._parse_requirements(content)
+        assert pkgs[0]["name"] == "uvicorn"
+        assert "standard" not in pkgs[0]["name"]
+
+    def test_parse_package_json_dependencies(self):
+        content = '{"dependencies":{"react":"^18.0.0"},"devDependencies":{"jest":"^29.0.0"}}'
+        pkgs = main._parse_package_json(content)
+        names = [p["name"] for p in pkgs]
+        assert "react" in names
+        assert "jest" in names
+
+    def test_parse_package_json_invalid_json_returns_empty(self):
+        pkgs = main._parse_package_json("not json")
+        assert pkgs == []
+
+    def test_parse_go_mod_block_require(self):
+        content = "module example.com/mymod\n\ngo 1.21\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n\tgolang.org/x/net v0.21.0\n)"
+        pkgs = main._parse_go_mod(content)
+        names = [p["name"] for p in pkgs]
+        assert "github.com/gin-gonic/gin" in names
+        assert "golang.org/x/net" in names
+
+    def test_parse_go_mod_single_require(self):
+        content = "module example.com/m\nrequire github.com/pkg/errors v0.9.1"
+        pkgs = main._parse_go_mod(content)
+        assert any(p["name"] == "github.com/pkg/errors" for p in pkgs)
+
+    def test_parse_go_mod_skips_comment_lines(self):
+        content = "require (\n\t// indirect\n\tgithub.com/real/dep v1.0.0\n)"
+        pkgs = main._parse_go_mod(content)
+        names = [p["name"] for p in pkgs]
+        assert "github.com/real/dep" in names
+        assert "//" not in names
+
+    def test_parse_cargo_toml_dependencies(self):
+        content = '[dependencies]\nserde = "1.0"\ntokio = { version = "1.36", features = ["full"] }\n\n[dev-dependencies]\ncargo-test = "0.1"'
+        pkgs = main._parse_cargo_toml(content)
+        names = [p["name"] for p in pkgs]
+        assert "serde" in names
+
+    def test_parse_cargo_toml_dev_dependencies(self):
+        content = '[dev-dependencies]\ncriterion = "0.5"'
+        pkgs = main._parse_cargo_toml(content)
+        assert any(p["name"] == "criterion" for p in pkgs)
+
+    def test_parse_cargo_toml_stops_at_next_section(self):
+        content = '[dependencies]\nfoo = "1.0"\n\n[profile.release]\nopt-level = 3'
+        pkgs = main._parse_cargo_toml(content)
+        names = [p["name"] for p in pkgs]
+        assert "foo" in names
+        assert "opt-level" not in names
+
+    def test_parse_cargo_toml_inline_table_extracts_version(self):
+        content = '[dependencies]\ntokio = { version = "1.36", features = ["full"] }'
+        pkgs = main._parse_cargo_toml(content)
+        tokio = next((p for p in pkgs if p["name"] == "tokio"), None)
+        assert tokio is not None
+        assert tokio["constraint"] == "1.36"
+
+    def test_parse_cargo_toml_simple_and_inline_mixed(self):
+        content = '[dependencies]\nserde = "1.0"\ntokio = { version = "1.36" }\nasync-trait = "0.1"'
+        pkgs = main._parse_cargo_toml(content)
+        by_name = {p["name"]: p["constraint"] for p in pkgs}
+        assert by_name["serde"] == "1.0"
+        assert by_name["tokio"] == "1.36"
+        assert by_name["async-trait"] == "0.1"
+
+    def test_parse_pyproject_toml_pep621_dependencies(self):
+        content = '[project]\ndependencies = [\n  "flask>=2.0",\n  "requests==2.31.0",\n]\n'
+        pkgs = main._parse_pyproject_toml(content)
+        by_name = {p["name"]: p["constraint"] for p in pkgs}
+        assert "flask" in by_name
+        assert by_name["flask"].startswith(">=")
+        assert "requests" in by_name
+        assert by_name["requests"] == "==2.31.0"
+
+    def test_parse_pyproject_toml_poetry_dependencies(self):
+        content = '[tool.poetry.dependencies]\npython = "^3.11"\nfastapi = "^0.100.0"\nhttpx = {version = "^0.24", extras = ["http2"]}\n'
+        pkgs = main._parse_pyproject_toml(content)
+        by_name = {p["name"]: p["constraint"] for p in pkgs}
+        assert "python" not in by_name, "python version constraint should be skipped"
+        assert "fastapi" in by_name
+        assert "^0.100.0" in by_name["fastapi"]
+
+    def test_parse_pyproject_toml_build_system_requires(self):
+        content = '[build-system]\nrequires = ["setuptools>=42", "wheel"]\nbuild-backend = "setuptools.build_meta"\n'
+        pkgs = main._parse_pyproject_toml(content)
+        names = [p["name"] for p in pkgs]
+        assert "setuptools" in names
+        assert "wheel" in names
+
+    def test_parse_pyproject_toml_deduplicates_across_sections(self):
+        content = (
+            '[project]\ndependencies = ["requests>=2.0"]\n'
+            '[build-system]\nrequires = ["requests>=1.0", "setuptools"]\n'
+        )
+        pkgs = main._parse_pyproject_toml(content)
+        names = [p["name"] for p in pkgs]
+        assert names.count("requests") == 1, "requests must not appear twice"
+
+    def test_parse_pyproject_toml_invalid_toml_returns_empty(self):
+        pkgs = main._parse_pyproject_toml("this is not : toml {{{{")
+        assert pkgs == []
+
+    def test_scan_deps_pyproject_toml_uses_correct_parser(self):
+        """pyproject.toml routed to _parse_pyproject_toml, not requirements parser."""
+        content = '[project]\ndependencies = ["flask>=2.0"]\n'
+        with patch("main._parse_pyproject_toml", wraps=main._parse_pyproject_toml) as mock_fn:
+            r = client.post("/api/repo/scan-deps", json={
+                "filename": "pyproject.toml",
+                "content": content,
+                "provider": "groq",
+                "groq_key": "fake",
+            })
+        mock_fn.assert_called_once()
+        # The packages event should contain flask, not a bogus 'requires' package
+        assert r.status_code == 200
+        events = [ln for ln in r.text.splitlines() if ln.startswith("data:")]
+        import json as _json
+        pkg_event = next((e for e in events if '"packages"' in e), None)
+        assert pkg_event is not None
+        payload = _json.loads(pkg_event[5:])
+        names = [p["name"] for p in payload["v"]["packages"]]
+        assert "flask" in names
+        assert "requires" not in names
+
+
+class TestCodeScanLanguages:
+    """Tests for language-specific scan patterns not covered in TestCodeScanEndpoint."""
+
+    def test_scan_typescript_innerHTML_high(self):
+        r = client.post("/api/code/scan", json={
+            "code": 'el.innerHTML = userData;',
+            "language": "typescript",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["safe"] is False
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_typescript_any_low(self):
+        r = client.post("/api/code/scan", json={
+            "code": "function foo(x: any) { return x; }",
+            "language": "typescript",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "low" for i in data["issues"])
+
+    def test_scan_sql_string_concat_high(self):
+        r = client.post("/api/code/scan", json={
+            "code": "query = \"SELECT * FROM users WHERE id = '\" + userId + \"'\"",
+            "language": "sql",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_bash_eval_high(self):
+        r = client.post("/api/code/scan", json={
+            "code": "eval $user_input",
+            "language": "bash",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_go_fmt_sprintf_sql_high(self):
+        r = client.post("/api/code/scan", json={
+            "code": 'query := fmt.Sprintf("SELECT * FROM users WHERE id = %s", userId)',
+            "language": "go",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_generic_hardcoded_token(self):
+        r = client.post("/api/code/scan", json={
+            "code": 'token = "ghp_abcdefghij1234567890"',
+            "language": "python",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "high" for i in data["issues"])
+
+    def test_scan_http_url_triggers_low(self):
+        r = client.post("/api/code/scan", json={
+            "code": 'url = "http://api.example.com/endpoint"',
+            "language": "javascript",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert any(i["severity"] == "low" for i in data["issues"])
+
+    def test_scan_http_localhost_no_issue(self):
+        r = client.post("/api/code/scan", json={
+            "code": 'const url = "http://localhost:8080/api"',
+            "language": "javascript",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        http_issues = [i for i in data["issues"] if "http" in i.get("pattern", "").lower() or "https" in i.get("message", "").lower()]
+        assert len(http_issues) == 0
+
+
+class TestScanDepsExtraEcosystems:
+    """Tests for go.mod, cargo.toml, and unknown extension in scan_deps."""
+
+    def test_scan_deps_go_mod_parsed(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "go.mod",
+            "content": "module example.com/m\n\ngo 1.21\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n\tgolang.org/x/net v0.21.0\n)",
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 200
+        content = r.text
+        assert "packages" in content
+        assert "gin" in content
+
+    def test_scan_deps_cargo_toml_parsed(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "cargo.toml",
+            "content": '[dependencies]\nserde = "1.0"\ntokio = { version = "1.36", features = ["full"] }',
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 200
+        assert "packages" in r.text
+
+    def test_scan_deps_unknown_filename_falls_back_to_requirements(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "requirements-dev.txt",
+            "content": "pytest==7.4.0\npytest-asyncio==0.23.0",
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 200
+        assert "packages" in r.text
+
+    def test_scan_deps_no_packages_found_returns_400(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "go.mod",
+            "content": "module example.com/m\n\ngo 1.21\n",
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 400
+        assert "No packages" in r.json()["error"]
+
+    def test_scan_deps_groq_provider_streams(self):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = True
+            mock_post.return_value.json.return_value = {
+                "choices": [{"message": {"content": "All dependencies look reasonable."}}]
+            }
+            r = client.post("/api/repo/scan-deps", json={
+                "filename": "requirements.txt",
+                "content": "flask==2.3.0\nrequests==2.31.0",
+                "provider": "groq",
+                "groq_key": "gsk_test",
+            })
+        assert r.status_code == 200
+        content = r.text
+        assert "packages" in content
+
+    def test_scan_deps_outdated_flag_set(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"info": {"version": "3.0.0"}}
+            r = client.post("/api/repo/scan-deps", json={
+                "filename": "requirements.txt",
+                "content": "flask==1.0.0",
+                "provider": "anthropic",
+                "anthropic_key": "",
+            })
+        assert r.status_code == 200
+        import json as _json
+        for line in r.text.splitlines():
+            if line.startswith("data: "):
+                ev = _json.loads(line[6:])
+                if ev.get("t") == "packages":
+                    pkg = ev["v"]["packages"][0]
+                    assert pkg["pinned"] == "1.0.0"
+                    assert pkg["latest"] == "3.0.0"
+                    assert pkg["outdated"] is True
+                    break
+
+    def test_scan_deps_unpinned_flag_set(self):
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "requirements.txt",
+            "content": "flask>=2.0",
+            "provider": "anthropic",
+            "anthropic_key": "",
+        })
+        assert r.status_code == 200
+        import json as _json
+        for line in r.text.splitlines():
+            if line.startswith("data: "):
+                ev = _json.loads(line[6:])
+                if ev.get("t") == "packages":
+                    pkg = ev["v"]["packages"][0]
+                    assert pkg["unpinned"] is True
+                    assert pkg["pinned"] is None
+                    break
+
+
+class TestVersionCheckerHelpers:
+    """Unit tests for _pypi_latest and _npm_latest."""
+
+    def test_pypi_latest_returns_version_on_success(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"info": {"version": "1.2.3"}}
+            result = main._pypi_latest("requests")
+        assert result == {"name": "requests", "latest": "1.2.3"}
+
+    def test_pypi_latest_returns_none_on_http_error(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = False
+            result = main._pypi_latest("nonexistent-pkg")
+        assert result == {"name": "nonexistent-pkg", "latest": None}
+
+    def test_pypi_latest_returns_none_on_network_error(self):
+        with patch("requests.get", side_effect=Exception("timeout")):
+            result = main._pypi_latest("requests")
+        assert result == {"name": "requests", "latest": None}
+
+    def test_npm_latest_returns_version_on_success(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"version": "18.2.0"}
+            result = main._npm_latest("react")
+        assert result == {"name": "react", "latest": "18.2.0"}
+
+    def test_npm_latest_returns_none_on_http_error(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = False
+            result = main._npm_latest("nonexistent-pkg")
+        assert result == {"name": "nonexistent-pkg", "latest": None}
+
+    def test_npm_latest_returns_none_on_network_error(self):
+        with patch("requests.get", side_effect=Exception("connection refused")):
+            result = main._npm_latest("react")
+        assert result == {"name": "react", "latest": None}
+
+
+class TestBuildSystemAgentSecurity:
+    """Tests for SECURITY_FOOTER injection logic in build_system."""
+
+    def test_code_agent_gets_security_footer(self):
+        body = _body(agent="code")
+        result = main.build_system(body)
+        assert "Security Requirements" in result
+
+    def test_refactor_agent_gets_security_footer(self):
+        body = _body(agent="refactor")
+        result = main.build_system(body)
+        assert "Security Requirements" in result
+
+    def test_testgen_agent_gets_security_footer(self):
+        body = _body(agent="testgen")
+        result = main.build_system(body)
+        assert "Security Requirements" in result
+
+    def test_debug_agent_gets_security_footer(self):
+        body = _body(agent="debug")
+        result = main.build_system(body)
+        assert "Security Requirements" in result
+
+    def test_review_agent_no_security_footer(self):
+        body = _body(agent="review")
+        result = main.build_system(body)
+        assert "Security Requirements" not in result
+
+    def test_architect_agent_no_security_footer(self):
+        body = _body(agent="architect")
+        result = main.build_system(body)
+        assert "Security Requirements" not in result
+
+    def test_docs_agent_no_security_footer(self):
+        body = _body(agent="docs")
+        result = main.build_system(body)
+        assert "Security Requirements" not in result
+
+
+class TestFieldLengthConstraints:
+    def test_prompt_enhance_rejects_oversized_prompt(self):
+        r = client.post("/api/prompt/enhance", json={
+            "provider": "anthropic",
+            "anthropic_key": "key",
+            "prompt": "x" * 4001,
+        })
+        assert r.status_code == 422
+
+    def test_prompt_enhance_accepts_max_prompt(self):
+        with patch("main.Anthropic") as mock_cls:
+            mock_inst = MagicMock()
+            mock_cls.return_value = mock_inst
+            msg = MagicMock(); msg.content = [MagicMock(text="improved")]
+            mock_inst.messages.create.return_value = msg
+            r = client.post("/api/prompt/enhance", json={
+                "provider": "anthropic",
+                "anthropic_key": "key",
+                "prompt": "x" * 4000,
+            })
+        assert r.status_code == 200
+
+    def test_suggest_files_rejects_oversized_task(self):
+        r = client.post("/api/repo/suggest-files", json={
+            "provider": "anthropic",
+            "task": "x" * 2001,
+            "files": ["main.py"],
+        })
+        assert r.status_code == 422
+
+    def test_suggest_files_rejects_max_suggestions_too_high(self):
+        r = client.post("/api/repo/suggest-files", json={
+            "provider": "anthropic",
+            "task": "add tests",
+            "files": ["main.py"],
+            "max_suggestions": 21,
+        })
+        assert r.status_code == 422
+
+    def test_summarize_file_rejects_oversized_content(self):
+        r = client.post("/api/repo/summarize-file", json={
+            "provider": "anthropic",
+            "filename": "big.py",
+            "content": "x" * 200_001,
+        })
+        assert r.status_code == 422
+
+    def test_commit_msg_rejects_oversized_diff(self):
+        r = client.post("/api/commit/suggest-message", json={
+            "provider": "anthropic",
+            "path": "main.py",
+            "diff": "x" * 50_001,
+        })
+        assert r.status_code == 422
+
+    def test_chat_rejects_too_many_messages(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "anthropic",
+            "anthropic_key": "key",
+            "messages": [{"role": "user", "content": "hi"}] * 501,
+        })
+        assert r.status_code == 422
+
+    def test_chat_rejects_too_many_tools(self):
+        tool = {"name": "t", "description": "d", "url": "https://x.com", "method": "GET"}
+        r = client.post("/api/chat/stream", json={
+            "provider": "anthropic",
+            "anthropic_key": "key",
+            "messages": [{"role": "user", "content": "hi"}],
+            "tools": [tool] * 21,
+        })
+        assert r.status_code == 422
+
+    def test_batch_write_rejects_too_many_files(self):
+        item = {"path": "file.txt", "content": "hello", "message": "add"}
+        r = client.post("/api/repo/write/batch", json={
+            "token": "tok",
+            "owner": "user",
+            "repo": "myrepo",
+            "branch": "main",
+            "files": [item] * 51,
+        })
+        assert r.status_code == 422
+
+    def test_issue_rejects_too_many_labels(self):
+        r = client.post("/api/github/issue/create", json={
+            "token": "tok",
+            "owner": "user",
+            "repo": "myrepo",
+            "title": "t",
+            "body": "b",
+            "labels": ["label"] * 11,
+        })
+        assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Cycle 67: asyncio.TimeoutError handling in inline streaming loops
+# ---------------------------------------------------------------------------
+
+class TestInlineStreamTimeout:
+    """Verify that asyncio.TimeoutError in inline wait_for loops emits an SSE error event."""
+
+    def test_release_notes_timeout_emits_error_sse(self):
+        mock_commits = [
+            {"sha": "abc1234567890", "commit": {"message": "feat: auth", "author": {"name": "A", "date": "2026-01-01"}}}
+        ]
+        with patch("requests.get") as mock_get, \
+             patch("main.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = mock_commits
+            r = client.post("/api/repo/release-notes", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "token": "tok",
+                "owner": "user",
+                "repo": "myrepo",
+            })
+        assert r.status_code == 200
+        assert "timed out" in r.text
+
+    def test_generate_readme_timeout_emits_error_sse(self):
+        with patch("main.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+            r = client.post("/api/repo/generate-readme", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "file_context": "main.py\n\ndef main(): pass",
+            })
+        assert r.status_code == 200
+        assert "timed out" in r.text
+
+    def test_scan_deps_timeout_emits_error_sse(self):
+        with patch("requests.get") as mock_get, \
+             patch("main.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"info": {"version": "2.0.0"}}
+            r = client.post("/api/repo/scan-deps", json={
+                "filename": "requirements.txt",
+                "content": "fastapi==0.100.0",
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+            })
+        assert r.status_code == 200
+        assert "timed out" in r.text
+
+
+# ---------------------------------------------------------------------------
+# Cycle 67: chat_stream SSRF guard for openai_compat_base_url
+# ---------------------------------------------------------------------------
+
+class TestChatStreamOpenAICompatSSRF:
+    def test_single_stream_rejects_file_scheme_base_url(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "openai_compat",
+            "openai_compat_base_url": "file:///etc/passwd",
+            "openai_compat_model": "llama3",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_single_stream_rejects_gopher_scheme_base_url(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "openai_compat",
+            "openai_compat_base_url": "gopher://evil/exploit",
+            "openai_compat_model": "llama3",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_multi_agent_rejects_file_scheme_base_url(self):
+        # chat_stream calls get_runner(body) before starting the generator,
+        # so ValueError from invalid URL is caught and returned as 400 JSON
+        r = client.post("/api/chat/stream", json={
+            "provider": "openai_compat",
+            "openai_compat_base_url": "file:///etc/shadow",
+            "openai_compat_model": "llama3",
+            "messages": [{"role": "user", "content": "build it"}],
+            "multi_agent": True,
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+
+# ---------------------------------------------------------------------------
+# AirLLM provider
+# ---------------------------------------------------------------------------
+
+class TestRunAirLLM:
+    """Tests for _run_airllm thread target and the AirLLM get_runner path."""
+
+    def test_airllm_missing_import_emits_error(self):
+        """When airllm is not installed, _run_airllm emits an error event."""
+        import builtins
+        real_import = builtins.__import__
+
+        def _block(name, *args, **kwargs):
+            if name == "airllm":
+                raise ImportError("No module named 'airllm'")
+            return real_import(name, *args, **kwargs)
+
+        results = []
+
+        async def _collect():
+            q = asyncio.Queue()
+            loop = asyncio.get_running_loop()
+            import threading
+            with patch("builtins.__import__", side_effect=_block):
+                t = threading.Thread(
+                    target=main._run_airllm,
+                    args=(q, loop, "sys", [{"role": "user", "content": "hi"}], "test-model", 64),
+                    daemon=True,
+                )
+                t.start()
+                while True:
+                    kind, val = await asyncio.wait_for(q.get(), timeout=5)
+                    results.append((kind, val))
+                    if kind in ("done", "error"):
+                        break
+                t.join(timeout=3)
+
+        asyncio.get_event_loop().run_until_complete(_collect())
+        assert any(k == "error" for k, _ in results)
+        err = next(v for k, v in results if k == "error")
+        assert "airllm" in err.lower()
+
+    def test_airllm_get_runner_returns_callable(self):
+        body = _body(provider="airllm", airllm_model="meta-llama/Llama-2-7b-chat-hf", airllm_max_tokens=256)
+        runner = main.get_runner(body)
+        assert callable(runner)
+
+    def test_airllm_get_runner_default_model_when_empty(self):
+        body = _body(provider="airllm", airllm_model="", airllm_max_tokens=512)
+        runner = main.get_runner(body)
+        assert callable(runner)
+
+    def test_airllm_chat_stream_returns_sse(self):
+        with patch("main.stream_one", side_effect=_mock_stream_text):
+            r = client.post("/api/chat/stream", json={
+                "provider": "airllm",
+                "airllm_model": "meta-llama/Llama-2-7b-chat-hf",
+                "airllm_max_tokens": 128,
+                "messages": [{"role": "user", "content": "hello"}],
+            })
+        assert r.status_code == 200
+        assert "text/event-stream" in r.headers.get("content-type", "")
+        assert "streamed text" in r.text
+
+    def test_airllm_model_field_rejects_oversized_id(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "airllm",
+            "airllm_model": "x" * 201,
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert r.status_code == 422
+
+    def test_airllm_max_tokens_rejects_zero(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "airllm",
+            "airllm_model": "meta-llama/Llama-2-7b-chat-hf",
+            "airllm_max_tokens": 0,
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert r.status_code == 422
+
+    def test_airllm_max_tokens_rejects_over_limit(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "airllm",
+            "airllm_model": "meta-llama/Llama-2-7b-chat-hf",
+            "airllm_max_tokens": 4097,
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert r.status_code == 422
+
+    def test_prov_label_includes_airllm(self):
+        assert "airllm" in main._PROV_LABEL
+        assert main._PROV_LABEL["airllm"] == "AirLLM"
+
+
+# ---------------------------------------------------------------------------
+# /api/agent/run — LangGraph pipeline endpoint
+# ---------------------------------------------------------------------------
+
+class TestAgentRunEndpoint:
+    def test_returns_503_when_control_plane_unavailable(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = False
+            r = client.post("/api/agent/run", json={"task": "ping example.com"})
+            assert r.status_code == 503
+            assert "error" in r.json()
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_rejects_empty_task(self):
+        r = client.post("/api/agent/run", json={"task": ""})
+        assert r.status_code == 422
+
+    def test_rejects_task_exceeding_max_length(self):
+        r = client.post("/api/agent/run", json={"task": "x" * 4001})
+        assert r.status_code == 422
+
+    def test_returns_sse_stream_when_mocked(self):
+        async def _fake_astream(state):
+            yield {"retrieve": {"rag_context": "some context"}}
+            yield {"synthesis": {"final_answer": "done"}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream = _fake_astream
+
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._build_langgraph", return_value=mock_graph):
+                r = client.post("/api/agent/run", json={"task": "fetch example.com"})
+            assert r.status_code == 200
+            assert "text/event-stream" in r.headers.get("content-type", "")
+            assert "retrieve" in r.text
+            assert "done" in r.text
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_streams_node_events_for_all_nodes(self):
+        async def _fake_astream(state):
+            for node in ("retrieve", "reasoning", "execution", "synthesis"):
+                yield {node: {"rag_context": ""} if node == "retrieve" else
+                              {"tool_plan": None} if node == "reasoning" else
+                              {"tool_results": None} if node == "execution" else
+                              {"final_answer": "answer text"}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream = _fake_astream
+
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._build_langgraph", return_value=mock_graph):
+                r = client.post("/api/agent/run", json={"task": "test"})
+            body = r.text
+            assert "retrieve" in body
+            assert "reasoning" in body
+            assert "execution" in body
+            assert "synthesis" in body
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_streams_final_answer_as_text_chunks(self):
+        async def _fake_astream(state):
+            yield {"synthesis": {"final_answer": "Hello world from agent"}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream = _fake_astream
+
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._build_langgraph", return_value=mock_graph):
+                r = client.post("/api/agent/run", json={"task": "hi"})
+            # Answer is split into 8-char chunks; verify at least one text event is present
+            assert '"t": "text"' in r.text
+            assert "Hello wo" in r.text  # first 8-char chunk of "Hello world from agent"
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_emits_warn_event_for_node_error(self):
+        async def _fake_astream(state):
+            yield {"execution": {"error": "connection refused", "retry_count": 1}}
+            yield {"synthesis": {"final_answer": "fallback"}}
+
+        mock_graph = MagicMock()
+        mock_graph.astream = _fake_astream
+
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._build_langgraph", return_value=mock_graph):
+                r = client.post("/api/agent/run", json={"task": "test error"})
+            assert "warn" in r.text
+            assert "connection refused" in r.text
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_emits_error_event_on_exception(self):
+        async def _raise(state):
+            raise RuntimeError("graph exploded")
+            yield  # make it a generator
+
+        mock_graph = MagicMock()
+        mock_graph.astream = _raise
+
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._build_langgraph", return_value=mock_graph):
+                r = client.post("/api/agent/run", json={"task": "crash"})
+            assert "error" in r.text
+            assert "graph exploded" in r.text
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_node_labels_dict_covers_pipeline_nodes(self):
+        for node in ("retrieve", "reasoning", "execution", "synthesis"):
+            assert node in main._AGENT_NODE_LABELS
+
+
+# ---------------------------------------------------------------------------
+# /api/memory/query — Pinecone RAG query
+# ---------------------------------------------------------------------------
+
+class TestMemoryQueryEndpoint:
+    def test_returns_503_when_control_plane_unavailable(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = False
+            r = client.post("/api/memory/query", json={"q": "some task"})
+            assert r.status_code == 503
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_rejects_empty_query(self):
+        r = client.post("/api/memory/query", json={"q": ""})
+        assert r.status_code == 422
+
+    def test_rejects_top_k_zero(self):
+        r = client.post("/api/memory/query", json={"q": "test", "top_k": 0})
+        assert r.status_code == 422
+
+    def test_rejects_top_k_over_limit(self):
+        r = client.post("/api/memory/query", json={"q": "test", "top_k": 21})
+        assert r.status_code == 422
+
+    def test_returns_context_when_available(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._pinecone_query", return_value="relevant passage here"):
+                r = client.post("/api/memory/query", json={"q": "example task", "top_k": 3})
+            assert r.status_code == 200
+            body = r.json()
+            assert body["context"] == "relevant passage here"
+            assert body["found"] is True
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_found_false_when_no_context(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._pinecone_query", return_value=""):
+                r = client.post("/api/memory/query", json={"q": "obscure task"})
+            assert r.status_code == 200
+            assert r.json()["found"] is False
+            assert r.json()["context"] == ""
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_default_top_k_is_three(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            captured = {}
+            def _capture(q, top_k=3):
+                captured["top_k"] = top_k
+                return ""
+            with patch("main._pinecone_query", side_effect=_capture):
+                client.post("/api/memory/query", json={"q": "task"})
+            assert captured.get("top_k") == 3
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+
+# ---------------------------------------------------------------------------
+# /api/memory/upsert — Pinecone memory store
+# ---------------------------------------------------------------------------
+
+class TestMemoryUpsertEndpoint:
+    def test_returns_503_when_control_plane_unavailable(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = False
+            r = client.post("/api/memory/upsert", json={"text": "hello world"})
+            assert r.status_code == 503
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_rejects_empty_text(self):
+        r = client.post("/api/memory/upsert", json={"text": ""})
+        assert r.status_code == 422
+
+    def test_rejects_text_over_limit(self):
+        r = client.post("/api/memory/upsert", json={"text": "x" * 10_001})
+        assert r.status_code == 422
+
+    def test_returns_stored_true_on_success(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._pinecone_upsert", return_value=True):
+                r = client.post("/api/memory/upsert", json={"text": "important context here"})
+            assert r.status_code == 200
+            assert r.json()["stored"] is True
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_returns_503_when_upsert_fails(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            with patch("main._pinecone_upsert", return_value=False):
+                r = client.post("/api/memory/upsert", json={"text": "some text"})
+            assert r.status_code == 503
+            assert r.json()["stored"] is False
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+    def test_passes_metadata_to_upsert(self):
+        original = main._CONTROL_PLANE_AVAILABLE
+        try:
+            main._CONTROL_PLANE_AVAILABLE = True
+            captured = {}
+            def _capture(text, metadata=None):
+                captured["metadata"] = metadata
+                return True
+            with patch("main._pinecone_upsert", side_effect=_capture):
+                client.post("/api/memory/upsert", json={"text": "ctx", "metadata": {"source": "test"}})
+            assert captured.get("metadata") == {"source": "test"}
+        finally:
+            main._CONTROL_PLANE_AVAILABLE = original
+
+
+# ---------------------------------------------------------------------------
+# /api/tools/dispatch — Go data-plane proxy
+# ---------------------------------------------------------------------------
+
+class TestToolsDispatchEndpoint:
+    def _valid_body(self):
+        return {
+            "task_id": "test-task-1",
+            "calls": [{"call_id": "c1", "tool": "ping", "args": {"host": "1.1.1.1"}}],
+        }
+
+    def test_rejects_empty_task_id(self):
+        r = client.post("/api/tools/dispatch", json={"task_id": "", "calls": [{"call_id": "c1", "tool": "ping", "args": {}}]})
+        assert r.status_code == 422
+
+    def test_rejects_empty_calls_list(self):
+        r = client.post("/api/tools/dispatch", json={"task_id": "t1", "calls": []})
+        assert r.status_code == 422
+
+    def test_rejects_calls_list_over_20(self):
+        calls = [{"call_id": f"c{i}", "tool": "ping", "args": {}} for i in range(21)]
+        r = client.post("/api/tools/dispatch", json={"task_id": "t1", "calls": calls})
+        assert r.status_code == 422
+
+    def test_returns_400_for_invalid_go_url(self):
+        import os
+        original = os.environ.get("GO_DATA_PLANE_URL")
+        try:
+            os.environ["GO_DATA_PLANE_URL"] = "ftp://bad-scheme"
+            r = client.post("/api/tools/dispatch", json=self._valid_body())
+            assert r.status_code == 400
+            assert "error" in r.json()
+        finally:
+            if original is None:
+                os.environ.pop("GO_DATA_PLANE_URL", None)
+            else:
+                os.environ["GO_DATA_PLANE_URL"] = original
+
+    def test_returns_502_when_go_service_unreachable(self):
+        import httpx as _httpx
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.post = AsyncMock(side_effect=_httpx.ConnectError("refused"))
+            mock_cls.return_value = mock_client
+            r = client.post("/api/tools/dispatch", json=self._valid_body())
+        assert r.status_code == 502
+        assert "error" in r.json()
+
+    def test_returns_go_response_on_success(self):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json = MagicMock(return_value={
+            "task_id": "test-task-1",
+            "results": [{"call_id": "c1", "tool": "ping", "ok": True, "data": {}, "duration_ms": 5}],
+            "duration_ms": 10,
+        })
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.post = AsyncMock(return_value=mock_resp)
+            mock_cls.return_value = mock_client
+            r = client.post("/api/tools/dispatch", json=self._valid_body())
+
+        assert r.status_code == 200
+        assert r.json()["task_id"] == "test-task-1"
+        assert len(r.json()["results"]) == 1
+
+    def test_agent_initial_state_has_required_keys(self):
+        required = {"messages", "rag_context", "tool_plan", "tool_results", "final_answer", "error", "retry_count"}
+        assert required.issubset(set(main._AGENT_INITIAL_STATE.keys()))

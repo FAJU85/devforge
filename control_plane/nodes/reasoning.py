@@ -26,7 +26,7 @@ ping        Check TCP reachability of a host.
 Rules
 ─────
 - call_id must be unique within the batch (e.g. "fetch-1", "ping-main").
-- Maximum 10 calls per batch.
+- Maximum 20 calls per batch.
 - Use http_fetch for content retrieval, ping for connectivity checks.
 - Do not hallucinate URLs — only use URLs explicitly mentioned in the task.
 """

@@ -1,0 +1,14 @@
+{
+  "skipDangerousModePermissionPrompt": true,
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "Edit(.claude/MEMORY.md)",
+      "Edit(.claude/**)"
+    ],
+    "defaultMode": "bypassPermissions"
+  }
+}

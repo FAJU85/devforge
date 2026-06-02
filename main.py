@@ -2,13 +2,28 @@ from fastapi import FastAPI, Query
 from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Callable, List, Optional
+import ast as _ast
 import json, os, requests, base64, re, asyncio, threading
 from concurrent.futures import ThreadPoolExecutor, as_completed as _futs_done
 
 from anthropic import Anthropic
 from huggingface_hub import InferenceClient
+
+# Optional: control-plane (LangGraph + Pinecone + Go data-plane integration)
+try:
+    from control_plane.graph import build_graph as _build_langgraph
+    from control_plane.memory.pinecone_client import (
+        query_context as _pinecone_query,
+        upsert_text as _pinecone_upsert,
+    )
+    _CONTROL_PLANE_AVAILABLE = True
+except Exception:
+    _CONTROL_PLANE_AVAILABLE = False
+    def _build_langgraph(): return None  # noqa: E301
+    def _pinecone_query(q: str, top_k: int = 3) -> str: return ""  # noqa: E301
+    def _pinecone_upsert(text: str, metadata=None) -> bool: return False  # noqa: E301
 
 app = FastAPI(title="DevForge")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -90,6 +105,68 @@ def build_system(body: "ChatBody") -> str:
     if fc:
         base += f"\n\n---\n**Repository context:**\n{fc}"
     return base
+
+_airllm_cache: dict = {}
+
+def _run_airllm(q, loop, system: str, messages: list, model_id: str, max_new_tokens: int = 512):
+    """Thread target: run local inference via AirLLM (streams model layers from disk/CPU to GPU)."""
+    try:
+        try:
+            from airllm import AutoModel
+            import torch
+        except ImportError:
+            asyncio.run_coroutine_threadsafe(
+                q.put(("error", "airllm not installed — run: pip install airllm")), loop
+            )
+            return
+
+        if model_id not in _airllm_cache:
+            asyncio.run_coroutine_threadsafe(
+                q.put(("text", f"⏳ Loading **{model_id}** — first run downloads and caches the model, may take several minutes…\n\n")), loop
+            )
+            device = "cuda:0" if torch.cuda.is_available() else "cpu"
+            _airllm_cache[model_id] = AutoModel.from_pretrained(model_id, device=device)
+
+        model = _airllm_cache[model_id]
+        tokenizer = model.tokenizer
+        device = next(iter(model.parameters())).device if hasattr(model, "parameters") else "cpu"
+
+        # Build the prompt using the model's chat template when available
+        chat_msgs = [{"role": "system", "content": system}] + messages
+        if hasattr(tokenizer, "apply_chat_template") and getattr(tokenizer, "chat_template", None):
+            prompt = tokenizer.apply_chat_template(chat_msgs, tokenize=False, add_generation_prompt=True)
+        else:
+            # Llama-2 style fallback
+            prompt = f"[INST] <<SYS>>\n{system}\n<</SYS>>\n\n"
+            for m in messages:
+                if m["role"] == "user":
+                    prompt += f"{m['content']} [/INST] "
+                elif m["role"] == "assistant":
+                    prompt += f"{m['content']} [INST] "
+
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
+        input_ids = inputs["input_ids"].to(device)
+        input_len = input_ids.shape[-1]
+
+        generation_output = model.generate(
+            input_ids,
+            max_new_tokens=max(1, min(int(max_new_tokens), 4096)),
+            use_cache=True,
+            return_dict_in_generate=True,
+        )
+
+        new_ids = generation_output.sequences[0][input_len:]
+        result = tokenizer.decode(new_ids, skip_special_tokens=True).strip()
+
+        # Simulate token-level streaming in small chunks
+        for i in range(0, max(len(result), 1), 8):
+            chunk = result[i:i + 8]
+            if chunk:
+                asyncio.run_coroutine_threadsafe(q.put(("text", chunk)), loop)
+
+        asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+    except Exception as e:
+        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
 
 def _run_anthropic_thinking(q, loop, system, messages, api_key, model, thinking_budget):
     """Run Anthropic with extended thinking enabled; emits ('thinking', text) chunks."""
@@ -184,18 +261,25 @@ def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="
                     result_content = f"Error: Tool '{block.name}' not found"
                 else:
                     try:
-                        hdrs = dict(tool_def.headers or {})
-                        url = tool_def.url
-                        inp = block.input or {}
-                        for k, v in inp.items():
-                            url = url.replace(f"{{{k}}}", str(v))
-                        if tool_def.method.upper() == "GET":
-                            params = {k: v for k, v in inp.items() if f"{{{k}}}" not in tool_def.url}
-                            r = requests.get(url, headers=hdrs, params=params, timeout=15)
+                        if not re.match(r"^https?://", tool_def.url or ""):
+                            result_content = "Error: Tool URL must start with http:// or https://"
                         else:
-                            hdrs.setdefault("Content-Type", "application/json")
-                            r = requests.request(tool_def.method.upper(), url, headers=hdrs, json=inp, timeout=15)
-                        result_content = r.text[:2000]
+                            hdrs = dict(tool_def.headers or {})
+                            url = tool_def.url
+                            inp = block.input or {}
+                            for k, v in inp.items():
+                                url = url.replace(f"{{{k}}}", str(v))
+                            method = (tool_def.method or "GET").upper()
+                            if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+                                result_content = f"Error: Unsupported method {method}"
+                            elif method == "GET":
+                                params = {k: v for k, v in inp.items() if f"{{{k}}}" not in tool_def.url}
+                                r = requests.get(url, headers=hdrs, params=params, timeout=15)
+                                result_content = r.text[:2000]
+                            else:
+                                hdrs.setdefault("Content-Type", "application/json")
+                                r = requests.request(method, url, headers=hdrs, json=inp, timeout=15)
+                                result_content = r.text[:2000]
                     except Exception as e:
                         result_content = f"Error: {e}"
                 asyncio.run_coroutine_threadsafe(
@@ -332,7 +416,7 @@ def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
 
 async def stream_one(runner, system: str, messages: list):
     q: asyncio.Queue = asyncio.Queue()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     threading.Thread(target=runner, args=(q, loop, system, messages), daemon=True).start()
     while True:
         try:
@@ -349,7 +433,7 @@ async def root():
         return HTMLResponse(f.read())
 
 @app.get("/api/hf/models")
-async def search_hf_models(q: str = Query(default=""), limit: int = Query(default=25)):
+async def search_hf_models(q: str = Query(default="", max_length=200), limit: int = Query(default=25, ge=1, le=100)):
     params = {"pipeline_tag": "text-generation", "sort": "downloads", "direction": -1, "limit": limit, "full": False}
     if q.strip(): params["search"] = q.strip()
     try:
@@ -373,7 +457,7 @@ async def github_auth_start():
     return JSONResponse(r.json(), status_code=200 if r.ok else 500)
 
 class DeviceCodeBody(BaseModel):
-    device_code: str
+    device_code: str = Field(max_length=100)
 
 @app.post("/api/github/auth/poll")
 async def github_auth_poll(body: DeviceCodeBody):
@@ -385,7 +469,7 @@ async def github_auth_poll(body: DeviceCodeBody):
     return JSONResponse(r.json())
 
 class TokenBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
 
 @app.post("/api/github/user")
 async def github_user(body: TokenBody):
@@ -420,9 +504,12 @@ def parse_gh_url(url: str) -> "tuple[str | None, str | None]":
     m = re.search(r"github\.com/([^/\s]+)/([^/\s]+)", url.strip())
     if not m:
         m2 = re.match(r"^([^/\s]+)/([^/\s]+)$", url.strip())
-        if m2: return m2.group(1), m2.group(2).replace(".git", "")
+        if m2: return m2.group(1), m2.group(2).removesuffix(".git")
         return None, None
-    return m.group(1), m.group(2).replace(".git", "").rstrip("/")
+    return m.group(1), m.group(2).removesuffix(".git").rstrip("/")
+
+def _valid_http_url(url: str) -> bool:
+    return bool(url and re.match(r"^https?://", url))
 
 def gh_hdrs(token: str) -> dict:
     """Build GitHub API request headers for an authenticated token.
@@ -437,12 +524,12 @@ def gh_hdrs(token: str) -> dict:
 
 class RepoBody(BaseModel):
     token: str
-    url: str
-    branch: Optional[str] = ""
+    url: str = Field(max_length=300)
+    branch: Optional[str] = Field(default="", max_length=255)
 
 
 @app.get("/api/repo/branches")
-async def list_branches(token: str = Query(...), owner: str = Query(...), repo: str = Query(...)):
+async def list_branches(token: str = Query(...), owner: str = Query(..., max_length=100), repo: str = Query(..., max_length=100)):
     """List all branches for a repository."""
     r = requests.get(
         f"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100",
@@ -469,7 +556,10 @@ async def repo_connect(body: RepoBody):
     return {"owner": owner, "repo": repo, "branch": branch, "default_branch": default_branch, "files": files}
 
 class FileBody(BaseModel):
-    token: str; owner: str; repo: str; path: str
+    token: str
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    path: str = Field(max_length=1000)
 
 @app.post("/api/repo/file")
 async def repo_file(body: FileBody):
@@ -484,12 +574,12 @@ async def repo_file(body: FileBody):
 
 class WriteFileBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    path: str
-    content: str
-    message: str
-    branch: str
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    path: str = Field(max_length=1000)
+    content: str = Field(max_length=2_000_000)
+    message: str = Field(max_length=500)
+    branch: str = Field(max_length=255)
 
 @app.post("/api/repo/write")
 async def repo_write(body: WriteFileBody):
@@ -502,7 +592,7 @@ async def repo_write(body: WriteFileBody):
     if existing.ok:
         try:
             sha = existing.json().get("sha")
-        except (KeyError, json.JSONDecodeError):
+        except Exception:
             pass
 
     payload: dict = {
@@ -543,9 +633,9 @@ class SuggestFilesBody(BaseModel):
     openai_compat_model: Optional[str] = ""
     hf_token: Optional[str] = ""
     hf_model: Optional[str] = ""
-    task: str
+    task: str = Field(max_length=2000)
     files: List[str]
-    max_suggestions: int = 6
+    max_suggestions: int = Field(default=6, ge=1, le=20)
 
 @app.post("/api/repo/suggest-files")
 async def suggest_files(body: SuggestFilesBody):
@@ -563,8 +653,7 @@ async def suggest_files(body: SuggestFilesBody):
     result = ""
     try:
         if body.provider == "anthropic" and body.anthropic_key:
-            from anthropic import Anthropic as _Anth
-            client = _Anth(api_key=body.anthropic_key)
+            client = Anthropic(api_key=body.anthropic_key)
             msg = client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=256,
@@ -584,6 +673,8 @@ async def suggest_files(body: SuggestFilesBody):
             )
             result = r.json()["choices"][0]["message"]["content"] if r.ok else "[]"
         elif body.provider == "openai_compat" and body.openai_compat_base_url:
+            if not _valid_http_url(body.openai_compat_base_url):
+                return JSONResponse({"error": "openai_compat_base_url must be http:// or https://"}, status_code=400)
             url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
             hdrs = {"Content-Type": "application/json"}
             if body.openai_compat_key:
@@ -611,8 +702,8 @@ async def suggest_files(body: SuggestFilesBody):
 
 
 class SummarizeFileBody(BaseModel):
-    content: str
-    filename: str
+    content: str = Field(max_length=200_000)
+    filename: str = Field(max_length=500)
     provider: str
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
@@ -649,6 +740,8 @@ async def summarize_file(body: SummarizeFileBody):
             )
             result = r.json()["choices"][0]["message"]["content"] if r.ok else ""
         elif body.provider == "openai_compat" and body.openai_compat_base_url:
+            if not _valid_http_url(body.openai_compat_base_url):
+                return JSONResponse({"error": "openai_compat_base_url must be http:// or https://"}, status_code=400)
             url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
             hdrs = {"Content-Type": "application/json"}
             if body.openai_compat_key:
@@ -669,16 +762,16 @@ async def summarize_file(body: SummarizeFileBody):
 
 
 class BatchWriteItem(BaseModel):
-    path: str
-    content: str
-    message: str
+    path: str = Field(max_length=1000)
+    content: str = Field(max_length=2_000_000)
+    message: str = Field(max_length=500)
 
 class BatchWriteBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    branch: str
-    files: List[BatchWriteItem]
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    branch: str = Field(max_length=255)
+    files: List[BatchWriteItem] = Field(max_length=50)
 
 @app.post("/api/repo/write/batch")
 async def repo_write_batch(body: BatchWriteBody):
@@ -723,9 +816,9 @@ async def repo_write_batch(body: BatchWriteBody):
 
 class GistBody(BaseModel):
     token: str
-    filename: str
-    content: str
-    description: Optional[str] = ""
+    filename: str = Field(max_length=255)
+    content: str = Field(max_length=1_000_000)
+    description: Optional[str] = Field(default="", max_length=255)
     public: Optional[bool] = False
 
 @app.post("/api/github/gist/create")
@@ -754,11 +847,11 @@ async def create_gist(body: GistBody):
 
 class IssueBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    title: str
-    body: str
-    labels: Optional[List[str]] = []
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    title: str = Field(max_length=500)
+    body: str = Field(max_length=65_536)
+    labels: Optional[List[str]] = Field(default=[], max_length=10)
 
 @app.post("/api/github/issue/create")
 async def create_issue(body: IssueBody):
@@ -781,12 +874,12 @@ async def create_issue(body: IssueBody):
 
 class PRBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    title: str
-    body: str
-    head: str
-    base: str
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    title: str = Field(max_length=500)
+    body: str = Field(max_length=65_536)
+    head: str = Field(max_length=255)
+    base: str = Field(max_length=255)
 
 @app.post("/api/github/pr/create")
 async def create_pr(body: PRBody):
@@ -809,9 +902,9 @@ async def create_pr(body: PRBody):
 
 class PRDiffBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    pr_number: int
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    pr_number: int = Field(ge=1)
 
 @app.post("/api/github/pr/diff")
 async def get_pr_diff(body: PRDiffBody):
@@ -849,10 +942,10 @@ async def get_pr_diff(body: PRDiffBody):
 
 class RepoSearchBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    query: str
-    max_results: int = 10
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    query: str = Field(max_length=500)
+    max_results: int = Field(default=10, ge=1, le=30)
 
 
 @app.post("/api/repo/search")
@@ -895,10 +988,10 @@ async def repo_search(body: RepoSearchBody):
 
 class RepoCommitsBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    branch: Optional[str] = "main"
-    max_results: int = 10
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    branch: Optional[str] = Field(default="main", max_length=255)
+    max_results: int = Field(default=10, ge=1, le=50)
 
 
 @app.post("/api/repo/commits")
@@ -926,9 +1019,9 @@ async def repo_commits(body: RepoCommitsBody):
 
 class WorkflowRunsBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    max_results: int = 10
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    max_results: int = Field(default=10, ge=1, le=50)
 
 
 @app.post("/api/repo/workflow-runs")
@@ -971,11 +1064,11 @@ class ReleaseNotesBody(BaseModel):
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
     token: str
-    owner: str
-    repo: str
-    since: Optional[str] = ""   # SHA or tag (exclusive start)
-    until: Optional[str] = ""   # SHA or tag (inclusive end), default HEAD
-    max_commits: int = 50
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    since: Optional[str] = Field(default="", max_length=255)
+    until: Optional[str] = Field(default="", max_length=255)
+    max_commits: int = Field(default=50, ge=1, le=100)
     anthropic_model: Optional[str] = "claude-sonnet-4-6"
 
 @app.post("/api/repo/release-notes")
@@ -1026,9 +1119,8 @@ async def generate_release_notes(body: ReleaseNotesBody):
 
     async def _stream():
         if body.provider == "anthropic" and body.anthropic_key:
-            import threading
             q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             def _run():
                 try:
                     client = Anthropic(api_key=body.anthropic_key)
@@ -1043,7 +1135,10 @@ async def generate_release_notes(body: ReleaseNotesBody):
                     asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
             threading.Thread(target=_run, daemon=True).start()
             while True:
-                kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                try:
+                    kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
                 if kind == "text":
                     yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
                 elif kind == "done":
@@ -1083,9 +1178,9 @@ class CommitMsgBody(BaseModel):
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
     hf_token: Optional[str] = ""
-    path: str
-    content: Optional[str] = ""
-    diff: Optional[str] = ""
+    path: str = Field(max_length=1000)
+    content: Optional[str] = Field(default="", max_length=50_000)
+    diff: Optional[str] = Field(default="", max_length=50_000)
 
 @app.post("/api/commit/suggest-message")
 async def suggest_commit_message(body: CommitMsgBody):
@@ -1164,18 +1259,27 @@ GENERIC_SECURITY_PATTERNS = [
     (r'http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0)', "low", "Non-HTTPS external URL — use HTTPS for all connections"),
 ]
 
+_DANGEROUS_CALLS: dict = {
+    "eval": "high", "exec": "high", "__import__": "medium", "compile": "medium",
+}
+_DANGEROUS_ATTRS: dict = {
+    ("os", "system"): "high", ("os", "popen"): "high",
+    ("subprocess", "call"): "medium", ("subprocess", "run"): "medium",
+    ("subprocess", "Popen"): "medium",
+    ("pickle", "loads"): "high", ("pickle", "load"): "high",
+}
+
 
 class CodeScanBody(BaseModel):
-    code: str
-    language: str = "text"
+    code: str = Field(max_length=100_000)
+    language: str = Field(default="text", max_length=50)
 
 
 @app.post("/api/code/scan")
 async def scan_code(body: CodeScanBody):
     """Scan code for security issues using AST analysis (Python) and pattern matching."""
-    import ast as _ast
     issues: list = []
-    code = (body.code or "").strip()
+    code = (body.code or "").strip()[:100_000]
     lang = (body.language or "text").lower()
     if not code:
         return {"issues": [], "safe": True, "language": lang, "total": 0}
@@ -1184,25 +1288,18 @@ async def scan_code(body: CodeScanBody):
     if lang == "python":
         try:
             tree = _ast.parse(code)
-            DANGEROUS_CALLS = {"eval": "high", "exec": "high", "__import__": "medium", "compile": "medium"}
-            DANGEROUS_ATTRS = {
-                ("os", "system"): "high", ("os", "popen"): "high",
-                ("subprocess", "call"): "medium", ("subprocess", "run"): "medium",
-                ("subprocess", "Popen"): "medium",
-                ("pickle", "loads"): "high", ("pickle", "load"): "high",
-            }
             for node in _ast.walk(tree):
                 ln = getattr(node, "lineno", None)
                 if isinstance(node, _ast.Call):
                     func = node.func
-                    if isinstance(func, _ast.Name) and func.id in DANGEROUS_CALLS:
-                        sev = DANGEROUS_CALLS[func.id]
+                    if isinstance(func, _ast.Name) and func.id in _DANGEROUS_CALLS:
+                        sev = _DANGEROUS_CALLS[func.id]
                         issues.append({"severity": sev, "pattern": f"{func.id}()",
                             "message": f"{func.id}() can execute arbitrary code — avoid or restrict carefully", "line": ln, "source": "ast"})
                     elif isinstance(func, _ast.Attribute) and isinstance(func.value, _ast.Name):
                         pair = (func.value.id, func.attr)
-                        if pair in DANGEROUS_ATTRS:
-                            sev = DANGEROUS_ATTRS[pair]
+                        if pair in _DANGEROUS_ATTRS:
+                            sev = _DANGEROUS_ATTRS[pair]
                             issues.append({"severity": sev, "pattern": f"{pair[0]}.{pair[1]}()",
                                 "message": f"{pair[0]}.{pair[1]}() is a high-risk call — validate all inputs", "line": ln, "source": "ast"})
                     for kw in node.keywords:
@@ -1228,7 +1325,7 @@ async def scan_code(body: CodeScanBody):
     for lineno, line in enumerate(code.split("\n"), 1):
         for pat, sev, msg in lang_patterns + GENERIC_SECURITY_PATTERNS:
             if re.search(pat, line, re.IGNORECASE):
-                key = (lineno, pat[:20])
+                key = (lineno, pat)
                 if key not in seen and not (lang == "python" and lineno in ast_high_lines and sev == "high"):
                     seen.add(key)
                     clean_pat = re.sub(r'[\\^$.*+?()\[\]{}|]', '', pat)[:30].strip()
@@ -1254,8 +1351,8 @@ class ReadmeBody(BaseModel):
     anthropic_key: Optional[str] = ""
     anthropic_model: Optional[str] = "claude-sonnet-4-6"
     groq_key: Optional[str] = ""
-    repo_name: Optional[str] = ""
-    file_context: str
+    repo_name: Optional[str] = Field(default="", max_length=200)
+    file_context: str = Field(max_length=500_000)
 
 @app.post("/api/repo/generate-readme")
 async def generate_readme(body: ReadmeBody):
@@ -1270,9 +1367,8 @@ async def generate_readme(body: ReadmeBody):
 
     async def _stream():
         if body.provider == "anthropic" and body.anthropic_key:
-            import threading
             q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             def _run():
                 try:
                     client = Anthropic(api_key=body.anthropic_key)
@@ -1287,7 +1383,10 @@ async def generate_readme(body: ReadmeBody):
                     asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
             threading.Thread(target=_run, daemon=True).start()
             while True:
-                kind, val = await asyncio.wait_for(q.get(), timeout=90)
+                try:
+                    kind, val = await asyncio.wait_for(q.get(), timeout=90)
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
                 if kind == "text":
                     yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
                 elif kind == "done":
@@ -1381,6 +1480,42 @@ def _parse_go_mod(content: str) -> list:
                 pkgs.append({"name": parts[0], "constraint": parts[1]})
     return pkgs
 
+def _parse_pyproject_toml(content: str) -> list:
+    try:
+        import tomllib
+    except ImportError:
+        return _parse_requirements(content)
+    try:
+        data = tomllib.loads(content)
+    except Exception:
+        return []
+    pkgs: list = []
+    seen: set = set()
+
+    def _add(name: str, constraint: str) -> None:
+        key = name.lower().replace("_", "-")
+        if key not in seen:
+            seen.add(key)
+            pkgs.append({"name": key, "constraint": constraint})
+
+    # PEP 621: [project].dependencies (PEP 508 strings)
+    for dep in ((data.get("project") or {}).get("dependencies") or []):
+        m = re.match(r"^([A-Za-z0-9_.-]+)\s*([>=<!~^,][^\s#;]*)?", str(dep).strip())
+        if m:
+            _add(m.group(1), (m.group(2) or "").strip())
+    # Poetry: [tool.poetry.dependencies]
+    for name, ver in (((data.get("tool") or {}).get("poetry") or {}).get("dependencies") or {}).items():
+        if name.lower() == "python":
+            continue
+        constraint = str(ver) if not isinstance(ver, dict) else (ver.get("version") or "")
+        _add(name, constraint)
+    # build-system.requires
+    for dep in ((data.get("build-system") or {}).get("requires") or []):
+        m = re.match(r"^([A-Za-z0-9_.-]+)\s*([>=<!~^,][^\s#;]*)?", str(dep).strip())
+        if m:
+            _add(m.group(1), (m.group(2) or "").strip())
+    return pkgs
+
 def _parse_cargo_toml(content: str) -> list:
     pkgs: list = []
     in_deps = False
@@ -1393,13 +1528,17 @@ def _parse_cargo_toml(content: str) -> list:
         if in_deps:
             m = re.match(r'^([a-zA-Z0-9_-]+)\s*=\s*["\']?([^"\'#\s,}]+)', line)
             if m:
-                pkgs.append({"name": m.group(1), "constraint": m.group(2).strip()})
+                constraint = m.group(2).strip()
+                if constraint.startswith("{"):
+                    vm = re.search(r'version\s*=\s*["\']([^"\']+)', line)
+                    constraint = vm.group(1) if vm else constraint
+                pkgs.append({"name": m.group(1), "constraint": constraint})
     return pkgs
 
 
 class ScanDepsBody(BaseModel):
-    filename: str
-    content: str
+    filename: str = Field(max_length=255)
+    content: str = Field(max_length=200_000)
     provider: str = "anthropic"
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
@@ -1410,12 +1549,14 @@ class ScanDepsBody(BaseModel):
 async def scan_deps(body: ScanDepsBody):
     """Parse a dependency file, check latest versions, and stream an AI security audit."""
     fname = (body.filename or "").lower().strip().split("/")[-1]
-    content = (body.content or "").strip()
+    content = (body.content or "").strip()[:200_000]
     if not content:
         return JSONResponse({"error": "content required"}, status_code=400)
 
     # Detect ecosystem
-    if fname in ("requirements.txt", "pyproject.toml") or fname.endswith("requirements.txt"):
+    if fname == "pyproject.toml":
+        ecosystem, packages, checker = "python", _parse_pyproject_toml(content), _pypi_latest
+    elif fname == "requirements.txt" or fname.endswith("requirements.txt"):
         ecosystem, packages, checker = "python", _parse_requirements(content), _pypi_latest
     elif fname == "package.json":
         ecosystem, packages, checker = "javascript", _parse_package_json(content), _npm_latest
@@ -1469,9 +1610,8 @@ async def scan_deps(body: ScanDepsBody):
     async def _stream():
         yield f"data: {json.dumps({'t':'packages','v':{'ecosystem':ecosystem,'packages':pkg_results}})}\n\n"
         if body.provider == "anthropic" and body.anthropic_key:
-            import threading as _th
             q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             model = (body.anthropic_model or "claude-haiku-4-5-20251001").strip() or "claude-haiku-4-5-20251001"
             def _run():
                 try:
@@ -1483,9 +1623,12 @@ async def scan_deps(body: ScanDepsBody):
                     asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
                 except Exception as e:
                     asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
-            _th.Thread(target=_run, daemon=True).start()
+            threading.Thread(target=_run, daemon=True).start()
             while True:
-                kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                try:
+                    kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
                 if kind == "text": yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
                 elif kind == "done": break
                 else: yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
@@ -1509,17 +1652,17 @@ async def scan_deps(body: ScanDepsBody):
 
 
 class ToolDef(BaseModel):
-    name: str
-    description: str
-    url: str
-    method: str = "GET"
+    name: str = Field(max_length=100)
+    description: str = Field(max_length=1000)
+    url: str = Field(max_length=2000)
+    method: str = Field(default="GET", max_length=10)
     headers: Optional[dict] = {}
     input_schema: Optional[dict] = None
 
 
 class ToolCallBody(BaseModel):
-    url: str
-    method: str = "GET"
+    url: str = Field(max_length=2000)
+    method: str = Field(default="GET", max_length=10)
     headers: Optional[dict] = {}
     body_json: Optional[dict] = None
 
@@ -1527,14 +1670,19 @@ class ToolCallBody(BaseModel):
 @app.post("/api/tools/call")
 async def call_tool(body: ToolCallBody):
     """Proxy a user-defined tool HTTP call to avoid CORS issues."""
+    if not re.match(r"^https?://", body.url):
+        return JSONResponse({"error": "Only http:// and https:// URLs are supported"}, status_code=400)
+    method = body.method.upper()
+    if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+        return JSONResponse({"error": f"Unsupported method: {method}"}, status_code=400)
     try:
         hdrs = dict(body.headers or {})
-        if body.method.upper() != "GET":
+        if method != "GET":
             hdrs.setdefault("Content-Type", "application/json")
-        if body.method.upper() == "GET":
+        if method == "GET":
             r = requests.get(body.url, headers=hdrs, timeout=15)
         else:
-            r = requests.request(body.method.upper(), body.url, headers=hdrs, json=body.body_json, timeout=15)
+            r = requests.request(method, body.url, headers=hdrs, json=body.body_json, timeout=15)
         return {"status": r.status_code, "response": r.text[:2000]}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -1551,7 +1699,7 @@ class PromptEnhanceBody(BaseModel):
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
     hf_token: Optional[str] = ""
-    prompt: str
+    prompt: str = Field(max_length=4000)
 
 @app.post("/api/prompt/enhance")
 async def enhance_prompt(body: PromptEnhanceBody):
@@ -1597,7 +1745,8 @@ async def enhance_prompt(body: PromptEnhanceBody):
 
 
 class Msg(BaseModel):
-    role: str; content: str
+    role: str = Field(max_length=20)
+    content: str = Field(max_length=200_000)
 
 class ChatBody(BaseModel):
     provider: str
@@ -1610,13 +1759,13 @@ class ChatBody(BaseModel):
     openai_compat_base_url: Optional[str] = "http://localhost:11434/v1"
     openai_compat_model: Optional[str] = "llama3"
     agent: str = "code"
-    messages: List[Msg]
-    file_context: Optional[str] = ""
-    owner: Optional[str] = ""
-    repo: Optional[str] = ""
-    skills: Optional[List[str]] = []
-    rules: Optional[str] = ""
-    instructions: Optional[str] = ""
+    messages: List[Msg] = Field(max_length=500)
+    file_context: Optional[str] = Field(default="", max_length=500_000)
+    owner: Optional[str] = Field(default="", max_length=100)
+    repo: Optional[str] = Field(default="", max_length=100)
+    skills: Optional[List[str]] = Field(default=[], max_length=12)
+    rules: Optional[str] = Field(default="", max_length=10_000)
+    instructions: Optional[str] = Field(default="", max_length=10_000)
     multi_agent: Optional[bool] = False
     # Per-stage provider overrides for multi-agent (empty = use body.provider)
     ma_plan_provider: Optional[str] = ""
@@ -1624,13 +1773,15 @@ class ChatBody(BaseModel):
     ma_test_provider: Optional[str] = ""
     ma_review_provider: Optional[str] = ""
     ma_include_test_stage: Optional[bool] = False
-    memory: Optional[str] = ""
-    tools: Optional[List[ToolDef]] = []
+    memory: Optional[str] = Field(default="", max_length=50_000)
+    tools: Optional[List[ToolDef]] = Field(default=[], max_length=20)
     anthropic_model: Optional[str] = "claude-sonnet-4-6"
     thinking_mode: Optional[bool] = False
-    thinking_budget: Optional[int] = 2000
+    thinking_budget: Optional[int] = Field(default=2000, ge=1000, le=100_000)
+    airllm_model: Optional[str] = Field(default="meta-llama/Llama-2-7b-chat-hf", max_length=200)
+    airllm_max_tokens: Optional[int] = Field(default=512, ge=1, le=4096)
 
-_PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom"}
+_PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom", "airllm": "AirLLM"}
 
 def get_runner(body: ChatBody, provider: str = "") -> Callable:
     """Return a thread-target callable bound to the chosen provider's run function.
@@ -1656,12 +1807,19 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
     elif p == "groq":
         return lambda q, loop, sys, msgs: _run_groq(q, loop, sys, msgs, body.groq_key, body.groq_model or "llama-3.3-70b-versatile")
     elif p == "openai_compat":
+        oc_url = body.openai_compat_base_url or "http://localhost:11434/v1"
+        if not _valid_http_url(oc_url):
+            raise ValueError("openai_compat_base_url must be http:// or https://")
         return lambda q, loop, sys, msgs: _run_openai_compat(
             q, loop, sys, msgs,
             body.openai_compat_key or "",
-            body.openai_compat_base_url or "http://localhost:11434/v1",
+            oc_url,
             body.openai_compat_model or "llama3",
         )
+    elif p == "airllm":
+        al_model = (getattr(body, 'airllm_model', '') or 'meta-llama/Llama-2-7b-chat-hf').strip() or 'meta-llama/Llama-2-7b-chat-hf'
+        al_max_tokens = int(getattr(body, 'airllm_max_tokens', 512) or 512)
+        return lambda q, loop, sys, msgs: _run_airllm(q, loop, sys, msgs, al_model, al_max_tokens)
     else:
         token = (body.hf_token or "").strip() or HF_TOKEN
         return lambda q, loop, sys, msgs: _run_hf(q, loop, sys, msgs, token, body.hf_model)
@@ -1670,7 +1828,10 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
 async def chat_stream(body: ChatBody):
     system = build_system(body)
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
-    runner = get_runner(body)
+    try:
+        runner = get_runner(body)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
 
     async def single_stream():
         async for kind, val in stream_one(runner, system, messages):
@@ -1685,10 +1846,14 @@ async def chat_stream(body: ChatBody):
         code_prov   = body.ma_code_provider   or body.provider
         test_prov   = body.ma_test_provider   or body.provider
         review_prov = body.ma_review_provider or body.provider
-        plan_runner   = get_runner(body, plan_prov)
-        code_runner   = get_runner(body, code_prov)
-        test_runner   = get_runner(body, test_prov)
-        review_runner = get_runner(body, review_prov)
+        try:
+            plan_runner   = get_runner(body, plan_prov)
+            code_runner   = get_runner(body, code_prov)
+            test_runner   = get_runner(body, test_prov)
+            review_runner = get_runner(body, review_prov)
+        except ValueError as exc:
+            yield f"data: {json.dumps({'t': 'error', 'v': str(exc)})}\n\n"
+            return
 
         yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': f'🗺️ Planning · {_PROV_LABEL.get(plan_prov, plan_prov)}'})}\n\n"
         plan_text = ""
@@ -1737,3 +1902,111 @@ async def chat_stream(body: ChatBody):
     gen = multi_agent_stream() if body.multi_agent else single_stream()
     return StreamingResponse(gen, media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ── Agent Pipeline (LangGraph + Pinecone + Go data-plane) ────────────────────
+
+_AGENT_NODE_LABELS: dict = {
+    "retrieve":  "🔍 Retrieving context",
+    "reasoning": "🧠 Planning tool calls",
+    "execution": "⚡ Executing tools",
+    "synthesis": "✍️ Synthesizing answer",
+}
+
+_AGENT_INITIAL_STATE: dict = {
+    "messages": [],
+    "rag_context": "",
+    "tool_plan": None,
+    "tool_results": None,
+    "final_answer": "",
+    "error": None,
+    "retry_count": 0,
+}
+
+
+class AgentRunBody(BaseModel):
+    task: str = Field(..., min_length=1, max_length=4000)
+
+
+@app.post("/api/agent/run")
+async def agent_run(body: AgentRunBody):
+    if not _CONTROL_PLANE_AVAILABLE:
+        return JSONResponse({"error": "control plane dependencies not installed"}, status_code=503)
+
+    state = {**_AGENT_INITIAL_STATE, "task": body.task}
+
+    async def event_stream():
+        try:
+            graph = _build_langgraph()
+            async for update in graph.astream(state):
+                for node_name, node_update in update.items():
+                    label = _AGENT_NODE_LABELS.get(node_name, node_name)
+                    yield f"data: {json.dumps({'t': 'node', 'v': node_name, 'label': label})}\n\n"
+                    if node_name == "synthesis":
+                        answer = (node_update or {}).get("final_answer") or ""
+                        for i in range(0, max(len(answer), 1), 8):
+                            chunk = answer[i:i + 8]
+                            if chunk:
+                                yield f"data: {json.dumps({'t': 'text', 'v': chunk})}\n\n"
+                    err = (node_update or {}).get("error")
+                    if err:
+                        yield f"data: {json.dumps({'t': 'warn', 'v': str(err)})}\n\n"
+            yield f"data: {json.dumps({'t': 'done'})}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'t': 'error', 'v': str(exc)})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+class MemoryQueryBody(BaseModel):
+    q: str = Field(..., min_length=1, max_length=2000)
+    top_k: int = Field(default=3, ge=1, le=20)
+
+
+@app.post("/api/memory/query")
+async def memory_query(body: MemoryQueryBody):
+    if not _CONTROL_PLANE_AVAILABLE:
+        return JSONResponse({"error": "control plane dependencies not installed"}, status_code=503)
+    context = _pinecone_query(body.q, top_k=body.top_k)
+    return {"context": context, "found": bool(context)}
+
+
+class MemoryUpsertBody(BaseModel):
+    text: str = Field(..., min_length=1, max_length=10_000)
+    metadata: Optional[dict] = Field(default=None)
+
+
+@app.post("/api/memory/upsert")
+async def memory_upsert(body: MemoryUpsertBody):
+    if not _CONTROL_PLANE_AVAILABLE:
+        return JSONResponse({"error": "control plane dependencies not installed"}, status_code=503)
+    ok = _pinecone_upsert(body.text, body.metadata)
+    if ok:
+        return {"stored": True}
+    return JSONResponse({"stored": False, "error": "Pinecone not configured or upsert failed"}, status_code=503)
+
+
+class GoToolsBody(BaseModel):
+    task_id: str = Field(..., min_length=1, max_length=100)
+    calls: List[dict] = Field(..., min_length=1, max_length=20)
+
+
+@app.post("/api/tools/dispatch")
+async def tools_dispatch(body: GoToolsBody):
+    """Proxy a BatchRequest to the Go data-plane service."""
+    go_url = os.environ.get("GO_DATA_PLANE_URL", "http://localhost:8080")
+    if not re.match(r"^https?://", go_url):
+        return JSONResponse({"error": "GO_DATA_PLANE_URL must be http:// or https://"}, status_code=400)
+    timeout = int(os.environ.get("GO_CALL_TIMEOUT", "30"))
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient(timeout=float(timeout)) as http:
+            resp = await http.post(f"{go_url}/tools/execute", json=body.model_dump())
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)

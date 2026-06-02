@@ -418,6 +418,7 @@ pre::-webkit-scrollbar{height:4px}
           <button class="prov-btn" id="pg" onclick="setProv('groq')">⚡ Groq</button>
           <button class="prov-btn" id="ph" onclick="setProv('hf')">🤗 HF</button>
           <button class="prov-btn" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
+          <button class="prov-btn" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
         </div>
         <div class="pfields" id="pf-a" style="flex-direction:column">
           <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" oninput="saveEnhance()"></div>
@@ -455,6 +456,19 @@ pre::-webkit-scrollbar{height:4px}
             <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off"></div>
           </div>
         </div>
+        <div id="pf-al" style="display:none">
+          <div class="prov-note">Run any HuggingFace model locally with minimal GPU memory — layers stream from disk to GPU via <strong>AirLLM</strong>. Requires <code>pip install airllm</code>.</div>
+          <div style="padding:0 10px 8px;display:flex;gap:5px;flex-wrap:wrap">
+            <button class="qfill-btn" onclick="fillAirLLM('meta-llama/Llama-2-7b-chat-hf')">🦙 Llama-2 7B</button>
+            <button class="qfill-btn" onclick="fillAirLLM('mistralai/Mistral-7B-Instruct-v0.2')">✨ Mistral 7B</button>
+            <button class="qfill-btn" onclick="fillAirLLM('Qwen/Qwen2.5-7B-Instruct')">🌟 Qwen2.5 7B</button>
+            <button class="qfill-btn" onclick="fillAirLLM('microsoft/Phi-3-mini-4k-instruct')">💡 Phi-3 Mini</button>
+          </div>
+          <div class="pfields">
+            <div><div class="flabel">HuggingFace Model ID</div><input class="finput" id="al-model" placeholder="meta-llama/Llama-2-7b-chat-hf" autocomplete="off" oninput="updBadge();saveEnhance()"></div>
+            <div><div class="flabel">Max new tokens</div><input class="finput" id="al-tokens" type="number" min="1" max="4096" value="512" oninput="saveEnhance()"></div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="s-sec">
@@ -463,11 +477,11 @@ pre::-webkit-scrollbar{height:4px}
         <div class="ma-row"><div><div class="ma-label">Multi-Agent Pipeline</div><div class="ma-sub">Plan → Implement → Review</div></div><div><input type="checkbox" id="multi-agent" class="toggle-input" onchange="updBadge();$('ma-stages').style.display=this.checked?'block':'none'"><label for="multi-agent" class="toggle-label"></label></div></div>
         <div id="ma-stages" style="display:none;padding-bottom:4px">
           <div style="padding:2px 16px 6px;font-size:10px;color:var(--muted2)">Per-stage provider (optional):</div>
-          <div class="ma-stage-row"><div class="ma-stage-lbl">🗺️ Plan</div><select class="finput" id="ma-plan-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
-          <div class="ma-stage-row"><div class="ma-stage-lbl">⚙️ Code</div><select class="finput" id="ma-code-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
-          <div class="ma-stage-row"><div class="ma-stage-lbl">🔍 Review</div><select class="finput" id="ma-rev-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
+          <div class="ma-stage-row"><div class="ma-stage-lbl">🗺️ Plan</div><select class="finput" id="ma-plan-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
+          <div class="ma-stage-row"><div class="ma-stage-lbl">⚙️ Code</div><select class="finput" id="ma-code-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
+          <div class="ma-stage-row"><div class="ma-stage-lbl">🔍 Review</div><select class="finput" id="ma-rev-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
           <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 6px"><input type="checkbox" id="ma-test-stage" class="toggle-input" onchange="onTestStageToggle()"><label for="ma-test-stage" class="toggle-label" style="flex-shrink:0"></label><div><div style="font-size:11px;color:var(--text)">🧪 Include Test stage</div><div style="font-size:10px;color:var(--muted2)">Plan → Code → Test → Review</div></div></div>
-          <div class="ma-stage-row" id="ma-test-row" style="display:none"><div class="ma-stage-lbl">🧪 Test</div><select class="finput" id="ma-test-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option></select></div>
+          <div class="ma-stage-row" id="ma-test-row" style="display:none"><div class="ma-stage-lbl">🧪 Test</div><select class="finput" id="ma-test-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
         </div>
         <div style="padding:0 16px 4px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between"><span>Skills</span><span style="font-weight:400;color:var(--muted2);font-size:10px">Stacks ↓</span></div>
         <div class="skills-grid">
@@ -525,6 +539,17 @@ pre::-webkit-scrollbar{height:4px}
         <div id="tool-list" style="margin:0 10px 6px;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;display:none"></div>
         <div style="padding:0 10px">
           <button onclick="openAddTool()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+ Define Tool</button>
+        </div>
+      </div>
+    </div>
+    <div class="s-sec closed">
+      <div class="s-lbl" onclick="toggleSec(this)">🤖 Agent Pipeline <span class="s-arr">▼</span></div>
+      <div class="s-content" style="padding-bottom:6px">
+        <div style="padding:4px 10px 6px;font-size:11px;color:var(--muted)">Run a task through the LangGraph pipeline: retrieve → plan → execute → synthesize.</div>
+        <div style="padding:0 10px 8px">
+          <textarea id="agent-task" class="side-textarea" placeholder="Describe a task for the agent pipeline…" style="resize:vertical;min-height:60px;margin-bottom:6px"></textarea>
+          <button onclick="runAgentPipeline()" style="width:100%;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent2);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-weight:600;font-family:inherit;transition:all .15s">&#9654; Run Pipeline</button>
+          <div id="agent-progress" style="display:none;margin-top:8px;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;color:var(--muted);max-height:200px;overflow-y:auto;word-break:break-word"></div>
         </div>
       </div>
     </div>
@@ -763,6 +788,9 @@ async function summarizeFile(path,evt){
 }
 function fmt(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(0)+'k';return n||0;}
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
+function escA(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function safeOpen(el){const u=el.dataset.url;if(u&&/^https?:\/\//.test(u))window.open(u,'_blank');}
+function safeOpenUrl(u){if(u&&/^https?:\/\//.test(u))window.open(u,'_blank');}
 function scrollB(){const m=$('msgs');m.scrollTop=m.scrollHeight;}
 // ── Message actions ───────────────────────────────────────────────────────────
 function cpMsg(btn){const body=btn.closest('.msg-inner').querySelector('.msg-body');navigator.clipboard.writeText(body?body.textContent:'');btn.textContent='✓';setTimeout(()=>{btn.textContent='copy';},1500);}
@@ -805,7 +833,7 @@ function renderTabBar(){
   list.innerHTML=S.tabs.map(t=>{
     const active=t.id===S.activeTabId;const n=t.name||'Chat';
     const cnt=t.msgs?.length;
-    return`<div class="tab-item${active?' active':''}" onclick="switchTab('${t.id}')" ondblclick="promptRenameTab('${t.id}')" title="${n}${cnt?' · '+cnt+' messages':''}"><span class="tab-name">${esc(n)}</span>${S.tabs.length>1?`<button class="tab-close" onclick="closeTab('${t.id}',event)">✕</button>`:''}</div>`;
+    return`<div class="tab-item${active?' active':''}" onclick="switchTab('${t.id}')" ondblclick="promptRenameTab('${t.id}')" title="${escA(n)}${cnt?' · '+cnt+' messages':''}"><span class="tab-name">${esc(n)}</span>${S.tabs.length>1?`<button class="tab-close" onclick="closeTab('${t.id}',event)">✕</button>`:''}</div>`;
   }).join('');
 }
 function newTab(){
@@ -887,7 +915,7 @@ async function suggestFiles(){
       if(S.selFiles.size+S.localFiles.size>=8)break;
       if(!S.selFiles.has(path)){
         const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});
-        if(!d.error){S.selFiles.set(path,d.content);updTF(path);loaded++;}
+        if(!d.error){S.selFiles.set(path,d.content);S.fileSizes.set(path,d.content.length);updTF(path);loaded++;}
       }
     }
     updCtx();toast(`🤔 AI suggested ${res.files.length} files, loaded ${loaded}`);
@@ -985,8 +1013,9 @@ function regenerate(){
   let lastUser=null;
   for(let i=S.msgs.length-1;i>=0;i--){if(S.msgs[i].role==='user'){lastUser=S.msgs[i].content;break;}}
   if(!lastUser){toast('Nothing to regenerate',true);return;}
-  // Remove last AI message from state (keep the user message)
+  // Remove last AI message AND last user message (send() re-adds the user message)
   if(S.msgs.length>0&&S.msgs[S.msgs.length-1].role==='assistant')S.msgs.pop();
+  if(S.msgs.length>0&&S.msgs[S.msgs.length-1].role==='user')S.msgs.pop();
   // Remove last AI message bubble from DOM
   const msgs=$('msgs');const wraps=msgs.querySelectorAll('.msg-wrap');
   if(wraps.length>0){const last=wraps[wraps.length-1];const av=last.querySelector('.msg-av');if(av&&av.classList.contains('agent'))last.remove();}
@@ -1000,8 +1029,8 @@ function onTestStageToggle(){const tr=$('ma-test-row');if(tr)tr.style.display=$(
 // ── Batch commit all AI-generated files ──────────────────────────────────────
 function extractFileBlocks(msgBody){const blocks=[];msgBody.querySelectorAll('.cblock').forEach(block=>{const writeBtn=block.querySelector('.cwrite[data-filepath]');if(!writeBtn)return;const path=writeBtn.getAttribute('data-filepath');const code=block.querySelector('code');if(path&&code)blocks.push({path,content:code.textContent});});return blocks;}
 async function batchCommit(blocks,branch,commitMsg){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const files=blocks.map(b=>({path:b.path,content:b.content,message:commitMsg||`Update ${b.path.split('/').pop()}`}));const res=await post('/api/repo/write/batch',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,branch,files});const ok=res.committed?.length||0;const errs=res.errors?.length||0;if(ok)toast(`✅ Committed ${ok} file${ok>1?'s':''}`+(errs?`, ${errs} error(s)`:'')); else toast(`Batch commit failed: ${res.errors?.[0]?.error||'unknown'}`,true);}
-function showBatchPanel(msgWrap){const existing=msgWrap.querySelector('.batch-panel');if(existing){existing.remove();return;}const blocks=extractFileBlocks(msgWrap);if(!blocks.length){toast('No writable files found in this response',true);return;}const branch=S.repo?.branch||'main';const panel=document.createElement('div');panel.className='write-panel batch-panel';panel.style.margin='8px 31px 0';panel.innerHTML=`<div style="font-size:12px;font-weight:600;color:var(--accent2);margin-bottom:8px">📦 Batch Commit ${blocks.length} file${blocks.length>1?'s':''}</div>${blocks.map((b,i)=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><input type="checkbox" checked id="bc-${i}" style="accent-color:var(--accent2)"><label for="bc-${i}" style="font-family:monospace;font-size:11px;color:var(--accent2)">${b.path}</label></div>`).join('')}<div class="wp-row" style="margin-top:8px"><div class="wp-field"><div class="flabel">Branch</div><input class="finput wp-branch" value="${branch}"></div><div class="wp-field"><div class="flabel">Commit message</div><input class="finput wp-msg" value="feat: apply AI-generated changes"></div></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px"><button onclick="this.closest('.batch-panel').remove()" style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;padding:6px 12px;border-radius:8px;font-size:11px;font-family:inherit">Cancel</button><button class="wp-commit" onclick="doBatchCommit(this,${JSON.stringify(blocks).replace(/"/g,'&quot;')})">📤 Commit All</button></div>`;msgWrap.querySelector('.msg-inner').appendChild(panel);}
-async function doBatchCommit(btn,allBlocks){const panel=btn.closest('.batch-panel');const branch=panel.querySelector('.wp-branch').value.trim();const msg=panel.querySelector('.wp-msg').value.trim();const selected=allBlocks.filter((_,i)=>panel.querySelector(`#bc-${i}`)?.checked);if(!selected.length){toast('Select at least one file',true);return;}btn.textContent='⏳ Committing…';btn.disabled=true;await batchCommit(selected,branch,msg);panel.remove();}
+function showBatchPanel(msgWrap){const existing=msgWrap.querySelector('.batch-panel');if(existing){existing.remove();return;}const blocks=extractFileBlocks(msgWrap);if(!blocks.length){toast('No writable files found in this response',true);return;}const branch=S.repo?.branch||'main';const panel=document.createElement('div');panel.className='write-panel batch-panel';panel.style.margin='8px 31px 0';panel.innerHTML=`<div style="font-size:12px;font-weight:600;color:var(--accent2);margin-bottom:8px">📦 Batch Commit ${blocks.length} file${blocks.length>1?'s':''}</div>${blocks.map((b,i)=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><input type="checkbox" checked id="bc-${i}" style="accent-color:var(--accent2)"><label for="bc-${i}" style="font-family:monospace;font-size:11px;color:var(--accent2)">${esc(b.path)}</label></div>`).join('')}<div class="wp-row" style="margin-top:8px"><div class="wp-field"><div class="flabel">Branch</div><input class="finput wp-branch" value="${escA(branch)}"></div><div class="wp-field"><div class="flabel">Commit message</div><input class="finput wp-msg" value="feat: apply AI-generated changes"></div></div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px"><button style="background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;padding:6px 12px;border-radius:8px;font-size:11px;font-family:inherit">Cancel</button><button class="wp-commit">📤 Commit All</button></div>`;panel.querySelector('button').onclick=()=>panel.remove();const commitBtn=panel.querySelector('.wp-commit');commitBtn.onclick=async()=>doBatchCommit(commitBtn,blocks);msgWrap.querySelector('.msg-inner').appendChild(panel);}
+async function doBatchCommit(btn,blocks){const panel=btn.closest('.batch-panel');const branch=panel.querySelector('.wp-branch').value.trim();const msg=panel.querySelector('.wp-msg').value.trim();const selected=blocks.filter((_,i)=>panel.querySelector(`#bc-${i}`)?.checked);if(!selected.length){toast('Select at least one file',true);return;}btn.textContent='⏳ Committing…';btn.disabled=true;await batchCommit(selected,branch,msg);panel.remove();}
 
 // ── Token stats ───────────────────────────────────────────────────────────────
 function addTokens(text,precise){const est=precise||(text.split(/\s+/).filter(Boolean).length*1.3|0);S.stats.tokens+=est;S.stats.messages++;const p=$('stat-pill');p.style.display='block';p.textContent=`~${S.stats.tokens>=1000?(S.stats.tokens/1000).toFixed(1)+'k':S.stats.tokens} tok`;}
@@ -1012,8 +1041,8 @@ function setTheme(t){document.documentElement.setAttribute('data-theme',t);$('ts
 function saveSession(){if(S.ghToken&&S.ghUser)localStorage.setItem('df-session',JSON.stringify({ghToken:S.ghToken,ghUser:S.ghUser}));}
 function clearSession(){localStorage.removeItem('df-session');}
 function restoreSession(){try{const raw=localStorage.getItem('df-session');if(!raw)return false;const{ghToken,ghUser}=JSON.parse(raw);if(!ghToken||!ghUser)return false;S.ghToken=ghToken;S.ghUser=ghUser;$('gh-av').src=ghUser.avatar_url||'';$('gh-nm').textContent=ghUser.name||ghUser.login;$('gh-lg').textContent='@'+ghUser.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();return true;}catch(e){return false;}}
-function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);const ts=$('ma-test-stage');const tt=$('think-toggle');const tb=$('think-budget');const data={prov:S.prov,anthropicKey:$('ak').value||'',anthropicModel:S.anthropicModel||'claude-sonnet-4-6',thinkingMode:tt?tt.checked:false,thinkingBudget:tb?tb.value:'2000',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||'',maTestStage:ts?ts.checked:false,maTestProv:$('ma-test-prov')?$('ma-test-prov').value||'':''};localStorage.setItem('df-enhance',JSON.stringify(data));}
-function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=d.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
+function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);const ts=$('ma-test-stage');const tt=$('think-toggle');const tb=$('think-budget');const data={prov:S.prov,anthropicKey:$('ak').value||'',anthropicModel:S.anthropicModel||'claude-sonnet-4-6',thinkingMode:tt?tt.checked:false,thinkingBudget:tb?tb.value:'2000',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',alModel:$('al-model')?$('al-model').value||'':'',alTokens:$('al-tokens')?$('al-tokens').value||'512':'512',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||'',maTestStage:ts?ts.checked:false,maTestProv:$('ma-test-prov')?$('ma-test-prov').value||'':''};localStorage.setItem('df-enhance',JSON.stringify(data));}
+function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.alModel&&$('al-model'))$('al-model').value=d.alModel;if(d.alTokens&&$('al-tokens'))$('al-tokens').value=d.alTokens;if(d.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=d.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
 function toggleMoreMenu(){$('more-menu').classList.toggle('open');}
 function closeMoreMenu(){const m=$('more-menu');if(m)m.classList.remove('open');}
 document.addEventListener('click',e=>{if(!e.target.closest('#more-menu')&&!e.target.closest('#more-btn'))closeMoreMenu();});
@@ -1031,7 +1060,7 @@ async function createGist(btn,lang){
   btn.textContent='⏳';btn.disabled=true;
   const d=await post('/api/github/gist/create',{token:S.ghToken,filename:fname,content,description:`DevForge snippet (${lang})`,public:false});
   if(d.error){toast('Gist failed: '+d.error,true);}
-  else{toast('✓ Gist created!');window.open(d.url,'_blank');}
+  else{toast('✓ Gist created!');safeOpenUrl(d.url);}
   btn.textContent='Gist';btn.disabled=false;
 }
 async function scanCode(btn,lang){
@@ -1053,7 +1082,8 @@ async function scanCode(btn,lang){
       const issuesText=d.issues.map(i=>`[${i.severity.toUpperCase()}] ${i.pattern}${i.line?' (line '+i.line+')':''}: ${i.message}`).join('\n');
       const issueHtml=d.issues.map(i=>{
         const icon=i.severity==='high'?'🔴':i.severity==='medium'?'🟡':'🔵';
-        return`<div class="scan-issue scan-${i.severity}">${icon} <strong>${i.pattern}</strong>${i.line?` <span style="color:var(--muted);font-size:10px">line ${i.line}</span>`:''}<div class="scan-msg">${i.message}</div></div>`;
+        const sev=['high','medium','low'].includes(i.severity)?i.severity:'low';
+        return`<div class="scan-issue scan-${sev}">${icon} <strong>${esc(String(i.pattern||''))}</strong>${i.line?` <span style="color:var(--muted);font-size:10px">line ${Number(i.line)||0}</span>`:''}<div class="scan-msg">${esc(String(i.message||''))}</div></div>`;
       }).join('');
       const enc=encodeURIComponent(issuesText);
       panel.innerHTML=`<div class="scan-header"><span class="scan-title">🛡️ Security Scan — ${summary}</span><button class="ccopy" style="border-color:var(--accent-border);color:var(--accent2)" onclick="autoFixCode(this)" data-issues="${enc}" title="Ask AI to fix these issues">🔧 Auto-Fix</button></div><div class="scan-issues">${issueHtml}</div>`;
@@ -1072,13 +1102,13 @@ function autoFixCode(btn){
   $('msgs').scrollTo(0,$('msgs').scrollHeight);
   toast('🔧 Security fix request ready — click Send');
 }
-function rmd(text){const d=document.createElement('div');d.innerHTML=marked.parse(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase();const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" onclick="cp(this)">copy</button><button class="ccopy" onclick="explainCode(this)" title="Explain this code">?</button><button class="ccopy" onclick="scanCode(this,'${lang}')" title="Scan for security issues">🛡️</button>`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{const ce=h.querySelector('code');if(!ce)return;const fp=ce.textContent.trim();if(!/[./]/.test(fp))return;const nx=h.nextElementSibling;if(nx&&nx.classList.contains('cblock')){const hd=nx.querySelector('.cblock-head');if(hd){const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);}}});}return d.innerHTML;}
+function rmd(text){const d=document.createElement('div');d.innerHTML=marked.parse(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase().replace(/[^a-z0-9+#._-]/g,'');const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';const gistBtn=S.ghToken?`<button class="ccopy" onclick="createGist(this,'${lang}')" title="Save as GitHub Gist">Gist</button>`:'';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" onclick="cp(this)">copy</button><button class="ccopy" onclick="explainCode(this)" title="Explain this code">?</button><button class="ccopy" onclick="scanCode(this,'${lang}')" title="Scan for security issues">🛡️</button>${gistBtn}`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{const ce=h.querySelector('code');if(!ce)return;const fp=ce.textContent.trim();if(!/[./]/.test(fp))return;const nx=h.nextElementSibling;if(nx&&nx.classList.contains('cblock')){const hd=nx.querySelector('.cblock-head');if(hd){const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);}}});}return d.innerHTML;}
 function cp(btn){const c=btn.closest('.cblock').querySelector('code');navigator.clipboard.writeText(c.textContent);btn.textContent='copied!';btn.classList.add('ok');setTimeout(()=>{btn.textContent='copy';btn.classList.remove('ok');},2000);}
 function uploadToArea(input,targetId){const file=input.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{$(targetId).value=e.target.result;saveEnhance();toast(`Loaded ${file.name}`);};r.readAsText(file);input.value='';}
 function uploadContext(input){const files=Array.from(input.files);if(!files.length)return;let done=0;const max=8-S.selFiles.size-S.localFiles.size;if(max<=0){toast('Max 8 files',true);input.value='';return;}const toLoad=files.slice(0,max);if(files.length>max)toast(`Max 8 files — loaded first ${max}`,true);toLoad.forEach(file=>{const r=new FileReader();r.onload=e=>{S.localFiles.set(file.name,e.target.result);done++;if(done===toLoad.length){updCtx();if(!S.streaming)toast(`Added ${done} file${done>1?'s':''}`);}};r.readAsText(file);});input.value='';}
 // ── Diff utilities ────────────────────────────────────────────────────────────
 function computeDiff(original,generated){const a=original.split('\n'),b=generated.split('\n');const res=[];let i=0,j=0;while(i<a.length||j<b.length){if(i<a.length&&j<b.length&&a[i]===b[j]){res.push({t:'ctx',v:a[i]});i++;j++;}else if(j<b.length&&(i>=a.length||!a.slice(i,Math.min(i+6,a.length)).includes(b[j]))){res.push({t:'add',v:b[j]});j++;}else{res.push({t:'del',v:a[i]});i++;}}return res;}
-function renderDiff(diff){const adds=diff.filter(l=>l.t==='add').length,dels=diff.filter(l=>l.t==='del').length;const lines=diff.map(l=>`<span class="diff-${l==='ctx'?'ctx':l.t}">${l.t==='add'?'+ ':l.t==='del'?'- ':'  '}${l.v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>`).join('');return{html:lines,adds,dels};}
+function renderDiff(diff){const adds=diff.filter(l=>l.t==='add').length,dels=diff.filter(l=>l.t==='del').length;const lines=diff.map(l=>`<span class="diff-${l.t}">${l.t==='add'?'+ ':l.t==='del'?'- ':'  '}${l.v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>`).join('');return{html:lines,adds,dels};}
 
 function showWritePanel(btn){
   const cblock=btn.closest('.cblock');const fp=btn.getAttribute('data-filepath')||'';
@@ -1099,10 +1129,10 @@ function showWritePanel(btn){
     }
   }
 
-  panel.innerHTML=`${diffHtml}<div class="wp-row"><div class="wp-field"><div class="flabel">Path</div><input class="finput wp-path" value="${fp.replace(/"/g,'&quot;')}" placeholder="src/file.ts"></div><div class="wp-field" style="max-width:140px"><div class="flabel">Branch</div><input class="finput wp-branch" value="${branch}" placeholder="main"></div></div><div class="wp-row"><div class="wp-field"><div class="flabel">Commit message <button onclick="suggestCommitMsg(this.closest('.write-panel'))" style="background:none;border:none;color:var(--purple);cursor:pointer;font-size:11px;padding:0 2px" title="AI: suggest commit message">✨</button></div><input class="finput wp-msg" value="Update ${fname}" placeholder="feat: …"></div><button class="wp-commit" onclick="commitFile(this)">📤 Commit</button></div>`;
+  panel.innerHTML=`${diffHtml}<div class="wp-row"><div class="wp-field"><div class="flabel">Path</div><input class="finput wp-path" value="${escA(fp)}" placeholder="src/file.ts"></div><div class="wp-field" style="max-width:140px"><div class="flabel">Branch</div><input class="finput wp-branch" value="${escA(branch)}" placeholder="main"></div></div><div class="wp-row"><div class="wp-field"><div class="flabel">Commit message <button onclick="suggestCommitMsg(this.closest('.write-panel'))" style="background:none;border:none;color:var(--purple);cursor:pointer;font-size:11px;padding:0 2px" title="AI: suggest commit message">✨</button></div><input class="finput wp-msg" value="Update ${escA(fname)}" placeholder="feat: …"></div><button class="wp-commit" onclick="commitFile(this)">📤 Commit</button></div>`;
   cblock.appendChild(panel);
 }
-async function commitFile(btn){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const panel=btn.closest('.write-panel');const cblock=panel.closest('.cblock');const path=panel.querySelector('.wp-path').value.trim();const branch=panel.querySelector('.wp-branch').value.trim();const message=panel.querySelector('.wp-msg').value.trim();const code=cblock.querySelector('code');if(!path||!message||!code)return;btn.textContent='⏳ Writing…';btn.disabled=true;const res=await post('/api/repo/write',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,content:code.textContent,message,branch});if(res.error){toast('Write failed: '+res.error,true);btn.textContent='📤 Commit';btn.disabled=false;return;}btn.textContent='✅ Written!';const defaultBranch=S.repo.branch||'main';if(res.commit_url){const a=document.createElement('a');a.href=res.commit_url;a.target='_blank';a.className='wp-link';a.textContent='View commit →';btn.after(a);}if(branch!==defaultBranch){const prBtn=document.createElement('button');prBtn.className='wp-commit';prBtn.style.cssText='background:var(--blue);margin-left:6px';prBtn.textContent='🔀 Create PR';prBtn.onclick=()=>openPRModal(branch);btn.after(prBtn);}toast(`✅ Committed to ${branch}: ${path}`);}
+async function commitFile(btn){if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}const panel=btn.closest('.write-panel');const cblock=panel.closest('.cblock');const path=panel.querySelector('.wp-path').value.trim();const branch=panel.querySelector('.wp-branch').value.trim();const message=panel.querySelector('.wp-msg').value.trim();const code=cblock.querySelector('code');if(!path||!message||!code)return;btn.textContent='⏳ Writing…';btn.disabled=true;const res=await post('/api/repo/write',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,content:code.textContent,message,branch});if(res.error){toast('Write failed: '+res.error,true);btn.textContent='📤 Commit';btn.disabled=false;return;}btn.textContent='✅ Written!';const defaultBranch=S.repo.branch||'main';if(res.commit_url&&/^https?:\/\//.test(res.commit_url)){const a=document.createElement('a');a.href=res.commit_url;a.target='_blank';a.className='wp-link';a.textContent='View commit →';btn.after(a);}if(branch!==defaultBranch){const prBtn=document.createElement('button');prBtn.className='wp-commit';prBtn.style.cssText='background:var(--blue);margin-left:6px';prBtn.textContent='🔀 Create PR';prBtn.onclick=()=>openPRModal(branch);btn.after(prBtn);}toast(`✅ Committed to ${branch}: ${path}`);}
 async function suggestCommitMsg(panel){
   const path=panel.querySelector('.wp-path')?.value?.trim()||'';
   const cblock=panel.closest?.('.cblock');const code=cblock?.querySelector('code');
@@ -1116,16 +1146,16 @@ async function suggestCommitMsg(panel){
   try{const d=await post('/api/commit/suggest-message',body);if(d.message){panel.querySelector('.wp-msg').value=d.message;toast('✨ Commit message suggested!');}else{toast('Error: '+(d.error||'Failed'),true);}}catch(e){toast(e.message,true);}
   if(btn){btn.textContent='✨';btn.disabled=false;}
 }
-async function startOAuth(){const d=await post('/api/github/auth/start',{});if(d.error){toast(d.error,true);return;}S.devCode=d.device_code;const uri=d.verification_uri||'https://github.com/login/device';$('oauth-box').style.display='block';$('oauth-box').innerHTML=`<div class="oauth-box"><div class="oauth-lbl">Enter this code at GitHub</div><div class="oauth-code">${d.user_code}</div><br><a href="${uri}" target="_blank" class="oauth-link"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Open github.com/login/device</a></div>`;$('oauth-check').style.display='block';}
+async function startOAuth(){const d=await post('/api/github/auth/start',{});if(d.error){toast(d.error,true);return;}S.devCode=d.device_code;const uri=d.verification_uri&&/^https:\/\/github\.com\//.test(d.verification_uri)?d.verification_uri:'https://github.com/login/device';$('oauth-box').style.display='block';$('oauth-box').innerHTML=`<div class="oauth-box"><div class="oauth-lbl">Enter this code at GitHub</div><div class="oauth-code">${esc(String(d.user_code||''))}</div><br><a href="${escA(uri)}" target="_blank" class="oauth-link"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Open github.com/login/device</a></div>`;$('oauth-check').style.display='block';}
 async function pollOAuth(){if(!S.devCode)return;const d=await post('/api/github/auth/poll',{device_code:S.devCode});if(d.access_token){S.ghToken=d.access_token;const u=await post('/api/github/user',{token:S.ghToken});S.ghUser=u;saveSession();$('gh-av').src=u.avatar_url||'';$('gh-nm').textContent=u.name||u.login;$('gh-lg').textContent='@'+u.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();}else if(d.error==='authorization_pending'){toast('Not authorized yet — approve on GitHub first');}else{toast('Error: '+(d.error_description||d.error||'Unknown'),true);}}
 function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.tabs=[];S.activeTabId=null;$('tab-bar').style.display='none';S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';closeMoreMenu();const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='none';$('commits-panel').style.display='none';$('search-results-panel').style.display='none';const wp=$('workflows-panel');if(wp)wp.style.display='none';updCtx();updHint();}
 async function loadRepos(){$('repo-list').innerHTML='<div class="list-msg">Loading…</div>';const repos=await post('/api/github/repos',{token:S.ghToken});if(!Array.isArray(repos)){$('repo-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';return;}S.allRepos=repos;renderRepoList(repos);}
-function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo('${r.full_name.replace(/'/g,"\\'")}',this)"><div class="li-name">${r.name}</div><div class="li-sub"><span>${r.language||'—'}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
+function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo(this.dataset.repo,this)" data-repo="${escA(r.full_name)}"><div class="li-name">${esc(r.name)}</div><div class="li-sub"><span>${esc(r.language||'—')}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
 function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerCase().includes(q.toLowerCase())));}
 async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};S.tabs=[];S.activeTabId=null;$('mem-pill').style.display='none';$('stat-pill').style.display='none';updCtx();$('file-tree').innerHTML='';$('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadBranches();loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='block';updHint();}
 function buildTree(files){const folders={};const root=[];for(const f of files){const p=f.path.split('/');if(p.length===1)root.push(f);else{if(!folders[p[0]])folders[p[0]]=[];folders[p[0]].push(f);}}let h='';for(const f of root)h+=tfn(f);for(const[k,v]of Object.entries(folders))h+=tfd(k,v);$('file-tree').innerHTML=h;}
-function tfd(name,files){const subs={};const direct=[];for(const f of files){const rest=f.path.split('/').slice(1).join('/');const p=rest.split('/');if(p.length===1)direct.push(f);else{const k=p[0];if(!subs[k])subs[k]=[];subs[k].push(f);}}let inner='';for(const[k,v]of Object.entries(subs))inner+=tfd(name+'/'+k,v);for(const f of direct)inner+=tfn(f);return`<div class="tfolder"><div class="tfolder-h" onclick="this.parentElement.classList.toggle('open')"><span class="tarr">▶</span><span>📁</span><span style="font-family:monospace;font-size:12px">${name.split('/').pop()}</span></div><div class="tfolder-c">${inner}</div></div>`;}
-function tfn(f){const sel=S.selFiles.has(f.path);const safe=f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'");const sz=f.size||0;const tok=tokEst(sz);const tc=sz?tokCls(tok):'';const tokHtml=sz?`<span class="tok-badge ${tc}">${tokFmt(tok)}</span>`:'';return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" onclick="togF('${safe}',${sz})"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF('${safe}',${sz})"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${f.path.split('/').pop()}</span>${tokHtml}<button class="peek-btn" onclick="event.stopPropagation();peekFile('${safe}',${sz})" title="Preview file">👁</button></div>`;}
+function tfd(name,files){const subs={};const direct=[];for(const f of files){const rest=f.path.split('/').slice(1).join('/');const p=rest.split('/');if(p.length===1)direct.push(f);else{const k=p[0];if(!subs[k])subs[k]=[];subs[k].push(f);}}let inner='';for(const[k,v]of Object.entries(subs))inner+=tfd(name+'/'+k,v);for(const f of direct)inner+=tfn(f);return`<div class="tfolder"><div class="tfolder-h" onclick="this.parentElement.classList.toggle('open')"><span class="tarr">▶</span><span>📁</span><span style="font-family:monospace;font-size:12px">${esc(name.split('/').pop())}</span></div><div class="tfolder-c">${inner}</div></div>`;}
+function tfn(f){const sel=S.selFiles.has(f.path);const sz=f.size||0;const tok=tokEst(sz);const tc=sz?tokCls(tok):'';const tokHtml=sz?`<span class="tok-badge ${tc}">${tokFmt(tok)}</span>`:'';return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" data-path="${escA(f.path)}" data-size="${sz}" onclick="togF(this.dataset.path,+this.dataset.size)"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF(this.parentElement.dataset.path,+this.parentElement.dataset.size)"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${esc(f.path.split('/').pop())}</span>${tokHtml}<button class="peek-btn" data-path="${escA(f.path)}" data-size="${sz}" onclick="event.stopPropagation();peekFile(this.dataset.path,+this.dataset.size)" title="Preview file">👁</button></div>`;}
 function tfid(p){return'tf-'+btoa(unescape(encodeURIComponent(p))).replace(/[+=\/]/g,'');}
 async function togF(path,size=0){if(S.selFiles.has(path)){S.selFiles.delete(path);S.fileSizes.delete(path);updTF(path);updCtx();return;}if(S.selFiles.size+S.localFiles.size>=8){toast('Max 8 files');return;}const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});if(d.error){toast(d.error,true);return;}S.selFiles.set(path,d.content);S.fileSizes.set(path,size||d.content.length);updTF(path);updCtx();}
 
@@ -1175,19 +1205,18 @@ function updCtx(){
   const strip=$('ctx-strip');strip.innerHTML='';
   let totalTok=0;
   for(const [path] of S.selFiles){
-    const sz=S.fileSizes.get(path)||0;const tok=tokEst(sz);totalTok+=tok;const tc=tokCls(tok);
-    const canSum=tok>4000&&((S.prov==='anthropic'&&$('ak').value)||(S.prov==='groq'&&$('gk').value)||(S.prov==='openai_compat'&&$('oci-url')?.value));
+    const rawSz=S.fileSizes.get(path)||0;const sz=Math.min(rawSz,5000);const tok=tokEst(sz);totalTok+=tok;const tc=tokCls(tok);
+    const canSum=rawSz>5000&&((S.prov==='anthropic'&&$('ak').value)||(S.prov==='groq'&&$('gk').value)||(S.prov==='openai_compat'&&$('oci-url')?.value));
     const p=document.createElement('div');p.className='cpill';
-    const safePath=path.replace(/'/g,"\\'");
-    p.innerHTML=`${ficon(path)} ${path.split('/').pop()} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span>${canSum?`<button class="sum-btn" onclick="summarizeFile('${safePath}',event)" title="AI Summarize">∑</button>`:''} <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
+    p.innerHTML=`${ficon(path)} ${esc(path.split('/').pop())} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span>${canSum?`<button class="sum-btn" data-path="${escA(path)}" onclick="summarizeFile(this.dataset.path,event)" title="AI Summarize">∑</button>`:''} <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
     p.onclick=(e)=>{if(e.target.tagName==='BUTTON'||e.target.tagName==='SPAN'&&e.target.style.cursor==='pointer')return;};
     const rmSpan=p.querySelector('span[style*="cursor"]');if(rmSpan)rmSpan.onclick=()=>{S.selFiles.delete(path);S.fileSizes.delete(path);updTF(path);updCtx();};
     strip.appendChild(p);
   }
   for(const [name,content] of S.localFiles){
-    const tok=tokEst(content.length);totalTok+=tok;const tc=tokCls(tok);
+    const tok=tokEst(Math.min(content.length,5000));totalTok+=tok;const tc=tokCls(tok);
     const p=document.createElement('div');p.className='cpill local';
-    p.innerHTML=`📎 ${name} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span> <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
+    p.innerHTML=`📎 ${esc(name)} <span class="cpill-tok ${tc}">${tokFmt(tok)}</span> <span style="margin-left:3px;opacity:.5;cursor:pointer">✕</span>`;
     const rmSpan=p.querySelector('span[style*="cursor"]');if(rmSpan)rmSpan.onclick=()=>{S.localFiles.delete(name);updCtx();};
     strip.appendChild(p);
   }
@@ -1209,10 +1238,10 @@ async function searchCode(){
   if(!q){return;}if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}
   const panel=$('search-results-panel');panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">Searching…</div>';panel.style.display='block';
   const d=await post('/api/repo/search',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,query:q});
-  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${d.error}</div>`;return;}
+  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${esc(String(d.error))}</div>`;return;}
   if(!d.items?.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No results found</div>';return;}
-  panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>${d.total} results</span><button onclick="$('search-results-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
-    d.items.map(item=>`<div class="search-result" onclick="loadSearchResult('${item.path.replace(/'/g,"\\'")}')" title="Click to add to context"><div class="sr-path">${ficon(item.path)} ${item.path}</div>${item.snippets.map(s=>`<div class="sr-snippet">${esc(s)}</div>`).join('')}</div>`).join('');
+  panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>${Number(d.total)||0} results</span><button onclick="$('search-results-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
+    d.items.map(item=>`<div class="search-result" onclick="loadSearchResult(this.dataset.path)" data-path="${escA(item.path)}" title="Click to add to context"><div class="sr-path">${ficon(item.path)} ${esc(item.path)}</div>${item.snippets.map(s=>`<div class="sr-snippet">${esc(s)}</div>`).join('')}</div>`).join('');
 }
 async function loadSearchResult(path){
   if(S.selFiles.has(path)){toast('Already in context');return;}
@@ -1227,10 +1256,10 @@ async function toggleCommits(){
   if(!S.repo||!S.ghToken)return;
   panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">Loading commits…</div>';panel.style.display='block';
   const d=await post('/api/repo/commits',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,branch:S.repo.branch});
-  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${d.error}</div>`;return;}
+  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${esc(String(d.error))}</div>`;return;}
   if(!d.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No commits found</div>';return;}
   panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>Recent commits on ${esc(S.repo.branch)}</span><button onclick="$('commits-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
-    d.map(c=>`<div class="commit-item" onclick="window.open('${c.url}','_blank')"><div><span class="ci-sha">${c.sha}</span><span class="ci-msg">${esc(c.message)}</span></div><div class="ci-meta">${esc(c.author)} · ${c.date}</div></div>`).join('');
+    d.map(c=>`<div class="commit-item" onclick="safeOpen(this)" data-url="${escA(c.url)}"><div><span class="ci-sha">${esc(String(c.sha||'').slice(0,7))}</span><span class="ci-msg">${esc(c.message)}</span></div><div class="ci-meta">${esc(c.author)} · ${esc(String(c.date||''))}</div></div>`).join('');
 }
 
 async function toggleWorkflows(){
@@ -1239,11 +1268,11 @@ async function toggleWorkflows(){
   if(panel.style.display==='block'){panel.style.display='none';return;}
   panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">Loading workflow runs…</div>';panel.style.display='block';
   const d=await post('/api/repo/workflow-runs',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,max_results:15});
-  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${d.error}</div>`;return;}
+  if(d.error){panel.innerHTML=`<div style="padding:8px 10px;font-size:11px;color:var(--red)">${esc(String(d.error))}</div>`;return;}
   if(!d.length){panel.innerHTML='<div style="padding:8px 10px;font-size:11px;color:var(--muted)">No workflow runs found</div>';return;}
   const icon=c=>{if(c==='success')return '✅';if(c==='failure')return '❌';if(c==='cancelled')return '⛔';if(c==='skipped')return '⏭️';return '🔄';};
   panel.innerHTML=`<div style="padding:4px 10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border2)"><span>GitHub Actions — ${esc(S.repo.owner+'/'+S.repo.repo)}</span><button onclick="$('workflows-panel').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px">✕</button></div>`+
-    d.map(r=>`<div class="commit-item" onclick="window.open('${r.url}','_blank')" title="${esc(r.conclusion||r.status)}"><div><span style="margin-right:4px">${icon(r.conclusion)}</span><span class="ci-msg">${esc(r.name)}</span></div><div class="ci-meta">${esc(r.branch)} · ${r.sha} · ${r.date}</div></div>`).join('');
+    d.map(r=>`<div class="commit-item" onclick="safeOpen(this)" data-url="${escA(r.url)}" title="${escA(r.conclusion||r.status)}"><div><span style="margin-right:4px">${icon(r.conclusion)}</span><span class="ci-msg">${esc(r.name)}</span></div><div class="ci-meta">${esc(r.branch)} · ${esc(String(r.sha||'').slice(0,7))} · ${esc(String(r.date||''))}</div></div>`).join('');
 }
 
 // ── PR Review ────────────────────────────────────────────────────────────────
@@ -1295,7 +1324,7 @@ async function generateReleaseNotes(){
   let raw='';
   try{
     const res=await fetch('/api/repo/release-notes',{method:'POST',headers:{'Content-Type':'application/json'},signal:_rnAbort.signal,body:JSON.stringify(body)});
-    if(!res.ok){$('rn-output').innerHTML=`<span style="color:var(--red)">Error: ${await res.text()}</span>`;return;}
+    if(!res.ok){$('rn-output').innerHTML=`<span style="color:var(--red)">Error: ${esc(await res.text())}</span>`;return;}
     $('rn-output').innerHTML='';
     const out=$('rn-output');
     const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
@@ -1326,7 +1355,7 @@ async function generateReadme(){
   else if(S.prov==='groq')body.groq_key=$('gk').value;
   try{
     const res=await fetch('/api/repo/generate-readme',{method:'POST',headers:{'Content-Type':'application/json'},signal:_readmeAbort.signal,body:JSON.stringify(body)});
-    if(!res.ok){$('readme-output').innerHTML=`<span style="color:var(--red)">Error: ${await res.text()}</span>`;return;}
+    if(!res.ok){$('readme-output').innerHTML=`<span style="color:var(--red)">Error: ${esc(await res.text())}</span>`;return;}
     $('readme-output').innerHTML='';
     const out=$('readme-output');
     const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
@@ -1377,7 +1406,7 @@ async function runDepsAudit(){
             const outdated=packages.filter(p=>p.outdated).length;
             const unpinned=packages.filter(p=>p.unpinned).length;
             const tbl=`<div style="padding:8px 14px;background:var(--panel2);border-bottom:1px solid var(--border2);font-size:11px;color:var(--muted)">
-              📦 <strong style="color:var(--text)">${packages.length} packages</strong> · ecosystem: ${ecosystem}
+              📦 <strong style="color:var(--text)">${packages.length} packages</strong> · ecosystem: ${esc(ecosystem)}
               ${outdated?`· <span style="color:var(--red)">⚠️ ${outdated} outdated</span>`:''}
               ${unpinned?`· <span style="color:#f59e0b">⚠️ ${unpinned} unpinned</span>`:''}
             </div>
@@ -1386,7 +1415,7 @@ async function runDepsAudit(){
               <tbody>${packages.map(p=>{
                 const badge=p.outdated?'<span style="background:var(--red);color:#fff;border-radius:3px;padding:1px 5px;font-size:9px">OUTDATED</span>':p.unpinned?'<span style="background:#f59e0b;color:#000;border-radius:3px;padding:1px 5px;font-size:9px">UNPINNED</span>':'';
                 const pinColor=p.outdated?'color:var(--red)':'color:var(--text)';
-                return`<tr style="border-bottom:1px solid var(--border2)"><td style="padding:3px 12px;color:var(--accent2)">${p.name}</td><td style="padding:3px 12px;${pinColor}">${p.pinned||p.constraint||'—'}</td><td style="padding:3px 12px;color:var(--accent2)">${p.latest||'—'}</td><td style="padding:3px 8px">${badge}</td></tr>`;
+                return`<tr style="border-bottom:1px solid var(--border2)"><td style="padding:3px 12px;color:var(--accent2)">${esc(p.name)}</td><td style="padding:3px 12px;${pinColor}">${esc(p.pinned||p.constraint||'—')}</td><td style="padding:3px 12px;color:var(--accent2)">${esc(p.latest||'—')}</td><td style="padding:3px 8px">${badge}</td></tr>`;
               }).join('')}</tbody>
             </table></div>`;
             $('deps-pkg-table').innerHTML=tbl;
@@ -1421,7 +1450,7 @@ async function loadBranches(){
   const d=await fetch(`/api/repo/branches?token=${encodeURIComponent(S.ghToken)}&owner=${S.repo.owner}&repo=${S.repo.repo}`).then(r=>r.json());
   if(d.error||!Array.isArray(d))return;
   const sel=$('branch-select');const wrap=$('branch-sel-wrap');if(!sel||!wrap)return;
-  sel.innerHTML=d.map(b=>`<option value="${esc(b.name)}"${b.name===S.repo.branch?' selected':''}>${esc(b.name)} (${b.sha})</option>`).join('');
+  sel.innerHTML=d.map(b=>`<option value="${escA(b.name)}"${b.name===S.repo.branch?' selected':''}>${esc(b.name)} (${esc(String(b.sha||'').slice(0,7))})</option>`).join('');
   wrap.style.display='flex';
   const prw=$('pr-review-wrap');if(prw)prw.style.display='block';
 }
@@ -1435,11 +1464,12 @@ async function switchBranch(branch){
   buildTree(d.files);quickScanRepo(d.files);
   toast(`Switched to ${branch}`);
 }
-function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='anthropic');$('pg').classList.toggle('on',p==='groq');$('ph').classList.toggle('on',p==='hf');$('po').classList.toggle('on',p==='openai_compat');$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
-function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';const short=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';$('model-pill').textContent=short;}else if(S.prov==='groq')$('model-pill').textContent=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')$('model-pill').textContent=($('oci-model')&&$('oci-model').value)||'custom';else $('model-pill').textContent=S.hfModel.split('/').pop();}
+function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='anthropic');$('pg').classList.toggle('on',p==='groq');$('ph').classList.toggle('on',p==='hf');$('po').classList.toggle('on',p==='openai_compat');$('pal').classList.toggle('on',p==='airllm');$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';$('pf-al').style.display=p==='airllm'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
+function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';const short=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';$('model-pill').textContent=short;}else if(S.prov==='groq')$('model-pill').textContent=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')$('model-pill').textContent=($('oci-model')&&$('oci-model').value)||'custom';else if(S.prov==='airllm')$('model-pill').textContent=(($('al-model')&&$('al-model').value)||'airllm').split('/').pop();else $('model-pill').textContent=S.hfModel.split('/').pop();}
+function fillAirLLM(model){$('al-model').value=model;updBadge();saveEnhance();toast('AirLLM model: '+model.split('/').pop());}
 let searchTimer=null;
 function debounceSearch(q){clearTimeout(searchTimer);searchTimer=setTimeout(()=>fetchModels(q),400);}
-async function fetchModels(q=''){$('model-list').innerHTML='<div class="list-msg">Searching…</div>';try{const models=await get(`/api/hf/models?q=${encodeURIComponent(q)}&limit=25`);if(models.error){$('model-list').innerHTML=`<div class="list-msg" style="color:var(--red)">${models.error}</div>`;return;}if(!models.length){$('model-list').innerHTML='<div class="list-msg">No models found</div>';return;}$('model-list').innerHTML=models.map(m=>`<div class="list-item${S.hfModel===m.id?' active':''}" onclick="selectModel('${m.id.replace(/'/g,"\\'")}',this)"><div class="li-name">${m.name}</div><div class="li-sub"><span style="color:var(--muted)">${m.author}</span><span>↓${fmt(m.downloads)}</span><span>❤️${fmt(m.likes)}</span>${m.gated?'<span class="li-badge">gated</span>':''}</div></div>`).join('');}catch(e){$('model-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';}}
+async function fetchModels(q=''){$('model-list').innerHTML='<div class="list-msg">Searching…</div>';try{const models=await get(`/api/hf/models?q=${encodeURIComponent(q)}&limit=25`);if(models.error){$('model-list').innerHTML=`<div class="list-msg" style="color:var(--red)">${esc(String(models.error))}</div>`;return;}if(!models.length){$('model-list').innerHTML='<div class="list-msg">No models found</div>';return;}$('model-list').innerHTML=models.map(m=>`<div class="list-item${S.hfModel===m.id?' active':''}" data-id="${escA(m.id)}" onclick="selectModel(this.dataset.id,this)"><div class="li-name">${esc(m.name||'')}</div><div class="li-sub"><span style="color:var(--muted)">${esc(m.author||'')}</span><span>↓${fmt(m.downloads)}</span><span>❤️${fmt(m.likes)}</span>${m.gated?'<span class="li-badge">gated</span>':''}</div></div>`).join('');}catch(e){$('model-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';}}
 function selectModel(id,el){S.hfModel=id;document.querySelectorAll('#model-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');$('hf-sel-name').textContent=id;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';updBadge();saveEnhance();}
 function clearModel(){$('hf-selected').style.display='none';$('hf-browser').style.display='block';$('model-search').value='';fetchModels('');}
 function setAgent(el){document.querySelectorAll('.atab').forEach(t=>t.classList.remove('on'));el.classList.add('on');S.agent=el.dataset.agent;}
@@ -1479,20 +1509,20 @@ async function send(){
     const thinkToggle=$('think-toggle');const thinkBudget=$('think-budget');
     const thinkingMode=!!(thinkToggle&&thinkToggle.checked&&(S.anthropicModel||'').includes('opus'));
     const thinkingBudget=thinkBudget?parseInt(thinkBudget.value)||2000:2000;
-    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},signal:S.abortCtrl?.signal,body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,anthropic_model:S.anthropicModel||'claude-sonnet-4-6',thinking_mode:thinkingMode,thinking_budget:thinkingBudget,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:'',hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:histMsgs,file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent,ma_plan_provider:$('ma-plan-prov').value||'',ma_code_provider:$('ma-code-prov').value||'',ma_test_provider:$('ma-test-prov')?$('ma-test-prov').value||'':'',ma_review_provider:$('ma-rev-prov').value||'',ma_include_test_stage:includeTest,memory:getMemoryContext(),tools:S.tools||[]})});
-    if(!res.ok){const err=await res.text();tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${res.status}: ${err.slice(0,300)}</span></div></div>`;S.streaming=false;$('send-btn').disabled=false;return;}
+    const res=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},signal:S.abortCtrl?.signal,body:JSON.stringify({provider:S.prov,anthropic_key:$('ak').value,anthropic_model:S.anthropicModel||'claude-sonnet-4-6',thinking_mode:thinkingMode,thinking_budget:thinkingBudget,groq_key:$('gk').value,groq_model:$('gm').value,hf_token:'',hf_model:S.hfModel,openai_compat_key:$('oci-key').value,openai_compat_base_url:$('oci-url').value,openai_compat_model:$('oci-model').value,agent:S.agent,messages:histMsgs,file_context:bCtx(),owner:S.repo?.owner||'',repo:S.repo?.repo||'',skills,rules:$('rules-input').value||'',instructions:$('instr-input').value||'',multi_agent:multiAgent,ma_plan_provider:$('ma-plan-prov').value||'',ma_code_provider:$('ma-code-prov').value||'',ma_test_provider:$('ma-test-prov')?$('ma-test-prov').value||'':'',ma_review_provider:$('ma-rev-prov').value||'',ma_include_test_stage:includeTest,memory:getMemoryContext(),tools:S.tools||[],airllm_model:$('al-model')?($('al-model').value||'meta-llama/Llama-2-7b-chat-hf'):'meta-llama/Llama-2-7b-chat-hf',airllm_max_tokens:$('al-tokens')?parseInt($('al-tokens').value)||512:512})});
+    if(!res.ok){const err=await res.text();tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${res.status}: ${esc(err.slice(0,300))}</span></div></div>`;S.streaming=false;$('send-btn').disabled=false;return;}
     if(multiAgent){
       tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent" style="color:var(--purple)">Multi-Agent</span><span class="msg-time">${now()}</span></div><div id="${streamId}-wrap"></div></div>`;
       const wrap=document.getElementById(`${streamId}-wrap`);
       let currentBlock=null;let currentBlockBody=null;let currentText='';
       const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
-      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='step'){currentText='';currentBlock=document.createElement('div');currentBlock.className='ma-block';const head=document.createElement('div');head.className=`ma-block-head ${ev.v==='plan'?'plan':ev.v==='code'?'code':ev.v==='test'?'code':'review'}`;head.innerHTML=`${ev.label} <span class="ma-arr">▼</span>`;head.onclick=()=>currentBlock.classList.toggle('collapsed');currentBlockBody=document.createElement('div');currentBlockBody.className='ma-block-body msg-body';currentBlock.appendChild(head);currentBlock.appendChild(currentBlockBody);wrap.appendChild(currentBlock);scrollB();}else if(ev.t==='text'){reply+=ev.v;currentText+=ev.v;if(currentBlockBody){currentBlockBody.innerHTML=rmd(currentText);scrollB();}}else if(ev.t==='error'){if(currentBlockBody)currentBlockBody.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
+      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='step'){currentText='';currentBlock=document.createElement('div');currentBlock.className='ma-block';const head=document.createElement('div');head.className=`ma-block-head ${ev.v==='plan'?'plan':ev.v==='code'?'code':ev.v==='test'?'code':'review'}`;head.innerHTML=`${esc(String(ev.label||''))} <span class="ma-arr">▼</span>`;head.onclick=()=>currentBlock.classList.toggle('collapsed');currentBlockBody=document.createElement('div');currentBlockBody.className='ma-block-body msg-body';currentBlock.appendChild(head);currentBlock.appendChild(currentBlockBody);wrap.appendChild(currentBlock);scrollB();}else if(ev.t==='text'){reply+=ev.v;currentText+=ev.v;if(currentBlockBody){currentBlockBody.innerHTML=rmd(currentText);scrollB();}}else if(ev.t==='error'){if(currentBlockBody)currentBlockBody.innerHTML=`<span style="color:var(--red)">❌ ${esc(String(ev.v||''))}</span>`;}}catch{}}}
     }else{
       tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span><span class="msg-time">${now()}</span></div><div class="msg-body" id="${streamId}"></div></div>`;
       const be=document.getElementById(streamId);
       const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
       let thinkBlock=null,thinkBody=null;
-      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='thinking'){if(!thinkBlock){thinkBlock=document.createElement('div');thinkBlock.className='thinking-block';thinkBlock.innerHTML='<div class="think-hd" onclick="this.parentElement.classList.toggle(\'collapsed\')">🧠 Thinking… <span class="think-arr">▼</span></div><div class="think-body"></div>';be.parentElement.insertBefore(thinkBlock,be);thinkBody=thinkBlock.querySelector('.think-body');}thinkBody.textContent+=ev.v;scrollB();}else if(ev.t==='text'){if(thinkBlock){thinkBlock.querySelector('.think-hd').innerHTML='🧠 Thoughts <span class="think-arr">▼</span>';thinkBlock.classList.add('collapsed');}reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='usage'){gotUsage=true;addTokens('',ev.v.input+ev.v.output);}else if(ev.t==='tool_call'){insertToolCallCard(ev.v);}else if(ev.t==='tool_result'){updateToolResultCard(ev.v);}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${ev.v}</span>`;}}catch{}}}
+      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='thinking'){if(!thinkBlock){thinkBlock=document.createElement('div');thinkBlock.className='thinking-block';thinkBlock.innerHTML='<div class="think-hd" onclick="this.parentElement.classList.toggle(\'collapsed\')">🧠 Thinking… <span class="think-arr">▼</span></div><div class="think-body"></div>';be.parentElement.insertBefore(thinkBlock,be);thinkBody=thinkBlock.querySelector('.think-body');}thinkBody.textContent+=ev.v;scrollB();}else if(ev.t==='text'){if(thinkBlock){thinkBlock.querySelector('.think-hd').innerHTML='🧠 Thoughts <span class="think-arr">▼</span>';thinkBlock.classList.add('collapsed');}reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='usage'){gotUsage=true;addTokens('',ev.v.input+ev.v.output);}else if(ev.t==='tool_call'){insertToolCallCard(ev.v);}else if(ev.t==='tool_result'){updateToolResultCard(ev.v);}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${esc(String(ev.v||''))}</span>`;}}catch{}}}
     }
     if(reply){S.msgs.push({role:'assistant',content:reply});if(!gotUsage)addTokens(reply);
       // Auto-name the tab from first user message
@@ -1501,7 +1531,7 @@ async function send(){
       saveMemory();autoSaveChat();}
     // Add copy + regenerate actions to the AI message we just rendered
     if(reply&&!multiAgent){const meta=tw.querySelector('.msg-meta');if(meta&&!meta.querySelector('.msg-actions')){const acts=document.createElement('div');acts.className='msg-actions';acts.innerHTML='<button class="msg-act" onclick="cpMsg(this)">copy</button><button class="msg-act" onclick="regenerate()" title="Regenerate this response">🔄</button>';meta.appendChild(acts);}}
-  }catch(e){tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${e.message}</span></div></div>`;}
+  }catch(e){tw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av agent">AI</div><span class="msg-role agent">Agent</span></div><div class="msg-body"><span style="color:var(--red)">❌ ${esc(String(e.message||e))}</span></div></div>`;}
   clearInterval(timerId);
   S.streaming=false;$('send-btn').disabled=false;$('stop-btn').style.display='none';S.abortCtrl=null;
   // Offer batch commit if multiple writable files detected
@@ -1527,7 +1557,7 @@ async function submitIssue(){
   if(res.error){toast('Issue failed: '+res.error,true);return;}
   $('issue-modal').style.display='none';
   toast(`✅ Issue #${res.number} created`);
-  if(res.url){const a=document.createElement('a');a.href=res.url;a.target='_blank';a.className='wp-link';a.textContent='View issue →';$('msgs').appendChild(a);}
+  if(res.url&&/^https?:\/\//.test(res.url)){const a=document.createElement('a');a.href=res.url;a.target='_blank';a.className='wp-link';a.textContent='View issue →';$('msgs').appendChild(a);}
 }
 async function submitPR(){
   const title=$('pr-title').value.trim();const body=$('pr-body').value.trim();
@@ -1539,7 +1569,7 @@ async function submitPR(){
   if(res.error){toast('PR failed: '+res.error,true);return;}
   $('pr-modal').style.display='none';
   toast(`✅ PR #${res.number} created`);
-  if(res.url){window.open(res.url,'_blank');}
+  if(res.url){safeOpenUrl(res.url);}
 }
 function openPRModal(branch){
   if(!S.repo||!S.ghToken){toast('Connect a GitHub repo first',true);return;}
@@ -1558,7 +1588,7 @@ function renderToolList(){
   const el=$('tool-list');const badge=$('tool-count-badge');
   if(!S.tools.length){el.style.display='none';badge.style.display='none';return;}
   el.style.display='block';badge.textContent=S.tools.length;badge.style.display='inline';
-  el.innerHTML=S.tools.map((t,i)=>`<div class="tool-item"><span class="tool-method">${t.method||'GET'}</span><span class="tool-name-lbl" title="${t.description}">${t.name}</span><button class="tool-del" onclick="editTool(${i})" title="Edit" style="color:var(--muted2);font-size:11px">✏️</button><button class="tool-del" onclick="deleteTool(${i})" title="Remove">✕</button></div>`).join('');
+  el.innerHTML=S.tools.map((t,i)=>`<div class="tool-item"><span class="tool-method">${esc(t.method||'GET')}</span><span class="tool-name-lbl" title="${escA(t.description||'')}">${esc(t.name)}</span><button class="tool-del" onclick="editTool(${i})" title="Edit" style="color:var(--muted2);font-size:11px">✏️</button><button class="tool-del" onclick="deleteTool(${i})" title="Remove">✕</button></div>`).join('');
 }
 function openAddTool(){
   $('tm-edit-idx').value='-1';$('tm-name').value='';$('tm-desc').value='';
@@ -1596,7 +1626,11 @@ function insertToolCallCard(data){
   const card=document.createElement('div');
   card.className='tool-card';card.id=`tool-card-${data.id}`;
   const inputStr=data.input&&Object.keys(data.input).length?JSON.stringify(data.input,null,2):'(no parameters)';
-  card.innerHTML=`<div class="tool-card-hd"><span>🔧</span><span class="tc-name">${data.name}</span><span class="tc-status spin">⏳</span></div><pre class="tool-input">${inputStr}</pre>`;
+  const hd=document.createElement('div');hd.className='tool-card-hd';
+  hd.innerHTML=`<span>🔧</span><span class="tc-name"></span><span class="tc-status spin">⏳</span>`;
+  hd.querySelector('.tc-name').textContent=data.name;
+  const pre=document.createElement('pre');pre.className='tool-input';pre.textContent=inputStr;
+  card.appendChild(hd);card.appendChild(pre);
   chatEl.appendChild(card);chatEl.scrollTop=chatEl.scrollHeight;
 }
 function updateToolResultCard(data){
@@ -1607,6 +1641,44 @@ function updateToolResultCard(data){
   card.appendChild(result);card.closest('#msgs')?.scrollTo({top:99999,behavior:'smooth'});
 }
 
+// ── Agent Pipeline ────────────────────────────────────────────────────────────
+async function runAgentPipeline(){
+  const task=($('agent-task').value||'').trim();
+  if(!task){toast('Enter a task for the agent pipeline',true);return;}
+  const prog=$('agent-progress');
+  prog.style.display='block';
+  prog.innerHTML='<div style="color:var(--muted2)">&#9203; Starting pipeline&#8230;</div>';
+  try{
+    const resp=await fetch('/api/agent/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
+    if(!resp.ok){const j=await resp.json().catch(()=>({}));prog.innerHTML=`<div style="color:var(--red)">&#10005; ${esc(j.error||resp.statusText)}</div>`;return;}
+    const reader=resp.body.getReader();const dec=new TextDecoder();
+    let buf='',answer='';
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');buf=lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data:'))continue;
+        const raw=line.slice(5).trim();
+        if(!raw||raw==='[DONE]')continue;
+        try{
+          const ev=JSON.parse(raw);
+          if(ev.t==='node'){prog.innerHTML+=`<div style="color:var(--blue);margin-top:4px">&#9679; ${esc(ev.label||ev.v)}</div>`;}
+          else if(ev.t==='text'){answer+=ev.v;}
+          else if(ev.t==='warn'){prog.innerHTML+=`<div style="color:var(--muted2);font-size:10px">&#9888; ${esc(ev.v)}</div>`;}
+          else if(ev.t==='error'){prog.innerHTML+=`<div style="color:var(--red)">&#10005; ${esc(ev.v)}</div>`;reader.cancel();return;}
+          else if(ev.t==='done'){
+            if(answer)prog.innerHTML+=`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);color:var(--text);white-space:pre-wrap;font-size:12px">${esc(answer)}</div>`;
+            prog.innerHTML+=`<div style="color:var(--accent2);margin-top:4px">&#10003; Done</div>`;
+          }
+        }catch(e){}
+      }
+    }
+    prog.scrollTop=prog.scrollHeight;
+  }catch(e){prog.innerHTML=`<div style="color:var(--red)">&#10005; ${esc(String(e))}</div>`;}
+}
+
 // ── Repo quick-scan ───────────────────────────────────────────────────────────
 const LANG_COLORS={js:'#f7df1e',ts:'#3178c6',jsx:'#61dafb',tsx:'#61dafb',py:'#3776ab',go:'#00add8',rs:'#ce422b',rb:'#cc342d',java:'#b07219',cs:'#239120',cpp:'#f34b7d',c:'#555',md:'#083fa1',json:'#292929',css:'#563d7c',html:'#e44b23',sh:'#89e051',sql:'#e38c00',yaml:'#cb171e',toml:'#9c4221'};
 const FRAMEWORK_HINTS={'package.json':'Node.js / JS','go.mod':'Go Module','requirements.txt':'Python','Cargo.toml':'Rust','pom.xml':'Java/Maven','build.gradle':'Java/Gradle','Dockerfile':'Docker','docker-compose.yml':'Docker Compose','next.config.js':'Next.js','next.config.ts':'Next.js','vite.config.ts':'Vite','pyproject.toml':'Python (PEP 517)','setup.py':'Python','Makefile':'Make','fastapi':'FastAPI'};
@@ -1615,7 +1687,7 @@ function quickScanRepo(files){
   files.forEach(f=>{const e=f.path.split('.').pop()?.toLowerCase()||'other';exts[e]=(exts[e]||0)+1;totalSize+=(f.size||0);});
   const sorted=Object.entries(exts).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const frameworks=[];Object.keys(FRAMEWORK_HINTS).forEach(k=>{if(rootFiles.has(k)||Array.from(rootFiles).some(f=>f.includes(k)))frameworks.push(FRAMEWORK_HINTS[k]);});
-  const langsHtml=sorted.map(([ext,cnt])=>{const col=LANG_COLORS[ext]||'var(--border)';return`<span class="rs-lang" style="background:${col}22;color:${col};border:1px solid ${col}44">.${ext} ${cnt}</span>`;}).join('');
+  const langsHtml=sorted.map(([ext,cnt])=>{const col=LANG_COLORS[ext]||'var(--border)';return`<span class="rs-lang" style="background:${col}22;color:${col};border:1px solid ${col}44">.${esc(ext)} ${Number(cnt)}</span>`;}).join('');
   const fw=frameworks.slice(0,3).map(f=>`<span class="rs-badge">${f}</span>`).join('');
   const sizeStr=totalSize>1e6?(totalSize/1e6).toFixed(1)+'MB':totalSize>1e3?(totalSize/1e3).toFixed(0)+'KB':totalSize+'B';
   const rs=$('rs-card');if(!rs)return;rs.style.display='block';
