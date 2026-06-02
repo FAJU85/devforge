@@ -817,8 +817,8 @@ pre::-webkit-scrollbar{height:4px}
 <script>
 const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),fileSizes:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',anthropicModel:'claude-sonnet-4-6',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[],promptHistory:[],histIdx:-1,_draftText:'',_budgetWarned:false,tabs:[],activeTabId:null};
 const $=id=>document.getElementById(id);
-const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
-const get=p=>fetch(p).then(r=>r.json());
+const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(e=>({error:e.message||'Network error'}));
+const get=p=>fetch(p).then(r=>r.json()).catch(e=>({error:e.message||'Network error'}));
 function toast(m,err=false){document.querySelectorAll('.toast').forEach(t=>t.remove());const t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=m;t.setAttribute('role',err?'alert':'status');t.setAttribute('aria-live',err?'assertive':'polite');document.body.appendChild(t);setTimeout(()=>t.remove(),4500);}
 function ar(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,180)+'px';}
 function now(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}

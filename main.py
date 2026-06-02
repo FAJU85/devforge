@@ -1294,10 +1294,10 @@ async def scan_code(body: CodeScanBody):
     if not code:
         return {"issues": [], "safe": True, "language": lang, "total": 0}
 
-    # Python AST deep scan
+    # Python AST deep scan (limit to 50K to bound parse time)
     if lang == "python":
         try:
-            tree = _ast.parse(code)
+            tree = _ast.parse(code[:50_000])
             for node in _ast.walk(tree):
                 ln = getattr(node, "lineno", None)
                 if isinstance(node, _ast.Call):
