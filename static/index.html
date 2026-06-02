@@ -460,20 +460,20 @@ pre::-webkit-scrollbar{height:4px}
       <!-- AI Provider Section -->
       <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
         <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">Provider</div>
-        <div class="prov-row">
-          <button class="prov-btn on" id="pa" onclick="setProv('anthropic')">Claude</button>
-          <button class="prov-btn" id="pg" onclick="setProv('groq')">⚡ Groq</button>
-          <button class="prov-btn" id="ph" onclick="setProv('hf')">🤗 HF</button>
-          <button class="prov-btn" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
-          <button class="prov-btn" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
+        <div class="prov-row" role="radiogroup" aria-label="AI provider">
+          <button class="prov-btn on" role="radio" aria-checked="true" id="pa" onclick="setProv('anthropic')">Claude</button>
+          <button class="prov-btn" role="radio" aria-checked="false" id="pg" onclick="setProv('groq')">⚡ Groq</button>
+          <button class="prov-btn" role="radio" aria-checked="false" id="ph" onclick="setProv('hf')">🤗 HF</button>
+          <button class="prov-btn" role="radio" aria-checked="false" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
+          <button class="prov-btn" role="radio" aria-checked="false" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
         </div>
         <!-- Provider-specific fields (hidden except when selected) -->
         <div id="pf-a" style="flex-direction:column;margin-top:8px">
           <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" oninput="saveEnhance()"></div>
-          <div class="model-selector">
-            <button class="msel-btn" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
-            <button class="msel-btn on" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
-            <button class="msel-btn" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent — for complex architecture">🧠<br>Opus</button>
+          <div class="model-selector" role="radiogroup" aria-label="Claude model">
+            <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
+            <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
+            <button class="msel-btn" role="radio" aria-checked="false" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent — for complex architecture">🧠<br>Opus</button>
           </div>
           <div class="think-opts" id="think-opts">
             <div class="ma-row"><div><div class="ma-label" style="font-size:12px">Extended Thinking</div><div class="ma-sub">Opus reasons before answering</div></div><div><input type="checkbox" id="think-toggle" class="toggle-input" onchange="saveEnhance()"><label for="think-toggle" class="toggle-label"></label></div></div>
@@ -1495,10 +1495,9 @@ function copyDepsAudit(){navigator.clipboard.writeText(_depsAuditRaw);toast('Cop
 
 function setAnthModel(model){
   S.anthropicModel=model;
-  ['haiku','sonnet','opus'].forEach(m=>$(`msel-${m}`)?.classList.remove('on'));
-  if(model.includes('haiku'))$('msel-haiku')?.classList.add('on');
-  else if(model.includes('opus'))$('msel-opus')?.classList.add('on');
-  else $('msel-sonnet')?.classList.add('on');
+  ['haiku','sonnet','opus'].forEach(m=>{const b=$(`msel-${m}`);if(b){b.classList.remove('on');b.setAttribute('aria-checked','false');}});
+  const active=model.includes('haiku')?$('msel-haiku'):model.includes('opus')?$('msel-opus'):$('msel-sonnet');
+  if(active){active.classList.add('on');active.setAttribute('aria-checked','true');}
   const to=$('think-opts');if(to){if(model.includes('opus'))to.classList.add('on');else{to.classList.remove('on');const tt=$('think-toggle');if(tt)tt.checked=false;}}
   updBadge();saveEnhance();
 }
@@ -1521,7 +1520,7 @@ async function switchBranch(branch){
   buildTree(d.files);quickScanRepo(d.files);
   toast(`Switched to ${branch}`);
 }
-function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='anthropic');$('pg').classList.toggle('on',p==='groq');$('ph').classList.toggle('on',p==='hf');$('po').classList.toggle('on',p==='openai_compat');$('pal').classList.toggle('on',p==='airllm');$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';$('pf-al').style.display=p==='airllm'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
+function setProv(p,silent=false){S.prov=p;const _pb=[['pa','anthropic'],['pg','groq'],['ph','hf'],['po','openai_compat'],['pal','airllm']];_pb.forEach(([id,pv])=>{const b=$(id);if(b){b.classList.toggle('on',p===pv);b.setAttribute('aria-checked',p===pv?'true':'false');}});$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';$('pf-al').style.display=p==='airllm'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
 function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';let text='claude-sonnet';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';text=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';}else if(S.prov==='groq')text=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')text=($('oci-model')&&$('oci-model').value)||'custom';else if(S.prov==='airllm')text=(($('al-model')&&$('al-model').value)||'airllm').split('/').pop();else text=S.hfModel.split('/').pop();const p=$('model-pill');const sp=$('sidebar-model-pill');if(p)p.textContent=text;if(sp)sp.textContent=text;}
 function fillAirLLM(model){$('al-model').value=model;updBadge();saveEnhance();toast('AirLLM model: '+model.split('/').pop());}
 let searchTimer=null;
