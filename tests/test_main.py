@@ -3358,3 +3358,59 @@ class TestBuildSystemAgentSecurity:
         body = _body(agent="docs")
         result = main.build_system(body)
         assert "Security Requirements" not in result
+
+
+class TestFieldLengthConstraints:
+    def test_prompt_enhance_rejects_oversized_prompt(self):
+        r = client.post("/api/prompt/enhance", json={
+            "provider": "anthropic",
+            "anthropic_key": "key",
+            "prompt": "x" * 4001,
+        })
+        assert r.status_code == 422
+
+    def test_prompt_enhance_accepts_max_prompt(self):
+        with patch("main.Anthropic") as mock_cls:
+            mock_inst = MagicMock()
+            mock_cls.return_value = mock_inst
+            msg = MagicMock(); msg.content = [MagicMock(text="improved")]
+            mock_inst.messages.create.return_value = msg
+            r = client.post("/api/prompt/enhance", json={
+                "provider": "anthropic",
+                "anthropic_key": "key",
+                "prompt": "x" * 4000,
+            })
+        assert r.status_code == 200
+
+    def test_suggest_files_rejects_oversized_task(self):
+        r = client.post("/api/repo/suggest-files", json={
+            "provider": "anthropic",
+            "task": "x" * 2001,
+            "files": ["main.py"],
+        })
+        assert r.status_code == 422
+
+    def test_suggest_files_rejects_max_suggestions_too_high(self):
+        r = client.post("/api/repo/suggest-files", json={
+            "provider": "anthropic",
+            "task": "add tests",
+            "files": ["main.py"],
+            "max_suggestions": 21,
+        })
+        assert r.status_code == 422
+
+    def test_summarize_file_rejects_oversized_content(self):
+        r = client.post("/api/repo/summarize-file", json={
+            "provider": "anthropic",
+            "filename": "big.py",
+            "content": "x" * 200_001,
+        })
+        assert r.status_code == 422
+
+    def test_commit_msg_rejects_oversized_diff(self):
+        r = client.post("/api/commit/suggest-message", json={
+            "provider": "anthropic",
+            "path": "main.py",
+            "diff": "x" * 50_001,
+        })
+        assert r.status_code == 422

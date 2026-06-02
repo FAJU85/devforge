@@ -2,7 +2,7 @@ from fastapi import FastAPI, Query
 from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Callable, List, Optional
 import ast as _ast
 import json, os, requests, base64, re, asyncio, threading
@@ -554,9 +554,9 @@ class SuggestFilesBody(BaseModel):
     openai_compat_model: Optional[str] = ""
     hf_token: Optional[str] = ""
     hf_model: Optional[str] = ""
-    task: str
+    task: str = Field(max_length=2000)
     files: List[str]
-    max_suggestions: int = 6
+    max_suggestions: int = Field(default=6, ge=1, le=20)
 
 @app.post("/api/repo/suggest-files")
 async def suggest_files(body: SuggestFilesBody):
@@ -623,8 +623,8 @@ async def suggest_files(body: SuggestFilesBody):
 
 
 class SummarizeFileBody(BaseModel):
-    content: str
-    filename: str
+    content: str = Field(max_length=200_000)
+    filename: str = Field(max_length=500)
     provider: str
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
@@ -1096,9 +1096,9 @@ class CommitMsgBody(BaseModel):
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
     hf_token: Optional[str] = ""
-    path: str
-    content: Optional[str] = ""
-    diff: Optional[str] = ""
+    path: str = Field(max_length=1000)
+    content: Optional[str] = Field(default="", max_length=50_000)
+    diff: Optional[str] = Field(default="", max_length=50_000)
 
 @app.post("/api/commit/suggest-message")
 async def suggest_commit_message(body: CommitMsgBody):
@@ -1611,7 +1611,7 @@ class PromptEnhanceBody(BaseModel):
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
     hf_token: Optional[str] = ""
-    prompt: str
+    prompt: str = Field(max_length=4000)
 
 @app.post("/api/prompt/enhance")
 async def enhance_prompt(body: PromptEnhanceBody):
