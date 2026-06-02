@@ -594,6 +594,8 @@ async def suggest_files(body: SuggestFilesBody):
             )
             result = r.json()["choices"][0]["message"]["content"] if r.ok else "[]"
         elif body.provider == "openai_compat" and body.openai_compat_base_url:
+            if not _valid_http_url(body.openai_compat_base_url):
+                return JSONResponse({"error": "openai_compat_base_url must be http:// or https://"}, status_code=400)
             url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
             hdrs = {"Content-Type": "application/json"}
             if body.openai_compat_key:
@@ -659,6 +661,8 @@ async def summarize_file(body: SummarizeFileBody):
             )
             result = r.json()["choices"][0]["message"]["content"] if r.ok else ""
         elif body.provider == "openai_compat" and body.openai_compat_base_url:
+            if not _valid_http_url(body.openai_compat_base_url):
+                return JSONResponse({"error": "openai_compat_base_url must be http:// or https://"}, status_code=400)
             url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
             hdrs = {"Content-Type": "application/json"}
             if body.openai_compat_key:
@@ -1712,10 +1716,13 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
     elif p == "groq":
         return lambda q, loop, sys, msgs: _run_groq(q, loop, sys, msgs, body.groq_key, body.groq_model or "llama-3.3-70b-versatile")
     elif p == "openai_compat":
+        oc_url = body.openai_compat_base_url or "http://localhost:11434/v1"
+        if not _valid_http_url(oc_url):
+            raise ValueError("openai_compat_base_url must be http:// or https://")
         return lambda q, loop, sys, msgs: _run_openai_compat(
             q, loop, sys, msgs,
             body.openai_compat_key or "",
-            body.openai_compat_base_url or "http://localhost:11434/v1",
+            oc_url,
             body.openai_compat_model or "llama3",
         )
     else:
@@ -1726,7 +1733,10 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
 async def chat_stream(body: ChatBody):
     system = build_system(body)
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
-    runner = get_runner(body)
+    try:
+        runner = get_runner(body)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
 
     async def single_stream():
         async for kind, val in stream_one(runner, system, messages):
@@ -1741,10 +1751,14 @@ async def chat_stream(body: ChatBody):
         code_prov   = body.ma_code_provider   or body.provider
         test_prov   = body.ma_test_provider   or body.provider
         review_prov = body.ma_review_provider or body.provider
-        plan_runner   = get_runner(body, plan_prov)
-        code_runner   = get_runner(body, code_prov)
-        test_runner   = get_runner(body, test_prov)
-        review_runner = get_runner(body, review_prov)
+        try:
+            plan_runner   = get_runner(body, plan_prov)
+            code_runner   = get_runner(body, code_prov)
+            test_runner   = get_runner(body, test_prov)
+            review_runner = get_runner(body, review_prov)
+        except ValueError as exc:
+            yield f"data: {json.dumps({'t': 'error', 'v': str(exc)})}\n\n"
+            return
 
         yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': f'🗺️ Planning · {_PROV_LABEL.get(plan_prov, plan_prov)}'})}\n\n"
         plan_text = ""

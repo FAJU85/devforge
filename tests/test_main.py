@@ -1697,6 +1697,59 @@ class TestToolCallEndpoint:
         assert "error" in r.json()
 
 
+class TestOpenAICompatBaseUrlValidation:
+    def test_suggest_files_rejects_file_scheme_base_url(self):
+        payload = {
+            "provider": "openai_compat",
+            "openai_compat_base_url": "file:///etc/passwd",
+            "openai_compat_model": "llama3",
+            "task": "add tests",
+            "files": ["main.py"],
+        }
+        r = client.post("/api/repo/suggest-files", json=payload)
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_suggest_files_rejects_gopher_scheme_base_url(self):
+        payload = {
+            "provider": "openai_compat",
+            "openai_compat_base_url": "gopher://evil/exploit",
+            "openai_compat_model": "llama3",
+            "task": "add tests",
+            "files": ["main.py"],
+        }
+        r = client.post("/api/repo/suggest-files", json=payload)
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_summarize_file_rejects_file_scheme_base_url(self):
+        payload = {
+            "provider": "openai_compat",
+            "openai_compat_base_url": "file:///etc/shadow",
+            "openai_compat_model": "llama3",
+            "filename": "README.md",
+            "content": "some content",
+        }
+        r = client.post("/api/repo/summarize-file", json=payload)
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_valid_http_url_helper_accepts_http(self):
+        assert main._valid_http_url("http://localhost:11434/v1") is True
+
+    def test_valid_http_url_helper_accepts_https(self):
+        assert main._valid_http_url("https://api.example.com/v1") is True
+
+    def test_valid_http_url_helper_rejects_file(self):
+        assert main._valid_http_url("file:///etc/passwd") is False
+
+    def test_valid_http_url_helper_rejects_empty(self):
+        assert main._valid_http_url("") is False
+
+    def test_valid_http_url_helper_rejects_none_coerced(self):
+        assert main._valid_http_url(None) is False
+
+
 class TestChatBodyWithTools:
     def test_chat_body_accepts_tools(self):
         from main import ChatBody, ToolDef
