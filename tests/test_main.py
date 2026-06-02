@@ -3998,3 +3998,21 @@ class TestToolsDispatchEndpoint:
     def test_agent_initial_state_has_required_keys(self):
         required = {"messages", "rag_context", "tool_plan", "tool_results", "final_answer", "error", "retry_count"}
         assert required.issubset(set(main._AGENT_INITIAL_STATE.keys()))
+
+
+class TestConfigEndpoint:
+    def test_returns_sentry_dsn_field(self, monkeypatch):
+        monkeypatch.setenv("SENTRY_DSN_PUBLIC", "")
+        r = client.get("/api/config")
+        assert r.status_code == 200
+        assert "sentry_dsn" in r.json()
+
+    def test_returns_dsn_from_env(self, monkeypatch):
+        monkeypatch.setenv("SENTRY_DSN_PUBLIC", "https://abc@sentry.io/123")
+        r = client.get("/api/config")
+        assert r.json()["sentry_dsn"] == "https://abc@sentry.io/123"
+
+    def test_returns_environment_field(self, monkeypatch):
+        monkeypatch.setenv("ENVIRONMENT", "staging")
+        r = client.get("/api/config")
+        assert r.json()["environment"] == "staging"

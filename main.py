@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +10,23 @@ from concurrent.futures import ThreadPoolExecutor, as_completed as _futs_done
 
 from anthropic import Anthropic
 from huggingface_hub import InferenceClient
+
+# Optional: Sentry error monitoring (backend + request tracing)
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+    _SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
+    if _SENTRY_DSN:
+        sentry_sdk.init(
+            dsn=_SENTRY_DSN,
+            integrations=[StarletteIntegration(), FastApiIntegration()],
+            traces_sample_rate=0.1,
+            send_default_pii=False,
+            environment=os.environ.get("ENVIRONMENT", "production"),
+        )
+except ImportError:
+    pass
 
 # Optional: control-plane (LangGraph + Pinecone + Go data-plane integration)
 try:
@@ -431,6 +448,14 @@ async def stream_one(runner, system: str, messages: list):
 async def root():
     with open("static/index.html") as f:
         return HTMLResponse(f.read())
+
+@app.get("/api/config")
+async def get_config():
+    """Return public client-side configuration (safe to expose)."""
+    return JSONResponse({
+        "sentry_dsn": os.environ.get("SENTRY_DSN_PUBLIC", ""),
+        "environment": os.environ.get("ENVIRONMENT", "production"),
+    })
 
 @app.get("/api/hf/models")
 async def search_hf_models(q: str = Query(default="", max_length=200), limit: int = Query(default=25, ge=1, le=100)):

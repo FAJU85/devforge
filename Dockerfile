@@ -4,6 +4,8 @@ WORKDIR /code
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# Error monitoring
+RUN pip install --no-cache-dir "sentry-sdk[fastapi]>=2.0"
 # Optional: AirLLM for local model inference (pulls torch + transformers; skip if not needed)
 RUN pip install --no-cache-dir airllm || true
 
