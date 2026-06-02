@@ -1616,8 +1616,16 @@ async def call_tool(body: ToolCallBody):
     method = body.method.upper()
     if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
         return JSONResponse({"error": f"Unsupported method: {method}"}, status_code=400)
+    # Sanitize headers: string values only, block hop-by-hop / sensitive headers
+    _BLOCKED_HDRS = {"host", "transfer-encoding", "connection", "upgrade",
+                     "proxy-authorization", "te", "trailers", "keep-alive"}
     try:
-        hdrs = dict(body.headers or {})
+        raw_hdrs = body.headers or {}
+        hdrs = {
+            str(k)[:200]: str(v)[:2000]
+            for k, v in raw_hdrs.items()
+            if str(k).lower() not in _BLOCKED_HDRS
+        }
         if method != "GET":
             hdrs.setdefault("Content-Type", "application/json")
         if method == "GET":
