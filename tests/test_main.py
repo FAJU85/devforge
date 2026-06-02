@@ -1706,6 +1706,34 @@ class TestToolCallEndpoint:
         assert r.status_code == 400
         assert "error" in r.json()
 
+    def test_tool_call_blocks_localhost(self):
+        r = client.post("/api/tools/call", json={"url": "http://localhost/secret", "method": "GET"})
+        assert r.status_code == 400
+        assert "internal" in r.json()["error"].lower()
+
+    def test_tool_call_blocks_loopback_ip(self):
+        r = client.post("/api/tools/call", json={"url": "http://127.0.0.1/secret", "method": "GET"})
+        assert r.status_code == 400
+
+    def test_tool_call_blocks_private_10_range(self):
+        r = client.post("/api/tools/call", json={"url": "http://10.0.0.1/internal", "method": "GET"})
+        assert r.status_code == 400
+
+    def test_tool_call_blocks_private_192_168_range(self):
+        r = client.post("/api/tools/call", json={"url": "http://192.168.1.1/admin", "method": "GET"})
+        assert r.status_code == 400
+
+    def test_tool_call_blocks_aws_metadata(self):
+        r = client.post("/api/tools/call", json={"url": "http://169.254.169.254/latest/meta-data/", "method": "GET"})
+        assert r.status_code == 400
+
+    def test_tool_call_allows_external_https(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = "ok"
+            r = client.post("/api/tools/call", json={"url": "https://api.example.com/data", "method": "GET"})
+        assert r.status_code == 200
+
 
 class TestOpenAICompatBaseUrlValidation:
     def test_suggest_files_rejects_file_scheme_base_url(self):

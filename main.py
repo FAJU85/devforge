@@ -1595,11 +1595,24 @@ class ToolCallBody(BaseModel):
     body_json: Optional[dict] = None
 
 
+_SSRF_BLOCKED = re.compile(
+    r"^https?://"
+    r"(?:localhost|127\.|0\.0\.0\.0|"
+    r"10\.\d+\.\d+\.\d+|"
+    r"172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+|"
+    r"192\.168\.\d+\.\d+|"
+    r"169\.254\.\d+\.\d+|"   # link-local / AWS metadata
+    r"\[::1\])",              # IPv6 loopback
+    re.IGNORECASE,
+)
+
 @app.post("/api/tools/call")
 async def call_tool(body: ToolCallBody):
     """Proxy a user-defined tool HTTP call to avoid CORS issues."""
     if not re.match(r"^https?://", body.url):
         return JSONResponse({"error": "Only http:// and https:// URLs are supported"}, status_code=400)
+    if _SSRF_BLOCKED.match(body.url):
+        return JSONResponse({"error": "Requests to internal/private addresses are not allowed"}, status_code=400)
     method = body.method.upper()
     if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
         return JSONResponse({"error": f"Unsupported method: {method}"}, status_code=400)
