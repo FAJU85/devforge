@@ -448,12 +448,12 @@ def gh_hdrs(token: str) -> dict:
 
 class RepoBody(BaseModel):
     token: str
-    url: str
-    branch: Optional[str] = ""
+    url: str = Field(max_length=300)
+    branch: Optional[str] = Field(default="", max_length=255)
 
 
 @app.get("/api/repo/branches")
-async def list_branches(token: str = Query(...), owner: str = Query(...), repo: str = Query(...)):
+async def list_branches(token: str = Query(...), owner: str = Query(..., max_length=100), repo: str = Query(..., max_length=100)):
     """List all branches for a repository."""
     r = requests.get(
         f"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100",
