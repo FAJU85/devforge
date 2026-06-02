@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install sentry-sdk[fastapi] pytest pytest-asyncio httpx
+
+      - name: Run tests
+        env:
+          GITHUB_CLIENT_ID: ""
+          GITHUB_CLIENT_SECRET: ""
+          HF_TOKEN: ""
+          SENTRY_DSN: ""
+        run: pytest tests/ -v --tb=short
+
+  test-control-plane:
+    name: Control-plane tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install control-plane dependencies
+        run: |
+          pip install -r control_plane/requirements.txt || true
+          pip install pytest pytest-asyncio
+
+      - name: Run control-plane tests
+        env:
+          PINECONE_API_KEY: ""
+          ANTHROPIC_API_KEY: ""
+        run: pytest control_plane/tests/ -v --tb=short
+
+  test-go:
+    name: Go data-plane tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          cache: true
+          cache-dependency-path: data_plane/go.sum
+
+      - name: Run Go tests
+        working-directory: data_plane
+        run: go test ./... -v

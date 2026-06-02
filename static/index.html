@@ -9,6 +9,27 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" id="hljs-theme">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://browser.sentry-cdn.com/8.54.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
+<script>
+(async()=>{
+  try{
+    const cfg=await fetch('/api/config').then(r=>r.json());
+    if(cfg.sentry_dsn){
+      Sentry.init({
+        dsn:cfg.sentry_dsn,
+        environment:cfg.environment||'production',
+        integrations:[Sentry.browserTracingIntegration()],
+        tracesSampleRate:0.1,
+        beforeSend(event){
+          // strip any API keys that may appear in breadcrumb URLs
+          if(event.request?.url)event.request.url=event.request.url.replace(/sk-[a-zA-Z0-9-]+/g,'sk-[REDACTED]');
+          return event;
+        }
+      });
+    }
+  }catch(e){}
+})();
+</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root,[data-theme="dark"]{--bg:#1f1f1f;--sidebar:#161616;--panel:#2a2a2a;--panel2:#242424;--border:#333;--border2:#2c2c2c;--text:#e8e8e8;--muted:#888;--muted2:#555;--input-bg:#141414;--hover:#2a2a2a;--hover2:#333;--accent:#34d399;--accent2:#10b981;--accent-dim:#1a3a2e;--accent-border:#2a5a40;--blue:#60a5fa;--blue-dim:#1e3a5f;--blue-border:#2a5080;--purple:#a78bfa;--purple-dim:#2d1f4a;--purple-border:#4a3a7a;--red:#f87171;--code-bg:#141414;--shadow:0 1px 3px #0005}
@@ -332,6 +353,17 @@ pre::-webkit-scrollbar{height:4px}
 /* Mobile overlay backdrop */
 .mob-overlay{display:none;position:fixed;inset:0;background:#0007;z-index:999;cursor:pointer}
 .mob-overlay.show{display:block}
+/* Settings Panel */
+.settings-panel{position:fixed;top:52px;left:0;bottom:0;width:280px;background:var(--sidebar);border-right:1px solid var(--border2);display:flex;flex-direction:column;overflow:hidden;z-index:100;animation:slideInLeft .25s ease;box-shadow:4px 0 28px #0007}
+@keyframes slideInLeft{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+.settings-head{height:48px;padding:12px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;font-size:13px}
+.settings-body{flex:1;overflow-y:auto;padding:0 16px}
+.settings-body .prov-row{margin:0;padding:0}
+.settings-body .flabel{margin-bottom:4px}
+.settings-body .side-textarea{margin:0;width:calc(100% + 32px);margin-left:-16px;margin-right:-16px;padding:8px 16px;border-radius:0;border-left:none;border-right:none}
+/* Hide token counter by default, show on hover */
+#stat-pill{opacity:.4;transition:opacity .2s}
+.topbar:hover #stat-pill{opacity:1}
 /* ── Mobile responsive ────────────────────────────────────────────────────── */
 @media(max-width:768px){
   .sidebar{position:fixed;top:0;left:0;height:100vh;z-index:1000;width:82vw;min-width:240px;max-width:300px;transform:translateX(0);transition:transform .25s cubic-bezier(.4,0,.2,1);box-shadow:4px 0 28px #0007}
@@ -411,8 +443,23 @@ pre::-webkit-scrollbar{height:4px}
       </div>
     </div>
     <div class="s-sec">
-      <div class="s-lbl" onclick="toggleSec(this)">AI Provider <span class="s-arr">▼</span></div>
-      <div class="s-content">
+      <div style="padding:0 10px 8px;display:flex;align-items:center;gap:6px">
+        <div class="model-pill" id="sidebar-model-pill" onclick="openSettings()" title="Click to change model" style="flex:1;cursor:pointer;background:var(--input-bg);border:1px solid var(--border2)">claude-sonnet-4</div>
+        <button onclick="openSettings()" title="Settings" style="background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;border-radius:6px;padding:6px 8px;font-size:14px;transition:all .15s">⚙️</button>
+      </div>
+      </div>
+    </div>
+  </div>
+  <!-- Settings Panel (hidden, shown on gear icon click) -->
+  <div id="settings-panel" class="settings-panel" style="display:none">
+    <div class="settings-head">
+      <span style="font-weight:600">⚙️ Settings</span>
+      <button onclick="closeSettings()" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0">✕</button>
+    </div>
+    <div class="settings-body">
+      <!-- AI Provider Section -->
+      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">Provider</div>
         <div class="prov-row">
           <button class="prov-btn on" id="pa" onclick="setProv('anthropic')">Claude</button>
           <button class="prov-btn" id="pg" onclick="setProv('groq')">⚡ Groq</button>
@@ -420,7 +467,8 @@ pre::-webkit-scrollbar{height:4px}
           <button class="prov-btn" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
           <button class="prov-btn" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
         </div>
-        <div class="pfields" id="pf-a" style="flex-direction:column">
+        <!-- Provider-specific fields (hidden except when selected) -->
+        <div id="pf-a" style="flex-direction:column;margin-top:8px">
           <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" oninput="saveEnhance()"></div>
           <div class="model-selector">
             <button class="msel-btn" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
@@ -432,19 +480,19 @@ pre::-webkit-scrollbar{height:4px}
             <div style="display:flex;align-items:center;gap:8px;padding:0 2px"><span class="flabel" style="flex:1;margin:0">Budget tokens</span><select class="finput" id="think-budget" style="width:110px;padding:3px 6px" onchange="saveEnhance()"><option value="2000">2K (fast)</option><option value="4000">4K</option><option value="8000">8K (deep)</option><option value="16000">16K (max)</option></select></div>
           </div>
         </div>
-        <div id="pf-g" style="display:none">
+        <div id="pf-g" style="display:none;margin-top:8px">
           <div class="prov-note green">✓ <strong>Free tier</strong> — <a href="https://console.groq.com" target="_blank">console.groq.com</a></div>
           <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off"></div>
           <div><div class="flabel">Model</div><select class="finput" id="gm" onchange="updBadge()"><option value="llama-3.3-70b-versatile">Llama 3.3 70B — Best</option><option value="llama-3.1-8b-instant">Llama 3.1 8B — Fast</option><option value="mixtral-8x7b-32768">Mixtral 8x7B</option><option value="gemma2-9b-it">Gemma 2 9B</option><option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B</option><option value="qwen-qwq-32b">Qwen QwQ 32B</option></select></div></div>
         </div>
-        <div id="pf-h" style="display:none">
+        <div id="pf-h" style="display:none;margin-top:8px">
           <div class="prov-note green">✓ <strong>Token pre-configured</strong> — HF_TOKEN set via Space secrets.</div>
           <div id="hf-selected" class="hf-selected" style="display:none"><span>🤗</span><span class="hf-sel-name" id="hf-sel-name">—</span><button class="hf-sel-clear" onclick="clearModel()">✕</button></div>
-          <div id="hf-browser"><div class="search-wrap" style="padding:0 10px 6px"><span class="search-icon">⌕</span><input class="search-in" id="model-search" placeholder="Search HF models…" oninput="debounceSearch(this.value)"></div><div class="list-scroll" id="model-list"><div class="list-msg">Search to browse models</div></div></div>
+          <div id="hf-browser"><div class="search-wrap" style="padding:0 0 6px"><span class="search-icon">⌕</span><input class="search-in" id="model-search" placeholder="Search HF models…" oninput="debounceSearch(this.value)"></div><div class="list-scroll" id="model-list"><div class="list-msg">Search to browse models</div></div></div>
         </div>
-        <div id="pf-o" style="display:none">
+        <div id="pf-o" style="display:none;margin-top:8px">
           <div class="prov-note">OpenAI-compatible endpoint — quick-fill or enter manually:</div>
-          <div style="padding:0 10px 8px;display:flex;gap:5px;flex-wrap:wrap">
+          <div style="padding:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">
             <button class="qfill-btn" onclick="fillEndpoint('vercel')">🌐 Vercel Gateway</button>
             <button class="qfill-btn" onclick="fillEndpoint('openrouter')">🔄 OpenRouter</button>
             <button class="qfill-btn" onclick="fillEndpoint('ollama')">🦙 Ollama</button>
@@ -456,9 +504,9 @@ pre::-webkit-scrollbar{height:4px}
             <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off"></div>
           </div>
         </div>
-        <div id="pf-al" style="display:none">
+        <div id="pf-al" style="display:none;margin-top:8px">
           <div class="prov-note">Run any HuggingFace model locally with minimal GPU memory — layers stream from disk to GPU via <strong>AirLLM</strong>. Requires <code>pip install airllm</code>.</div>
-          <div style="padding:0 10px 8px;display:flex;gap:5px;flex-wrap:wrap">
+          <div style="padding:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">
             <button class="qfill-btn" onclick="fillAirLLM('meta-llama/Llama-2-7b-chat-hf')">🦙 Llama-2 7B</button>
             <button class="qfill-btn" onclick="fillAirLLM('mistralai/Mistral-7B-Instruct-v0.2')">✨ Mistral 7B</button>
             <button class="qfill-btn" onclick="fillAirLLM('Qwen/Qwen2.5-7B-Instruct')">🌟 Qwen2.5 7B</button>
@@ -470,20 +518,24 @@ pre::-webkit-scrollbar{height:4px}
           </div>
         </div>
       </div>
-    </div>
-    <div class="s-sec">
-      <div class="s-lbl" onclick="toggleSec(this)">🚀 Enhance <span class="s-arr">▼</span></div>
-      <div class="s-content">
-        <div class="ma-row"><div><div class="ma-label">Multi-Agent Pipeline</div><div class="ma-sub">Plan → Implement → Review</div></div><div><input type="checkbox" id="multi-agent" class="toggle-input" onchange="updBadge();$('ma-stages').style.display=this.checked?'block':'none'"><label for="multi-agent" class="toggle-label"></label></div></div>
-        <div id="ma-stages" style="display:none;padding-bottom:4px">
-          <div style="padding:2px 16px 6px;font-size:10px;color:var(--muted2)">Per-stage provider (optional):</div>
+
+      <!-- Multi-Agent Pipeline -->
+      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">Multi-Agent</div>
+        <div class="ma-row"><div><div class="ma-label">Pipeline Stages</div><div class="ma-sub">Plan → Code → Review</div></div><div><input type="checkbox" id="multi-agent" class="toggle-input" onchange="updBadge();$('ma-stages').style.display=this.checked?'block':'none'"><label for="multi-agent" class="toggle-label"></label></div></div>
+        <div id="ma-stages" style="display:none;padding:8px 0">
+          <div style="padding:0 0 6px;font-size:10px;color:var(--muted2)">Per-stage provider (optional):</div>
           <div class="ma-stage-row"><div class="ma-stage-lbl">🗺️ Plan</div><select class="finput" id="ma-plan-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
           <div class="ma-stage-row"><div class="ma-stage-lbl">⚙️ Code</div><select class="finput" id="ma-code-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
           <div class="ma-stage-row"><div class="ma-stage-lbl">🔍 Review</div><select class="finput" id="ma-rev-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
-          <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 6px"><input type="checkbox" id="ma-test-stage" class="toggle-input" onchange="onTestStageToggle()"><label for="ma-test-stage" class="toggle-label" style="flex-shrink:0"></label><div><div style="font-size:11px;color:var(--text)">🧪 Include Test stage</div><div style="font-size:10px;color:var(--muted2)">Plan → Code → Test → Review</div></div></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><input type="checkbox" id="ma-test-stage" class="toggle-input" onchange="onTestStageToggle()"><label for="ma-test-stage" class="toggle-label" style="flex-shrink:0"></label><div><div style="font-size:11px;color:var(--text)">🧪 Include Test stage</div></div></div>
           <div class="ma-stage-row" id="ma-test-row" style="display:none"><div class="ma-stage-lbl">🧪 Test</div><select class="finput" id="ma-test-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
         </div>
-        <div style="padding:0 16px 4px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between"><span>Skills</span><span style="font-weight:400;color:var(--muted2);font-size:10px">Stacks ↓</span></div>
+      </div>
+
+      <!-- Skills -->
+      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">Skills</div>
         <div class="skills-grid">
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="react" class="skill-check"> ⚛️ React</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="nextjs" class="skill-check"> 🚀 Next.js</label>
@@ -496,61 +548,62 @@ pre::-webkit-scrollbar{height:4px}
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="docker" class="skill-check"> 🐳 Docker</label>
           <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="sql" class="skill-check"> 🗄️ SQL</label>
         </div>
-        <div style="padding:6px 16px 4px;display:flex;align-items:center;justify-content:space-between"><span style="font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Rules</span><label class="ul-lbl" for="rules-upload" title="Load from file">📎 Upload</label><input type="file" id="rules-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'rules-input')"></div>
-        <textarea class="side-textarea" id="rules-input" placeholder="e.g. Never use var. Always return errors." oninput="saveEnhance()"></textarea>
-        <div style="padding:8px 16px 4px;display:flex;align-items:center;justify-content:space-between"><span style="font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Custom Instructions</span><label class="ul-lbl" for="instr-upload" title="Load from file">📎 Upload</label><input type="file" id="instr-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'instr-input')"></div>
-        <textarea class="side-textarea" id="instr-input" placeholder="Override the default agent behavior…" oninput="saveEnhance()" style="margin-bottom:4px"></textarea>
-        <div style="padding:8px 16px 4px;font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase">Presets</div>
-        <div style="padding:0 10px 8px;display:flex;flex-direction:column;gap:5px">
-          <select class="finput" id="preset-sel" onchange="loadPreset(this.value)">
-            <option value="">— Load a preset —</option>
-            <optgroup label="Built-in">
-              <option value="__react_ts">⚛️ React + TypeScript</option>
-              <option value="__python">🐍 Python Backend</option>
-              <option value="__go">🐹 Go Microservice</option>
-              <option value="__security">🔒 Security Auditor</option>
-              <option value="__docs">📝 Tech Writer</option>
-              <option value="__nextjs">🚀 Next.js + Vercel</option>
-              <option value="__fastapi">⚡ FastAPI + Python</option>
-            </optgroup>
-            <optgroup label="Saved" id="preset-saved-group"></optgroup>
-          </select>
-          <div style="display:flex;gap:5px">
-            <input class="finput" id="preset-name" placeholder="Name to save current…" style="flex:1">
-            <button onclick="savePreset()" style="background:var(--accent2);border:none;border-radius:8px;padding:7px 10px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;transition:opacity .15s">Save</button>
-          </div>
+      </div>
+
+      <!-- Rules -->
+      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 6px;display:flex;align-items:center;justify-content:space-between"><span>Rules</span><label class="ul-lbl" for="rules-upload" title="Load from file">📎 Upload</label><input type="file" id="rules-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'rules-input')"></div>
+        <textarea class="side-textarea" id="rules-input" placeholder="e.g. Never use var. Always return errors." oninput="saveEnhance()" style="margin:0"></textarea>
+      </div>
+
+      <!-- Instructions -->
+      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 6px;display:flex;align-items:center;justify-content:space-between"><span>Instructions</span><label class="ul-lbl" for="instr-upload" title="Load from file">📎 Upload</label><input type="file" id="instr-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'instr-input')"></div>
+        <textarea class="side-textarea" id="instr-input" placeholder="Override the default agent behavior…" oninput="saveEnhance()" style="margin:0"></textarea>
+      </div>
+
+      <!-- Presets -->
+      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">Presets</div>
+        <select class="finput" id="preset-sel" onchange="loadPreset(this.value)" style="margin-bottom:6px">
+          <option value="">— Load a preset —</option>
+          <optgroup label="Built-in">
+            <option value="__react_ts">⚛️ React + TypeScript</option>
+            <option value="__python">🐍 Python Backend</option>
+            <option value="__go">🐹 Go Microservice</option>
+            <option value="__security">🔒 Security Auditor</option>
+            <option value="__docs">📝 Tech Writer</option>
+            <option value="__nextjs">🚀 Next.js + Vercel</option>
+            <option value="__fastapi">⚡ FastAPI + Python</option>
+          </optgroup>
+          <optgroup label="Saved" id="preset-saved-group"></optgroup>
+        </select>
+        <div style="display:flex;gap:5px">
+          <input class="finput" id="preset-name" placeholder="Name to save current…" style="flex:1">
+          <button onclick="savePreset()" style="background:var(--accent2);border:none;border-radius:8px;padding:7px 10px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;transition:opacity .15s">Save</button>
         </div>
       </div>
-    </div>
-    <div class="s-sec closed">
-      <div class="s-lbl" onclick="toggleSec(this)">📌 Snippets <span id="snip-count" style="font-size:10px;background:var(--purple-dim);color:var(--purple);border-radius:10px;padding:1px 6px;display:none"></span> <span class="s-arr">▼</span></div>
-      <div class="s-content" style="padding-bottom:6px">
-        <div style="padding:4px 10px 4px;font-size:11px;color:var(--muted)">Save prompts for quick reuse.</div>
-        <div id="snip-list" style="margin:0 10px 6px;display:none;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto"></div>
-        <div style="padding:0 10px;display:flex;gap:6px">
-          <button onclick="saveSnippet()" style="flex:1;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--purple)';this.style.color='var(--purple)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📌 Save prompt</button>
-        </div>
+
+      <!-- Snippets -->
+      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">📌 Snippets</div>
+        <div id="snip-list" style="display:none;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto;margin-bottom:6px"></div>
+        <button onclick="saveSnippet()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--purple)';this.style.color='var(--purple)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📌 Save prompt</button>
       </div>
-    </div>
-    <div class="s-sec">
-      <div class="s-lbl" onclick="toggleSec(this)">🔧 Tools <span id="tool-count-badge" style="font-size:10px;background:var(--blue-dim);color:var(--blue);border-radius:10px;padding:1px 6px;display:none"></span> <span class="s-arr">▼</span></div>
-      <div class="s-content" style="padding-bottom:6px">
-        <div style="padding:4px 10px 6px;font-size:11px;color:var(--muted)">Define HTTP tools Claude can call autonomously (Anthropic only).</div>
-        <div id="tool-list" style="margin:0 10px 6px;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;display:none"></div>
-        <div style="padding:0 10px">
-          <button onclick="openAddTool()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+ Define Tool</button>
-        </div>
+
+      <!-- Tools -->
+      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">🔧 Tools</div>
+        <div id="tool-list" style="background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;display:none;margin-bottom:6px"></div>
+        <button onclick="openAddTool()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+ Define Tool</button>
       </div>
-    </div>
-    <div class="s-sec closed">
-      <div class="s-lbl" onclick="toggleSec(this)">🤖 Agent Pipeline <span class="s-arr">▼</span></div>
-      <div class="s-content" style="padding-bottom:6px">
-        <div style="padding:4px 10px 6px;font-size:11px;color:var(--muted)">Run a task through the LangGraph pipeline: retrieve → plan → execute → synthesize.</div>
-        <div style="padding:0 10px 8px">
-          <textarea id="agent-task" class="side-textarea" placeholder="Describe a task for the agent pipeline…" style="resize:vertical;min-height:60px;margin-bottom:6px"></textarea>
-          <button onclick="runAgentPipeline()" style="width:100%;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent2);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-weight:600;font-family:inherit;transition:all .15s">&#9654; Run Pipeline</button>
-          <div id="agent-progress" style="display:none;margin-top:8px;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;color:var(--muted);max-height:200px;overflow-y:auto;word-break:break-word"></div>
-        </div>
+
+      <!-- Agent Pipeline -->
+      <div style="padding:12px 0">
+        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">🤖 Agent Pipeline</div>
+        <textarea id="agent-task" class="side-textarea" placeholder="Describe a task for the agent pipeline…" style="resize:vertical;min-height:60px;margin-bottom:6px"></textarea>
+        <button onclick="runAgentPipeline()" style="width:100%;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent2);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-weight:600;font-family:inherit;transition:all .15s;margin-bottom:6px">▶ Run Pipeline</button>
+        <div id="agent-progress" style="display:none;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;color:var(--muted);max-height:200px;overflow-y:auto;word-break:break-word"></div>
       </div>
     </div>
   </div>
@@ -568,11 +621,11 @@ pre::-webkit-scrollbar{height:4px}
       <button class="atab" data-agent="testgen" onclick="setAgent(this)">🧪 Tests</button>
     </div>
     <div class="tbr">
-      <div class="model-pill" id="model-pill">claude-sonnet-4</div>
       <div class="ctx-pill" id="ctx-pill" style="display:none">0 files</div>
       <div class="ma-pill" id="ma-pill" style="display:none">🤖 Multi-Agent</div>
       <div class="mem-pill" id="mem-pill" onclick="clearMemory()" title="Session memory active — click to clear">🧠 Memory</div>
       <div class="stat-pill" id="stat-pill">~0 tok</div>
+      <button onclick="openSettings()" title="Settings" style="background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;border-radius:6px;padding:6px 8px;font-size:14px;transition:all .15s;flex-shrink:0;display:flex;align-items:center">⚙️</button>
       <div style="position:relative;flex-shrink:0">
         <button class="export-btn" id="more-btn" onclick="toggleMoreMenu()" title="More actions" style="font-size:15px;letter-spacing:.05em;padding:4px 9px">⋯</button>
         <div class="more-menu" id="more-menu">
@@ -1049,6 +1102,8 @@ document.addEventListener('click',e=>{if(!e.target.closest('#more-menu')&&!e.tar
 function isMob(){return window.innerWidth<=768;}
 function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
 function expSidebar(){$('sidebar').classList.remove('col');if(!isMob())$('exp-btn').classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
+function openSettings(){const panel=$('settings-panel');if(panel)panel.style.display='flex';}
+function closeSettings(){const panel=$('settings-panel');if(panel)panel.style.display='none';}
 marked.setOptions({breaks:true,gfm:true});
 function explainCode(btn){const code=btn.closest('.cblock').querySelector('code');if(!code)return;const snippet=code.textContent.slice(0,800);const ti=$('ti');ti.value=`Explain what this code does, step by step:\n\`\`\`\n${snippet}\n\`\`\``;ti.focus();ti.dispatchEvent(new Event('input'));$('msgs').scrollTo(0,$('msgs').scrollHeight);}
 async function createGist(btn,lang){
@@ -1465,7 +1520,7 @@ async function switchBranch(branch){
   toast(`Switched to ${branch}`);
 }
 function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='anthropic');$('pg').classList.toggle('on',p==='groq');$('ph').classList.toggle('on',p==='hf');$('po').classList.toggle('on',p==='openai_compat');$('pal').classList.toggle('on',p==='airllm');$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';$('pf-al').style.display=p==='airllm'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
-function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';const short=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';$('model-pill').textContent=short;}else if(S.prov==='groq')$('model-pill').textContent=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')$('model-pill').textContent=($('oci-model')&&$('oci-model').value)||'custom';else if(S.prov==='airllm')$('model-pill').textContent=(($('al-model')&&$('al-model').value)||'airllm').split('/').pop();else $('model-pill').textContent=S.hfModel.split('/').pop();}
+function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';let text='claude-sonnet';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';text=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';}else if(S.prov==='groq')text=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')text=($('oci-model')&&$('oci-model').value)||'custom';else if(S.prov==='airllm')text=(($('al-model')&&$('al-model').value)||'airllm').split('/').pop();else text=S.hfModel.split('/').pop();const p=$('model-pill');const sp=$('sidebar-model-pill');if(p)p.textContent=text;if(sp)sp.textContent=text;}
 function fillAirLLM(model){$('al-model').value=model;updBadge();saveEnhance();toast('AirLLM model: '+model.split('/').pop());}
 let searchTimer=null;
 function debounceSearch(q){clearTimeout(searchTimer);searchTimer=setTimeout(()=>fetchModels(q),400);}
