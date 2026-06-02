@@ -1,5 +1,5 @@
 # DevForge — Orchestrator Memory
-> Last updated: 2026-06-02 (cycle 69) | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
+> Last updated: 2026-06-02 (cycle 70) | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
 
 ## Project Identity
 - **Name:** DevForge
@@ -48,6 +48,22 @@ devforge/
 - **Control Plane:** LangGraph 0.2+ / LangChain-Anthropic / Pinecone v5
 - **Data Plane:** Go 1.21 / Gin 1.9 microservice (port 8080); http_fetch + ping executors
 - **Infrastructure env vars:** PINECONE_API_KEY, PINECONE_INDEX, GO_DATA_PLANE_URL, GO_CALL_TIMEOUT
+
+## Cycle 70 Summary (2026-06-02) — Premium UX Redesign
+
+| Area | Change |
+|---|---|
+| Frontend | Collapsed 5 provider buttons (Claude, Groq, HF, Custom, AirLLM) into single model pill in sidebar |
+| Frontend | Moved all settings sections (Provider fields, Multi-Agent, Skills, Rules, Instructions, Presets, Snippets, Tools, Agent Pipeline) into hidden slide-in settings panel |
+| Frontend | Added `⚙️` settings gear button in topbar; click toggles left-sliding settings panel with animation |
+| Frontend | Simplified sidebar to: Theme | GitHub | Repository | Model Pill | Settings Button |
+| Frontend | Removed model-pill from topbar (now shows only context pills + stat pill + settings gear + more menu) |
+| Frontend | Token counter now hidden by default, shows on topbar hover (reduced UI clutter) |
+| Frontend | Added `openSettings()` / `closeSettings()` JS functions to toggle settings panel |
+| Frontend | Updated `updBadge()` to sync model display between sidebar pill and topbar (where it was removed) |
+| Frontend | Settings panel has collapsible header with close button (✕) and scrollable content area |
+| Design | Matches premium AI agent UX patterns (Bolt.new, Cursor, v0.dev, Devin, Windsurf): minimal visible UI, opinionated defaults, settings hidden behind icon |
+| Tests | No test changes (frontend-only redesign) |
 
 ## Features Implemented (Cycles 1-24 Complete)
 - [x] GitHub OAuth one-click (Device Flow)
