@@ -393,7 +393,7 @@ async def github_auth_poll(body: DeviceCodeBody):
     return JSONResponse(r.json())
 
 class TokenBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
 
 @app.post("/api/github/user")
 async def github_user(body: TokenBody):
@@ -1455,8 +1455,8 @@ def _parse_cargo_toml(content: str) -> list:
 
 
 class ScanDepsBody(BaseModel):
-    filename: str
-    content: str
+    filename: str = Field(max_length=255)
+    content: str = Field(max_length=200_000)
     provider: str = "anthropic"
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
