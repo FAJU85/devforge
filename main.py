@@ -683,9 +683,9 @@ async def summarize_file(body: SummarizeFileBody):
 
 
 class BatchWriteItem(BaseModel):
-    path: str
-    content: str
-    message: str
+    path: str = Field(max_length=1000)
+    content: str = Field(max_length=2_000_000)
+    message: str = Field(max_length=500)
 
 class BatchWriteBody(BaseModel):
     token: str
@@ -737,9 +737,9 @@ async def repo_write_batch(body: BatchWriteBody):
 
 class GistBody(BaseModel):
     token: str
-    filename: str
-    content: str
-    description: Optional[str] = ""
+    filename: str = Field(max_length=255)
+    content: str = Field(max_length=1_000_000)
+    description: Optional[str] = Field(default="", max_length=255)
     public: Optional[bool] = False
 
 @app.post("/api/github/gist/create")
@@ -768,10 +768,10 @@ async def create_gist(body: GistBody):
 
 class IssueBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    title: str
-    body: str
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    title: str = Field(max_length=500)
+    body: str = Field(max_length=65_536)
     labels: Optional[List[str]] = []
 
 @app.post("/api/github/issue/create")
@@ -795,12 +795,12 @@ async def create_issue(body: IssueBody):
 
 class PRBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    title: str
-    body: str
-    head: str
-    base: str
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    title: str = Field(max_length=500)
+    body: str = Field(max_length=65_536)
+    head: str = Field(max_length=255)
+    base: str = Field(max_length=255)
 
 @app.post("/api/github/pr/create")
 async def create_pr(body: PRBody):
