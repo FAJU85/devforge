@@ -600,13 +600,13 @@ def gh_hdrs(token: str) -> dict:
     return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
 
 class RepoBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     url: str = Field(max_length=300)
     branch: Optional[str] = Field(default="", max_length=255)
 
 
 @app.get("/api/repo/branches")
-async def list_branches(token: str = Query(...), owner: str = Query(..., max_length=100), repo: str = Query(..., max_length=100)):
+async def list_branches(token: str = Query(..., max_length=500), owner: str = Query(..., max_length=100), repo: str = Query(..., max_length=100)):
     """List all branches for a repository."""
     r = requests.get(
         f"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100",
@@ -633,7 +633,7 @@ async def repo_connect(body: RepoBody):
     return {"owner": owner, "repo": repo, "branch": branch, "default_branch": default_branch, "files": files}
 
 class FileBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     path: str = Field(max_length=1000)
@@ -650,7 +650,7 @@ async def repo_file(body: FileBody):
     return {"path": body.path, "content": content}
 
 class WriteFileBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     path: str = Field(max_length=1000)
@@ -701,15 +701,15 @@ async def repo_write(body: WriteFileBody):
     }
 
 class SuggestFilesBody(BaseModel):
-    provider: str
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    groq_model: Optional[str] = "llama-3.3-70b-versatile"
-    openai_compat_key: Optional[str] = ""
-    openai_compat_base_url: Optional[str] = ""
-    openai_compat_model: Optional[str] = ""
-    hf_token: Optional[str] = ""
-    hf_model: Optional[str] = ""
+    provider: str = Field(max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    groq_model: Optional[str] = Field(default="llama-3.3-70b-versatile", max_length=200)
+    openai_compat_key: Optional[str] = Field(default="", max_length=500)
+    openai_compat_base_url: Optional[str] = Field(default="", max_length=2000)
+    openai_compat_model: Optional[str] = Field(default="", max_length=200)
+    hf_token: Optional[str] = Field(default="", max_length=500)
+    hf_model: Optional[str] = Field(default="", max_length=200)
     task: str = Field(max_length=2000)
     files: List[str]
     max_suggestions: int = Field(default=6, ge=1, le=20)
@@ -792,13 +792,13 @@ async def suggest_files(body: SuggestFilesBody):
 class SummarizeFileBody(BaseModel):
     content: str = Field(max_length=200_000)
     filename: str = Field(max_length=500)
-    provider: str
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    groq_model: Optional[str] = "llama-3.3-70b-versatile"
-    openai_compat_key: Optional[str] = ""
-    openai_compat_base_url: Optional[str] = ""
-    openai_compat_model: Optional[str] = ""
+    provider: str = Field(max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    groq_model: Optional[str] = Field(default="llama-3.3-70b-versatile", max_length=200)
+    openai_compat_key: Optional[str] = Field(default="", max_length=500)
+    openai_compat_base_url: Optional[str] = Field(default="", max_length=2000)
+    openai_compat_model: Optional[str] = Field(default="", max_length=200)
 
 
 @app.post("/api/repo/summarize-file")
@@ -821,7 +821,7 @@ class BatchWriteItem(BaseModel):
     message: str = Field(max_length=500)
 
 class BatchWriteBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     branch: str = Field(max_length=255)
@@ -886,7 +886,7 @@ async def repo_write_batch(body: BatchWriteBody):
 
 
 class GistBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     filename: str = Field(max_length=255)
     content: str = Field(max_length=1_000_000)
     description: Optional[str] = Field(default="", max_length=255)
@@ -917,7 +917,7 @@ async def create_gist(body: GistBody):
 
 
 class IssueBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     title: str = Field(max_length=500)
@@ -944,7 +944,7 @@ async def create_issue(body: IssueBody):
 
 
 class PRBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     title: str = Field(max_length=500)
@@ -972,7 +972,7 @@ async def create_pr(body: PRBody):
 
 
 class PRDiffBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     pr_number: int = Field(ge=1)
@@ -1012,7 +1012,7 @@ async def get_pr_diff(body: PRDiffBody):
 
 
 class RepoSearchBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     query: str = Field(max_length=500)
@@ -1058,7 +1058,7 @@ async def repo_search(body: RepoSearchBody):
 
 
 class RepoCommitsBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     branch: Optional[str] = Field(default="main", max_length=255)
@@ -1089,7 +1089,7 @@ async def repo_commits(body: RepoCommitsBody):
 
 
 class WorkflowRunsBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     max_results: int = Field(default=10, ge=1, le=50)
@@ -1131,16 +1131,16 @@ RELEASE_NOTES_SYSTEM = (
 )
 
 class ReleaseNotesBody(BaseModel):
-    provider: str = "anthropic"
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    token: str
+    provider: str = Field(default="anthropic", max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     since: Optional[str] = Field(default="", max_length=255)
     until: Optional[str] = Field(default="", max_length=255)
     max_commits: int = Field(default=50, ge=1, le=100)
-    anthropic_model: Optional[str] = "claude-sonnet-4-6"
+    anthropic_model: Optional[str] = Field(default="claude-sonnet-4-6", max_length=200)
 
 @app.post("/api/repo/release-notes")
 async def generate_release_notes(body: ReleaseNotesBody):
@@ -1199,13 +1199,13 @@ COMMIT_MSG_SYSTEM = (
 )
 
 class CommitMsgBody(BaseModel):
-    provider: str = "anthropic"
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    groq_model: Optional[str] = ""
-    openai_compat_key: Optional[str] = ""
-    openai_compat_base_url: Optional[str] = ""
-    openai_compat_model: Optional[str] = ""
+    provider: str = Field(default="anthropic", max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    groq_model: Optional[str] = Field(default="", max_length=200)
+    openai_compat_key: Optional[str] = Field(default="", max_length=500)
+    openai_compat_base_url: Optional[str] = Field(default="", max_length=2000)
+    openai_compat_model: Optional[str] = Field(default="", max_length=200)
     path: str = Field(max_length=1000)
     content: Optional[str] = Field(default="", max_length=50_000)
     diff: Optional[str] = Field(default="", max_length=50_000)
@@ -1357,10 +1357,10 @@ README_SYSTEM = (
 )
 
 class ReadmeBody(BaseModel):
-    provider: str = "anthropic"
-    anthropic_key: Optional[str] = ""
-    anthropic_model: Optional[str] = "claude-sonnet-4-6"
-    groq_key: Optional[str] = ""
+    provider: str = Field(default="anthropic", max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    anthropic_model: Optional[str] = Field(default="claude-sonnet-4-6", max_length=200)
+    groq_key: Optional[str] = Field(default="", max_length=500)
     repo_name: Optional[str] = Field(default="", max_length=200)
     file_context: str = Field(max_length=500_000)
 
@@ -1503,10 +1503,10 @@ def _parse_cargo_toml(content: str) -> list:
 class ScanDepsBody(BaseModel):
     filename: str = Field(max_length=255)
     content: str = Field(max_length=200_000)
-    provider: str = "anthropic"
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    anthropic_model: Optional[str] = "claude-haiku-4-5-20251001"
+    provider: str = Field(default="anthropic", max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    anthropic_model: Optional[str] = Field(default="claude-haiku-4-5-20251001", max_length=200)
 
 
 @app.post("/api/repo/scan-deps")
@@ -1623,14 +1623,14 @@ ENHANCE_SYSTEM = (
 )
 
 class PromptEnhanceBody(BaseModel):
-    provider: str = "anthropic"
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    groq_model: Optional[str] = ""
-    openai_compat_key: Optional[str] = ""
-    openai_compat_base_url: Optional[str] = ""
-    openai_compat_model: Optional[str] = ""
-    hf_token: Optional[str] = ""
+    provider: str = Field(default="anthropic", max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    groq_model: Optional[str] = Field(default="", max_length=200)
+    openai_compat_key: Optional[str] = Field(default="", max_length=500)
+    openai_compat_base_url: Optional[str] = Field(default="", max_length=2000)
+    openai_compat_model: Optional[str] = Field(default="", max_length=200)
+    hf_token: Optional[str] = Field(default="", max_length=500)
     prompt: str = Field(max_length=4000)
 
 @app.post("/api/prompt/enhance")
@@ -1665,16 +1665,16 @@ class Msg(BaseModel):
     content: str = Field(max_length=200_000)
 
 class ChatBody(BaseModel):
-    provider: str
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    groq_model: Optional[str] = "llama-3.3-70b-versatile"
-    hf_token: Optional[str] = ""
-    hf_model: Optional[str] = "Qwen/Qwen2.5-Coder-32B-Instruct"
-    openai_compat_key: Optional[str] = ""
-    openai_compat_base_url: Optional[str] = "http://localhost:11434/v1"
-    openai_compat_model: Optional[str] = "llama3"
-    agent: str = "code"
+    provider: str = Field(max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    groq_model: Optional[str] = Field(default="llama-3.3-70b-versatile", max_length=200)
+    hf_token: Optional[str] = Field(default="", max_length=500)
+    hf_model: Optional[str] = Field(default="Qwen/Qwen2.5-Coder-32B-Instruct", max_length=200)
+    openai_compat_key: Optional[str] = Field(default="", max_length=500)
+    openai_compat_base_url: Optional[str] = Field(default="http://localhost:11434/v1", max_length=2000)
+    openai_compat_model: Optional[str] = Field(default="llama3", max_length=200)
+    agent: str = Field(default="code", max_length=50)
     messages: List[Msg] = Field(max_length=500)
     file_context: Optional[str] = Field(default="", max_length=500_000)
     owner: Optional[str] = Field(default="", max_length=100)
@@ -1684,14 +1684,14 @@ class ChatBody(BaseModel):
     instructions: Optional[str] = Field(default="", max_length=10_000)
     multi_agent: Optional[bool] = False
     # Per-stage provider overrides for multi-agent (empty = use body.provider)
-    ma_plan_provider: Optional[str] = ""
-    ma_code_provider: Optional[str] = ""
-    ma_test_provider: Optional[str] = ""
-    ma_review_provider: Optional[str] = ""
+    ma_plan_provider: Optional[str] = Field(default="", max_length=50)
+    ma_code_provider: Optional[str] = Field(default="", max_length=50)
+    ma_test_provider: Optional[str] = Field(default="", max_length=50)
+    ma_review_provider: Optional[str] = Field(default="", max_length=50)
     ma_include_test_stage: Optional[bool] = False
     memory: Optional[str] = Field(default="", max_length=50_000)
     tools: Optional[List[ToolDef]] = Field(default=[], max_length=20)
-    anthropic_model: Optional[str] = "claude-sonnet-4-6"
+    anthropic_model: Optional[str] = Field(default="claude-sonnet-4-6", max_length=200)
     thinking_mode: Optional[bool] = False
     thinking_budget: Optional[int] = Field(default=2000, ge=1000, le=100_000)
     airllm_model: Optional[str] = Field(default="meta-llama/Llama-2-7b-chat-hf", max_length=200)
