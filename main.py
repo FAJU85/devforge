@@ -432,6 +432,9 @@ def parse_gh_url(url: str) -> "tuple[str | None, str | None]":
         return None, None
     return m.group(1), m.group(2).removesuffix(".git").rstrip("/")
 
+def _valid_http_url(url: str) -> bool:
+    return bool(url and re.match(r"^https?://", url))
+
 def gh_hdrs(token: str) -> dict:
     """Build GitHub API request headers for an authenticated token.
 
