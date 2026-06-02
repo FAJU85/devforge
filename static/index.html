@@ -386,11 +386,11 @@ pre::-webkit-scrollbar{height:4px}
 </head>
 <body>
 <div id="app">
-<div class="mob-overlay" id="mob-overlay" onclick="collSidebar()"></div>
-<aside class="sidebar" id="sidebar">
+<div class="mob-overlay" id="mob-overlay" onclick="collSidebar()" aria-hidden="true"></div>
+<aside class="sidebar" id="sidebar" aria-label="Navigation sidebar">
   <div class="s-head">
-    <div class="s-logo"><div class="s-mark">⚡</div><div class="s-name">DevForge</div></div>
-    <button class="s-coll" onclick="collSidebar()">‹</button>
+    <div class="s-logo"><div class="s-mark" aria-hidden="true">⚡</div><div class="s-name">DevForge</div></div>
+    <button class="s-coll" onclick="collSidebar()" aria-label="Collapse sidebar">‹</button>
   </div>
   <div class="s-body">
     <div class="s-sec" style="padding:8px 0"><div class="theme-sw"><button class="ts" id="ts-light" onclick="setTheme('light')">☀️ Light</button><button class="ts on" id="ts-dark" onclick="setTheme('dark')">🌙 Dark</button></div></div>
@@ -402,7 +402,7 @@ pre::-webkit-scrollbar{height:4px}
           <div id="oauth-box" style="display:none"></div>
           <button id="oauth-check" class="oauth-check" style="display:none" onclick="pollOAuth()">✓ Check Authorization Status</button>
         </div>
-        <div id="gh-user" style="display:none"><div class="gh-card"><img id="gh-av" class="gh-av" src="" alt=""><div><div class="gh-nm" id="gh-nm">—</div><div class="gh-lg" id="gh-lg">—</div></div><button class="gh-out" onclick="signOut()">✕</button></div></div>
+        <div id="gh-user" style="display:none"><div class="gh-card"><img id="gh-av" class="gh-av" src="" alt="GitHub avatar"><div><div class="gh-nm" id="gh-nm">—</div><div class="gh-lg" id="gh-lg">—</div></div><button class="gh-out" onclick="signOut()" aria-label="Sign out of GitHub">✕</button></div></div>
       </div>
     </div>
     <div class="s-sec" id="repo-sec" style="display:none">
@@ -445,16 +445,16 @@ pre::-webkit-scrollbar{height:4px}
     <div class="s-sec">
       <div style="padding:0 10px 8px;display:flex;align-items:center;gap:6px">
         <div class="model-pill" id="sidebar-model-pill" onclick="openSettings()" title="Click to change model" style="flex:1;cursor:pointer;background:var(--input-bg);border:1px solid var(--border2)">claude-sonnet-4</div>
-        <button onclick="openSettings()" title="Settings" style="background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;border-radius:6px;padding:6px 8px;font-size:14px;transition:all .15s">⚙️</button>
+        <button onclick="openSettings()" title="Settings" aria-label="Open settings" style="background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;border-radius:6px;padding:6px 8px;font-size:14px;transition:all .15s">⚙️</button>
       </div>
       </div>
     </div>
   </div>
   <!-- Settings Panel (hidden, shown on gear icon click) -->
-  <div id="settings-panel" class="settings-panel" style="display:none">
+  <div id="settings-panel" class="settings-panel" role="dialog" aria-modal="true" aria-label="Settings" style="display:none">
     <div class="settings-head">
-      <span style="font-weight:600">⚙️ Settings</span>
-      <button onclick="closeSettings()" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0">✕</button>
+      <span style="font-weight:600" aria-hidden="true">⚙️ Settings</span>
+      <button onclick="closeSettings()" aria-label="Close settings" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0">✕</button>
     </div>
     <div class="settings-body">
       <!-- AI Provider Section -->
@@ -608,17 +608,17 @@ pre::-webkit-scrollbar{height:4px}
     </div>
   </div>
 </aside>
-<div class="workspace">
+<main class="workspace" aria-label="Chat workspace">
   <div class="topbar">
-    <button class="exp-btn" id="exp-btn" onclick="expSidebar()">›</button>
-    <div class="atabs">
-      <button class="atab on" data-agent="code" onclick="setAgent(this)">⚙️ Code</button>
-      <button class="atab" data-agent="review" onclick="setAgent(this)">🔍 Review</button>
-      <button class="atab" data-agent="architect" onclick="setAgent(this)">🏗️ Arch</button>
-      <button class="atab" data-agent="debug" onclick="setAgent(this)">🐛 Debug</button>
-      <button class="atab" data-agent="docs" onclick="setAgent(this)">📝 Docs</button>
-      <button class="atab" data-agent="refactor" onclick="setAgent(this)">🔀 Refactor</button>
-      <button class="atab" data-agent="testgen" onclick="setAgent(this)">🧪 Tests</button>
+    <button class="exp-btn" id="exp-btn" onclick="expSidebar()" aria-label="Expand sidebar">›</button>
+    <div class="atabs" role="tablist" aria-label="Agent mode">
+      <button class="atab on" role="tab" aria-selected="true" data-agent="code" onclick="setAgent(this)">⚙️ Code</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="review" onclick="setAgent(this)">🔍 Review</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="architect" onclick="setAgent(this)">🏗️ Arch</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="debug" onclick="setAgent(this)">🐛 Debug</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="docs" onclick="setAgent(this)">📝 Docs</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="refactor" onclick="setAgent(this)">🔀 Refactor</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="testgen" onclick="setAgent(this)">🧪 Tests</button>
     </div>
     <div class="tbr">
       <div class="ctx-pill" id="ctx-pill" style="display:none">0 files</div>
@@ -652,7 +652,7 @@ pre::-webkit-scrollbar{height:4px}
     <div id="tabs-list" class="tabs-list"></div>
     <button class="tab-add" onclick="newTab()" title="New conversation tab">+</button>
   </div>
-  <div class="msgs" id="msgs">
+  <div class="msgs" id="msgs" role="log" aria-live="polite" aria-label="Chat messages">
     <div class="empty" id="empty">
       <div class="empty-mark">⚡</div>
       <div class="empty-title">DevForge</div>
@@ -668,19 +668,19 @@ pre::-webkit-scrollbar{height:4px}
   <div style="max-width:820px;margin:0 auto;width:100%"><div class="ctx-strip" id="ctx-strip"></div></div>
   <div class="input-wrap">
     <div class="ibox">
-      <textarea class="ti" id="ti" placeholder="Describe your task…" onkeydown="hk(event)" oninput="ar(this)" rows="1"></textarea>
+      <textarea class="ti" id="ti" placeholder="Describe your task…" onkeydown="hk(event)" oninput="ar(this)" rows="1" aria-label="Message input" aria-multiline="true"></textarea>
       <div class="ifoot">
         <button class="attach-btn" title="Upload local files as context" onclick="$('ctx-upload').click()">📎</button>
         <input type="file" id="ctx-upload" multiple accept=".txt,.md,.ts,.tsx,.js,.jsx,.py,.go,.json,.yaml,.yml,.toml,.css,.html,.sh,.rs,.rb,.java,.cpp,.c,.h" style="display:none" onchange="uploadContext(this)">
         <button class="attach-btn" id="suggest-btn" title="AI: suggest relevant files for your task" onclick="suggestFiles()" style="display:none;font-size:11px;gap:4px">🤔 Suggest</button>
         <span class="ihint" id="hint">Open sidebar to get started</span>
-        <button class="send-btn" id="stop-btn" onclick="stopStream()" style="display:none;background:var(--red)">⏹ Stop</button>
-        <button class="send-btn" id="enhance-btn" onclick="enhancePrompt()" title="AI: improve your prompt" style="background:var(--purple);padding:7px 10px">✨</button>
-        <button class="send-btn" id="send-btn" onclick="send()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg> Send</button>
+        <button class="send-btn" id="stop-btn" onclick="stopStream()" aria-label="Stop streaming" style="display:none;background:var(--red)">⏹ Stop</button>
+        <button class="send-btn" id="enhance-btn" onclick="enhancePrompt()" title="AI: improve your prompt" aria-label="Enhance prompt with AI" style="background:var(--purple);padding:7px 10px">✨</button>
+        <button class="send-btn" id="send-btn" onclick="send()" aria-label="Send message"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg> Send</button>
       </div>
     </div>
   </div>
-</div>
+</main>
 </div>
 
 <!-- Issue modal -->
@@ -1529,7 +1529,7 @@ function debounceSearch(q){clearTimeout(searchTimer);searchTimer=setTimeout(()=>
 async function fetchModels(q=''){$('model-list').innerHTML='<div class="list-msg">Searching…</div>';try{const models=await get(`/api/hf/models?q=${encodeURIComponent(q)}&limit=25`);if(models.error){$('model-list').innerHTML=`<div class="list-msg" style="color:var(--red)">${esc(String(models.error))}</div>`;return;}if(!models.length){$('model-list').innerHTML='<div class="list-msg">No models found</div>';return;}$('model-list').innerHTML=models.map(m=>`<div class="list-item${S.hfModel===m.id?' active':''}" data-id="${escA(m.id)}" onclick="selectModel(this.dataset.id,this)"><div class="li-name">${esc(m.name||'')}</div><div class="li-sub"><span style="color:var(--muted)">${esc(m.author||'')}</span><span>↓${fmt(m.downloads)}</span><span>❤️${fmt(m.likes)}</span>${m.gated?'<span class="li-badge">gated</span>':''}</div></div>`).join('');}catch(e){$('model-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';}}
 function selectModel(id,el){S.hfModel=id;document.querySelectorAll('#model-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');$('hf-sel-name').textContent=id;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';updBadge();saveEnhance();}
 function clearModel(){$('hf-selected').style.display='none';$('hf-browser').style.display='block';$('model-search').value='';fetchModels('');}
-function setAgent(el){document.querySelectorAll('.atab').forEach(t=>t.classList.remove('on'));el.classList.add('on');S.agent=el.dataset.agent;}
+function setAgent(el){document.querySelectorAll('.atab').forEach(t=>{t.classList.remove('on');t.setAttribute('aria-selected','false');});el.classList.add('on');el.setAttribute('aria-selected','true');S.agent=el.dataset.agent;}
 function updHint(){const h=$('hint');const n=S.selFiles.size+S.localFiles.size;if(!S.ghToken){h.textContent='Open sidebar → Connect GitHub · ⌘K settings';return;}if(!S.repo&&!n){h.textContent='Pick a repo or 📎 upload files for context';return;}if(!n){h.textContent='Select files for context · ⌘K settings';return;}h.textContent=`${n} file${n!==1?'s':''} in context · ⌘Enter send · ⌘1/2/3 model`;}
 function fill(btn){$('ti').value=btn.textContent.trim();$('ti').focus();ar($('ti'));}
 function hk(e){if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();send();}}
