@@ -1660,7 +1660,8 @@ async def enhance_prompt(body: PromptEnhanceBody):
 
 
 class Msg(BaseModel):
-    role: str; content: str
+    role: str = Field(max_length=20)
+    content: str = Field(max_length=200_000)
 
 class ChatBody(BaseModel):
     provider: str
@@ -1674,12 +1675,12 @@ class ChatBody(BaseModel):
     openai_compat_model: Optional[str] = "llama3"
     agent: str = "code"
     messages: List[Msg]
-    file_context: Optional[str] = ""
-    owner: Optional[str] = ""
-    repo: Optional[str] = ""
+    file_context: Optional[str] = Field(default="", max_length=500_000)
+    owner: Optional[str] = Field(default="", max_length=100)
+    repo: Optional[str] = Field(default="", max_length=100)
     skills: Optional[List[str]] = []
-    rules: Optional[str] = ""
-    instructions: Optional[str] = ""
+    rules: Optional[str] = Field(default="", max_length=10_000)
+    instructions: Optional[str] = Field(default="", max_length=10_000)
     multi_agent: Optional[bool] = False
     # Per-stage provider overrides for multi-agent (empty = use body.provider)
     ma_plan_provider: Optional[str] = ""
@@ -1687,11 +1688,11 @@ class ChatBody(BaseModel):
     ma_test_provider: Optional[str] = ""
     ma_review_provider: Optional[str] = ""
     ma_include_test_stage: Optional[bool] = False
-    memory: Optional[str] = ""
+    memory: Optional[str] = Field(default="", max_length=50_000)
     tools: Optional[List[ToolDef]] = []
     anthropic_model: Optional[str] = "claude-sonnet-4-6"
     thinking_mode: Optional[bool] = False
-    thinking_budget: Optional[int] = 2000
+    thinking_budget: Optional[int] = Field(default=2000, ge=1000, le=100_000)
 
 _PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom"}
 
