@@ -695,7 +695,7 @@ class BatchWriteBody(BaseModel):
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     branch: str = Field(max_length=255)
-    files: List[BatchWriteItem]
+    files: List[BatchWriteItem] = Field(max_length=50)
 
 @app.post("/api/repo/write/batch")
 async def repo_write_batch(body: BatchWriteBody):
@@ -775,7 +775,7 @@ class IssueBody(BaseModel):
     repo: str = Field(max_length=100)
     title: str = Field(max_length=500)
     body: str = Field(max_length=65_536)
-    labels: Optional[List[str]] = []
+    labels: Optional[List[str]] = Field(default=[], max_length=10)
 
 @app.post("/api/github/issue/create")
 async def create_issue(body: IssueBody):
@@ -1059,7 +1059,10 @@ async def generate_release_notes(body: ReleaseNotesBody):
                     asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
             threading.Thread(target=_run, daemon=True).start()
             while True:
-                kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                try:
+                    kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
                 if kind == "text":
                     yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
                 elif kind == "done":
@@ -1304,7 +1307,10 @@ async def generate_readme(body: ReadmeBody):
                     asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
             threading.Thread(target=_run, daemon=True).start()
             while True:
-                kind, val = await asyncio.wait_for(q.get(), timeout=90)
+                try:
+                    kind, val = await asyncio.wait_for(q.get(), timeout=90)
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
                 if kind == "text":
                     yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
                 elif kind == "done":
@@ -1543,7 +1549,10 @@ async def scan_deps(body: ScanDepsBody):
                     asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
             threading.Thread(target=_run, daemon=True).start()
             while True:
-                kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                try:
+                    kind, val = await asyncio.wait_for(q.get(), timeout=60)
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
                 if kind == "text": yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
                 elif kind == "done": break
                 else: yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
@@ -1674,11 +1683,11 @@ class ChatBody(BaseModel):
     openai_compat_base_url: Optional[str] = "http://localhost:11434/v1"
     openai_compat_model: Optional[str] = "llama3"
     agent: str = "code"
-    messages: List[Msg]
+    messages: List[Msg] = Field(max_length=500)
     file_context: Optional[str] = Field(default="", max_length=500_000)
     owner: Optional[str] = Field(default="", max_length=100)
     repo: Optional[str] = Field(default="", max_length=100)
-    skills: Optional[List[str]] = []
+    skills: Optional[List[str]] = Field(default=[], max_length=12)
     rules: Optional[str] = Field(default="", max_length=10_000)
     instructions: Optional[str] = Field(default="", max_length=10_000)
     multi_agent: Optional[bool] = False
@@ -1689,7 +1698,7 @@ class ChatBody(BaseModel):
     ma_review_provider: Optional[str] = ""
     ma_include_test_stage: Optional[bool] = False
     memory: Optional[str] = Field(default="", max_length=50_000)
-    tools: Optional[List[ToolDef]] = []
+    tools: Optional[List[ToolDef]] = Field(default=[], max_length=20)
     anthropic_model: Optional[str] = "claude-sonnet-4-6"
     thinking_mode: Optional[bool] = False
     thinking_budget: Optional[int] = Field(default=2000, ge=1000, le=100_000)

@@ -3437,3 +3437,132 @@ class TestFieldLengthConstraints:
             "diff": "x" * 50_001,
         })
         assert r.status_code == 422
+
+    def test_chat_rejects_too_many_messages(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "anthropic",
+            "anthropic_key": "key",
+            "messages": [{"role": "user", "content": "hi"}] * 501,
+        })
+        assert r.status_code == 422
+
+    def test_chat_rejects_too_many_tools(self):
+        tool = {"name": "t", "description": "d", "url": "https://x.com", "method": "GET"}
+        r = client.post("/api/chat/stream", json={
+            "provider": "anthropic",
+            "anthropic_key": "key",
+            "messages": [{"role": "user", "content": "hi"}],
+            "tools": [tool] * 21,
+        })
+        assert r.status_code == 422
+
+    def test_batch_write_rejects_too_many_files(self):
+        item = {"path": "file.txt", "content": "hello", "message": "add"}
+        r = client.post("/api/repo/write/batch", json={
+            "token": "tok",
+            "owner": "user",
+            "repo": "myrepo",
+            "branch": "main",
+            "files": [item] * 51,
+        })
+        assert r.status_code == 422
+
+    def test_issue_rejects_too_many_labels(self):
+        r = client.post("/api/github/issue/create", json={
+            "token": "tok",
+            "owner": "user",
+            "repo": "myrepo",
+            "title": "t",
+            "body": "b",
+            "labels": ["label"] * 11,
+        })
+        assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Cycle 67: asyncio.TimeoutError handling in inline streaming loops
+# ---------------------------------------------------------------------------
+
+class TestInlineStreamTimeout:
+    """Verify that asyncio.TimeoutError in inline wait_for loops emits an SSE error event."""
+
+    def test_release_notes_timeout_emits_error_sse(self):
+        mock_commits = [
+            {"sha": "abc1234567890", "commit": {"message": "feat: auth", "author": {"name": "A", "date": "2026-01-01"}}}
+        ]
+        with patch("requests.get") as mock_get, \
+             patch("main.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = mock_commits
+            r = client.post("/api/repo/release-notes", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "token": "tok",
+                "owner": "user",
+                "repo": "myrepo",
+            })
+        assert r.status_code == 200
+        assert "timed out" in r.text
+
+    def test_generate_readme_timeout_emits_error_sse(self):
+        with patch("main.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+            r = client.post("/api/repo/generate-readme", json={
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+                "file_context": "main.py\n\ndef main(): pass",
+            })
+        assert r.status_code == 200
+        assert "timed out" in r.text
+
+    def test_scan_deps_timeout_emits_error_sse(self):
+        with patch("requests.get") as mock_get, \
+             patch("main.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"info": {"version": "2.0.0"}}
+            r = client.post("/api/repo/scan-deps", json={
+                "filename": "requirements.txt",
+                "content": "fastapi==0.100.0",
+                "provider": "anthropic",
+                "anthropic_key": "sk-test",
+            })
+        assert r.status_code == 200
+        assert "timed out" in r.text
+
+
+# ---------------------------------------------------------------------------
+# Cycle 67: chat_stream SSRF guard for openai_compat_base_url
+# ---------------------------------------------------------------------------
+
+class TestChatStreamOpenAICompatSSRF:
+    def test_single_stream_rejects_file_scheme_base_url(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "openai_compat",
+            "openai_compat_base_url": "file:///etc/passwd",
+            "openai_compat_model": "llama3",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_single_stream_rejects_gopher_scheme_base_url(self):
+        r = client.post("/api/chat/stream", json={
+            "provider": "openai_compat",
+            "openai_compat_base_url": "gopher://evil/exploit",
+            "openai_compat_model": "llama3",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
+
+    def test_multi_agent_rejects_file_scheme_base_url(self):
+        # chat_stream calls get_runner(body) before starting the generator,
+        # so ValueError from invalid URL is caught and returned as 400 JSON
+        r = client.post("/api/chat/stream", json={
+            "provider": "openai_compat",
+            "openai_compat_base_url": "file:///etc/shadow",
+            "openai_compat_model": "llama3",
+            "messages": [{"role": "user", "content": "build it"}],
+            "multi_agent": True,
+        })
+        assert r.status_code == 400
+        assert "error" in r.json()
