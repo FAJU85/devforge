@@ -801,41 +801,58 @@ class BatchWriteBody(BaseModel):
 @app.post("/api/repo/write/batch")
 async def repo_write_batch(body: BatchWriteBody):
     """Commit multiple files to the repository, reporting per-file results."""
-    committed, errors = [], []
-    for item in body.files:
+
+    def write_file(item):
         sha = None
-        existing = requests.get(
-            f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
-            headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
-        )
-        if existing.ok:
-            try:
+        try:
+            existing = requests.get(
+                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+                headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
+            )
+            if existing.ok:
                 sha = existing.json().get("sha")
-            except Exception:
-                pass
-        payload: dict = {
+        except Exception:
+            pass
+
+        payload = {
             "message": item.message,
             "content": base64.b64encode(item.content.encode("utf-8")).decode("utf-8"),
             "branch": body.branch,
         }
         if sha:
             payload["sha"] = sha
-        w = requests.put(
-            f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
-            headers=gh_hdrs(body.token), json=payload, timeout=15,
-        )
-        if w.ok:
-            data = w.json()
-            committed.append({
-                "path": item.path,
-                "commit_url": data.get("commit", {}).get("html_url", ""),
-            })
-        else:
+
+        try:
+            w = requests.put(
+                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+                headers=gh_hdrs(body.token), json=payload, timeout=15,
+            )
+            if w.ok:
+                data = w.json()
+                return ("ok", {"path": item.path, "commit_url": data.get("commit", {}).get("html_url", "")})
+            else:
+                try:
+                    err_msg = w.json().get("message", "Write failed")
+                except Exception:
+                    err_msg = "Write failed"
+                return ("error", {"path": item.path, "error": err_msg})
+        except Exception as e:
+            return ("error", {"path": item.path, "error": str(e)})
+
+    committed, errors = [], []
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        futures = {ex.submit(write_file, item): item for item in body.files}
+        for future in _futs_done(futures, timeout=60):
             try:
-                err_msg = w.json().get("message", "Write failed")
-            except Exception:
-                err_msg = "Write failed"
-            errors.append({"path": item.path, "error": err_msg})
+                status, result = future.result()
+                if status == "ok":
+                    committed.append(result)
+                else:
+                    errors.append(result)
+            except Exception as e:
+                item = futures[future]
+                errors.append({"path": item.path, "error": str(e)})
+
     return {"committed": committed, "errors": errors}
 
 
