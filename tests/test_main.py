@@ -2709,9 +2709,14 @@ class TestCodeScanEndpoint:
         assert any("eval" in p for p in patterns)
         assert any(i["severity"] == "high" for i in data["issues"])
 
-    def test_scan_large_input_is_truncated(self):
-        large_code = "x = 1\n" * 20_000  # ~120K chars
+    def test_scan_large_input_is_rejected(self):
+        large_code = "x = 1\n" * 20_000  # ~120K chars, exceeds 100K limit
         r = client.post("/api/code/scan", json={"code": large_code, "language": "python"})
+        assert r.status_code == 422
+
+    def test_scan_at_limit_is_accepted(self):
+        at_limit_code = "x = 1\n" * 16_000  # ~96K chars, within 100K limit
+        r = client.post("/api/code/scan", json={"code": at_limit_code, "language": "python"})
         assert r.status_code == 200
         assert "issues" in r.json()
 

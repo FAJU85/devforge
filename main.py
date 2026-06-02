@@ -381,7 +381,7 @@ async def github_auth_start():
     return JSONResponse(r.json(), status_code=200 if r.ok else 500)
 
 class DeviceCodeBody(BaseModel):
-    device_code: str
+    device_code: str = Field(max_length=100)
 
 @app.post("/api/github/auth/poll")
 async def github_auth_poll(body: DeviceCodeBody):
@@ -826,9 +826,9 @@ async def create_pr(body: PRBody):
 
 class PRDiffBody(BaseModel):
     token: str
-    owner: str
-    repo: str
-    pr_number: int
+    owner: str = Field(max_length=100)
+    repo: str = Field(max_length=100)
+    pr_number: int = Field(ge=1)
 
 @app.post("/api/github/pr/diff")
 async def get_pr_diff(body: PRDiffBody):
@@ -1192,8 +1192,8 @@ _DANGEROUS_ATTRS: dict = {
 
 
 class CodeScanBody(BaseModel):
-    code: str
-    language: str = "text"
+    code: str = Field(max_length=100_000)
+    language: str = Field(default="text", max_length=50)
 
 
 @app.post("/api/code/scan")
@@ -1567,17 +1567,17 @@ async def scan_deps(body: ScanDepsBody):
 
 
 class ToolDef(BaseModel):
-    name: str
-    description: str
-    url: str
-    method: str = "GET"
+    name: str = Field(max_length=100)
+    description: str = Field(max_length=1000)
+    url: str = Field(max_length=2000)
+    method: str = Field(default="GET", max_length=10)
     headers: Optional[dict] = {}
     input_schema: Optional[dict] = None
 
 
 class ToolCallBody(BaseModel):
-    url: str
-    method: str = "GET"
+    url: str = Field(max_length=2000)
+    method: str = Field(default="GET", max_length=10)
     headers: Optional[dict] = {}
     body_json: Optional[dict] = None
 
