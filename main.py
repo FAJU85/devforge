@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Query
 from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -431,6 +431,58 @@ def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
 
+async def _stream_ai_sse(body, system: str, user_prompt: str, max_tokens: int = 1024, timeout: int = 60):
+    """Async generator yielding SSE chunks for Anthropic (streaming) and Groq (chunked) providers.
+
+    Yields raw `data: ...\\n\\n` strings; caller should prepend any initial events (e.g. 'packages').
+    """
+    if body.provider == "anthropic" and body.anthropic_key:
+        q: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+        model = (getattr(body, 'anthropic_model', '') or 'claude-haiku-4-5-20251001').strip() or 'claude-haiku-4-5-20251001'
+
+        def _run():
+            try:
+                client = Anthropic(api_key=body.anthropic_key)
+                with client.messages.stream(model=model, max_tokens=max_tokens, system=system,
+                        messages=[{"role": "user", "content": user_prompt}]) as stream:
+                    for text in stream.text_stream:
+                        asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+                asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+            except Exception as e:
+                asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+
+        threading.Thread(target=_run, daemon=True).start()
+        while True:
+            try:
+                kind, val = await asyncio.wait_for(q.get(), timeout=timeout)
+            except asyncio.TimeoutError:
+                yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; return
+            if kind == "text":
+                yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
+            elif kind == "done":
+                break
+            else:
+                yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; return
+    elif body.provider == "groq" and body.groq_key:
+        r = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+            json={"model": getattr(body, 'groq_model', '') or "llama-3.3-70b-versatile", "max_tokens": max_tokens,
+                  "messages": [{"role": "system", "content": system},
+                               {"role": "user", "content": user_prompt}]},
+            timeout=max(30, timeout // 2),
+        )
+        if r.ok:
+            text = r.json()["choices"][0]["message"]["content"]
+            for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
+                yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
+        else:
+            yield f"data: {json.dumps({'t':'error','v':r.text[:200]})}\n\n"; return
+    else:
+        yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"; return
+    yield f"data: {json.dumps({'t':'done'})}\n\n"
+
 async def stream_one(runner, system: str, messages: list):
     q: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
@@ -662,6 +714,50 @@ class SuggestFilesBody(BaseModel):
     files: List[str]
     max_suggestions: int = Field(default=6, ge=1, le=20)
 
+def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> tuple[bool, str]:
+    """Call an AI provider with the given system prompt and user prompt.
+
+    Returns: (success: bool, result: str)
+    """
+    try:
+        if body.provider == "anthropic" and body.anthropic_key:
+            client = Anthropic(api_key=body.anthropic_key)
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=max_tokens,
+                system=system,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return True, msg.content[0].text if msg.content else ""
+        elif body.provider == "groq" and body.groq_key:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+                json={"model": body.groq_model or "llama-3.1-8b-instant", "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ], "max_tokens": max_tokens, "stream": False},
+                timeout=20,
+            )
+            return r.ok, r.json()["choices"][0]["message"]["content"] if r.ok else ""
+        elif body.provider == "openai_compat" and body.openai_compat_base_url:
+            if not _valid_http_url(body.openai_compat_base_url):
+                return False, "openai_compat_base_url must be http:// or https://"
+            url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
+            hdrs = {"Content-Type": "application/json"}
+            if body.openai_compat_key:
+                hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
+            r = requests.post(url, headers=hdrs, json={
+                "model": body.openai_compat_model or "llama3",
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                "max_tokens": max_tokens, "stream": False,
+            }, timeout=20)
+            return r.ok, r.json()["choices"][0]["message"]["content"] if r.ok else ""
+        else:
+            return False, "No usable provider configured"
+    except Exception as e:
+        return False, str(e)
+
 @app.post("/api/repo/suggest-files")
 async def suggest_files(body: SuggestFilesBody):
     """Use AI to suggest the most relevant files for a given task."""
@@ -675,44 +771,11 @@ async def suggest_files(body: SuggestFilesBody):
     )
     system = "You are a file relevance expert. Return only a valid JSON array of file paths."
 
-    result = ""
-    try:
-        if body.provider == "anthropic" and body.anthropic_key:
-            client = Anthropic(api_key=body.anthropic_key)
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=256,
-                system=system,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            result = msg.content[0].text if msg.content else "[]"
-        elif body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": body.groq_model or "llama-3.1-8b-instant", "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": prompt},
-                ], "max_tokens": 256, "stream": False},
-                timeout=20,
-            )
-            result = r.json()["choices"][0]["message"]["content"] if r.ok else "[]"
-        elif body.provider == "openai_compat" and body.openai_compat_base_url:
-            if not _valid_http_url(body.openai_compat_base_url):
-                return JSONResponse({"error": "openai_compat_base_url must be http:// or https://"}, status_code=400)
-            url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
-            hdrs = {"Content-Type": "application/json"}
-            if body.openai_compat_key:
-                hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
-            r = requests.post(url, headers=hdrs, json={
-                "model": body.openai_compat_model or "llama3",
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-                "max_tokens": 256, "stream": False,
-            }, timeout=20)
-            result = r.json()["choices"][0]["message"]["content"] if r.ok else "[]"
-        else:
-            return JSONResponse({"error": "No usable provider configured"}, status_code=400)
+    success, result = _call_ai_provider(body, system, prompt, max_tokens=256)
+    if not success:
+        return JSONResponse({"error": result}, status_code=400)
 
+    try:
         # Extract JSON array from result (strip any surrounding text)
         m = re.search(r'\[.*?\]', result, re.DOTALL)
         if not m:
@@ -743,47 +806,13 @@ async def summarize_file(body: SummarizeFileBody):
     """Condense a large file to a short AI-generated summary for context injection."""
     system = "You are a code summarizer. Produce a concise summary (under 400 words) of the file: its purpose, key exports/functions/classes, and important patterns. Be specific and technical."
     prompt = f"File: {body.filename}\n\n```\n{body.content[:8000]}\n```\n\nSummarize this file for AI context."
-    try:
-        if body.provider == "anthropic" and body.anthropic_key:
-            client = Anthropic(api_key=body.anthropic_key)
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=600,
-                system=system,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            result = msg.content[0].text if msg.content else ""
-        elif body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.1-8b-instant", "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": prompt},
-                ], "max_tokens": 600, "stream": False},
-                timeout=20,
-            )
-            result = r.json()["choices"][0]["message"]["content"] if r.ok else ""
-        elif body.provider == "openai_compat" and body.openai_compat_base_url:
-            if not _valid_http_url(body.openai_compat_base_url):
-                return JSONResponse({"error": "openai_compat_base_url must be http:// or https://"}, status_code=400)
-            url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
-            hdrs = {"Content-Type": "application/json"}
-            if body.openai_compat_key:
-                hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
-            r = requests.post(url, headers=hdrs, json={
-                "model": body.openai_compat_model or "llama3",
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-                "max_tokens": 600, "stream": False,
-            }, timeout=20)
-            result = r.json()["choices"][0]["message"]["content"] if r.ok else ""
-        else:
-            return JSONResponse({"error": "No usable provider configured"}, status_code=400)
-        if not result:
-            return JSONResponse({"error": "Empty summary returned"}, status_code=400)
-        return {"summary": result}
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+
+    success, result = _call_ai_provider(body, system, prompt, max_tokens=600)
+    if not success:
+        return JSONResponse({"error": result}, status_code=400)
+    if not result:
+        return JSONResponse({"error": "Empty summary returned"}, status_code=400)
+    return {"summary": result}
 
 
 class BatchWriteItem(BaseModel):
@@ -801,41 +830,58 @@ class BatchWriteBody(BaseModel):
 @app.post("/api/repo/write/batch")
 async def repo_write_batch(body: BatchWriteBody):
     """Commit multiple files to the repository, reporting per-file results."""
-    committed, errors = [], []
-    for item in body.files:
+
+    def write_file(item):
         sha = None
-        existing = requests.get(
-            f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
-            headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
-        )
-        if existing.ok:
-            try:
+        try:
+            existing = requests.get(
+                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+                headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
+            )
+            if existing.ok:
                 sha = existing.json().get("sha")
-            except Exception:
-                pass
-        payload: dict = {
+        except Exception:
+            pass
+
+        payload = {
             "message": item.message,
             "content": base64.b64encode(item.content.encode("utf-8")).decode("utf-8"),
             "branch": body.branch,
         }
         if sha:
             payload["sha"] = sha
-        w = requests.put(
-            f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
-            headers=gh_hdrs(body.token), json=payload, timeout=15,
-        )
-        if w.ok:
-            data = w.json()
-            committed.append({
-                "path": item.path,
-                "commit_url": data.get("commit", {}).get("html_url", ""),
-            })
-        else:
+
+        try:
+            w = requests.put(
+                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+                headers=gh_hdrs(body.token), json=payload, timeout=15,
+            )
+            if w.ok:
+                data = w.json()
+                return ("ok", {"path": item.path, "commit_url": data.get("commit", {}).get("html_url", "")})
+            else:
+                try:
+                    err_msg = w.json().get("message", "Write failed")
+                except Exception:
+                    err_msg = "Write failed"
+                return ("error", {"path": item.path, "error": err_msg})
+        except Exception as e:
+            return ("error", {"path": item.path, "error": str(e)})
+
+    committed, errors = [], []
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        futures = {ex.submit(write_file, item): item for item in body.files}
+        for future in _futs_done(futures, timeout=60):
             try:
-                err_msg = w.json().get("message", "Write failed")
-            except Exception:
-                err_msg = "Write failed"
-            errors.append({"path": item.path, "error": err_msg})
+                status, result = future.result()
+                if status == "ok":
+                    committed.append(result)
+                else:
+                    errors.append(result)
+            except Exception as e:
+                item = futures[future]
+                errors.append({"path": item.path, "error": str(e)})
+
     return {"committed": committed, "errors": errors}
 
 
@@ -1140,56 +1186,10 @@ async def generate_release_notes(body: ReleaseNotesBody):
         f"Repository: {body.owner}/{body.repo}\n"
         f"Commits ({len(all_commits)} total):\n{commit_list}"
     )
-    model = (body.anthropic_model or "claude-sonnet-4-6").strip() or "claude-sonnet-4-6"
-
-    async def _stream():
-        if body.provider == "anthropic" and body.anthropic_key:
-            q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_running_loop()
-            def _run():
-                try:
-                    client = Anthropic(api_key=body.anthropic_key)
-                    with client.messages.stream(
-                        model=model, max_tokens=1024, system=RELEASE_NOTES_SYSTEM,
-                        messages=[{"role": "user", "content": user_prompt}],
-                    ) as stream:
-                        for text in stream.text_stream:
-                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
-                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
-                except Exception as e:
-                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
-            threading.Thread(target=_run, daemon=True).start()
-            while True:
-                try:
-                    kind, val = await asyncio.wait_for(q.get(), timeout=60)
-                except asyncio.TimeoutError:
-                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
-                if kind == "text":
-                    yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
-                elif kind == "done":
-                    break
-                else:
-                    yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
-        elif body.provider == "groq" and body.groq_key:
-            r2 = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.3-70b-versatile", "max_tokens": 1024,
-                      "messages": [{"role": "system", "content": RELEASE_NOTES_SYSTEM},
-                                   {"role": "user", "content": user_prompt}]},
-                timeout=30,
-            )
-            if r2.ok:
-                text = r2.json()["choices"][0]["message"]["content"]
-                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
-                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
-            else:
-                yield f"data: {json.dumps({'t':'error','v':r2.text[:200]})}\n\n"
-        else:
-            yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"
-        yield f"data: {json.dumps({'t':'done'})}\n\n"
-
-    return StreamingResponse(_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        _stream_ai_sse(body, RELEASE_NOTES_SYSTEM, user_prompt, max_tokens=1024, timeout=60),
+        media_type="text/event-stream",
+    )
 
 
 COMMIT_MSG_SYSTEM = (
@@ -1202,7 +1202,10 @@ class CommitMsgBody(BaseModel):
     provider: str = "anthropic"
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
-    hf_token: Optional[str] = ""
+    groq_model: Optional[str] = ""
+    openai_compat_key: Optional[str] = ""
+    openai_compat_base_url: Optional[str] = ""
+    openai_compat_model: Optional[str] = ""
     path: str = Field(max_length=1000)
     content: Optional[str] = Field(default="", max_length=50_000)
     diff: Optional[str] = Field(default="", max_length=50_000)
@@ -1213,28 +1216,10 @@ async def suggest_commit_message(body: CommitMsgBody):
     try:
         snippet = (body.diff or body.content or "")[:2000]
         user_prompt = f"File: {body.path}\n\n{snippet}"
-        if body.provider == "anthropic" and body.anthropic_key:
-            client = Anthropic(api_key=body.anthropic_key)
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001", max_tokens=80,
-                system=COMMIT_MSG_SYSTEM,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
-            return {"message": msg.content[0].text.strip()}
-        elif body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.1-8b-instant", "max_tokens": 80,
-                      "messages": [{"role": "system", "content": COMMIT_MSG_SYSTEM},
-                                   {"role": "user", "content": user_prompt}]},
-                timeout=15,
-            )
-            if not r.ok:
-                return JSONResponse({"error": r.text[:200]}, status_code=400)
-            return {"message": r.json()["choices"][0]["message"]["content"].strip()}
-        else:
-            return JSONResponse({"error": "no provider key"}, status_code=400)
+        success, result = _call_ai_provider(body, COMMIT_MSG_SYSTEM, user_prompt, max_tokens=80)
+        if not success:
+            return JSONResponse({"error": result}, status_code=400)
+        return {"message": result.strip()}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -1388,56 +1373,10 @@ async def generate_readme(body: ReadmeBody):
         f"Repository: {body.repo_name or 'Unknown'}\n\n"
         f"Files:\n{body.file_context[:12000]}"
     )
-    model = (body.anthropic_model or "claude-sonnet-4-6").strip() or "claude-sonnet-4-6"
-
-    async def _stream():
-        if body.provider == "anthropic" and body.anthropic_key:
-            q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_running_loop()
-            def _run():
-                try:
-                    client = Anthropic(api_key=body.anthropic_key)
-                    with client.messages.stream(
-                        model=model, max_tokens=2048, system=README_SYSTEM,
-                        messages=[{"role": "user", "content": user_prompt}],
-                    ) as stream:
-                        for text in stream.text_stream:
-                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
-                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
-                except Exception as e:
-                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
-            threading.Thread(target=_run, daemon=True).start()
-            while True:
-                try:
-                    kind, val = await asyncio.wait_for(q.get(), timeout=90)
-                except asyncio.TimeoutError:
-                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
-                if kind == "text":
-                    yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
-                elif kind == "done":
-                    break
-                else:
-                    yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
-        elif body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.3-70b-versatile", "max_tokens": 2048,
-                      "messages": [{"role": "system", "content": README_SYSTEM},
-                                   {"role": "user", "content": user_prompt}]},
-                timeout=45,
-            )
-            if r.ok:
-                text = r.json()["choices"][0]["message"]["content"]
-                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
-                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
-            else:
-                yield f"data: {json.dumps({'t':'error','v':r.text[:200]})}\n\n"
-        else:
-            yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"
-        yield f"data: {json.dumps({'t':'done'})}\n\n"
-
-    return StreamingResponse(_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        _stream_ai_sse(body, README_SYSTEM, user_prompt, max_tokens=2048, timeout=90),
+        media_type="text/event-stream",
+    )
 
 
 DEPS_AUDIT_SYSTEM = (
@@ -1634,44 +1573,8 @@ async def scan_deps(body: ScanDepsBody):
 
     async def _stream():
         yield f"data: {json.dumps({'t':'packages','v':{'ecosystem':ecosystem,'packages':pkg_results}})}\n\n"
-        if body.provider == "anthropic" and body.anthropic_key:
-            q: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_running_loop()
-            model = (body.anthropic_model or "claude-haiku-4-5-20251001").strip() or "claude-haiku-4-5-20251001"
-            def _run():
-                try:
-                    client = Anthropic(api_key=body.anthropic_key)
-                    with client.messages.stream(model=model, max_tokens=1024, system=DEPS_AUDIT_SYSTEM,
-                            messages=[{"role": "user", "content": ai_prompt}]) as stream:
-                        for text in stream.text_stream:
-                            asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
-                    asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
-                except Exception as e:
-                    asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
-            threading.Thread(target=_run, daemon=True).start()
-            while True:
-                try:
-                    kind, val = await asyncio.wait_for(q.get(), timeout=60)
-                except asyncio.TimeoutError:
-                    yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; break
-                if kind == "text": yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
-                elif kind == "done": break
-                else: yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; break
-        elif body.provider == "groq" and body.groq_key:
-            r2 = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.3-70b-versatile", "max_tokens": 1024,
-                      "messages": [{"role": "system", "content": DEPS_AUDIT_SYSTEM},
-                                   {"role": "user", "content": ai_prompt}]}, timeout=30)
-            if r2.ok:
-                text = r2.json()["choices"][0]["message"]["content"]
-                for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
-                    yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
-            else:
-                yield f"data: {json.dumps({'t':'error','v':r2.text[:200]})}\n\n"
-        else:
-            yield f"data: {json.dumps({'t':'error','v':'No provider key for AI analysis'})}\n\n"
-        yield f"data: {json.dumps({'t':'done'})}\n\n"
+        async for chunk in _stream_ai_sse(body, DEPS_AUDIT_SYSTEM, ai_prompt, max_tokens=1024, timeout=60):
+            yield chunk
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
 
@@ -1723,6 +1626,10 @@ class PromptEnhanceBody(BaseModel):
     provider: str = "anthropic"
     anthropic_key: Optional[str] = ""
     groq_key: Optional[str] = ""
+    groq_model: Optional[str] = ""
+    openai_compat_key: Optional[str] = ""
+    openai_compat_base_url: Optional[str] = ""
+    openai_compat_model: Optional[str] = ""
     hf_token: Optional[str] = ""
     prompt: str = Field(max_length=4000)
 
@@ -1733,26 +1640,11 @@ async def enhance_prompt(body: PromptEnhanceBody):
         p = (body.prompt or "").strip()
         if not p:
             return JSONResponse({"error": "prompt required"}, status_code=400)
-        if body.provider == "anthropic" and body.anthropic_key:
-            client = Anthropic(api_key=body.anthropic_key)
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001", max_tokens=512,
-                system=ENHANCE_SYSTEM,
-                messages=[{"role": "user", "content": p}],
-            )
-            enhanced = msg.content[0].text.strip()
-        elif body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.1-8b-instant", "max_tokens": 512,
-                      "messages": [{"role": "system", "content": ENHANCE_SYSTEM},
-                                   {"role": "user", "content": p}]},
-                timeout=20,
-            )
-            if not r.ok:
-                return JSONResponse({"error": r.text[:200]}, status_code=400)
-            enhanced = r.json()["choices"][0]["message"]["content"].strip()
+        if body.provider in ("anthropic", "groq", "openai_compat"):
+            success, result = _call_ai_provider(body, ENHANCE_SYSTEM, p, max_tokens=512)
+            if not success:
+                return JSONResponse({"error": result}, status_code=400)
+            return {"enhanced": result.strip()}
         else:
             token = (body.hf_token or "").strip() or HF_TOKEN
             if not token:
@@ -1763,8 +1655,7 @@ async def enhance_prompt(body: PromptEnhanceBody):
                 messages=[{"role": "system", "content": ENHANCE_SYSTEM},
                            {"role": "user", "content": p}],
             )
-            enhanced = result.choices[0].message.content.strip()
-        return {"enhanced": enhanced}
+            return {"enhanced": result.choices[0].message.content.strip()}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
