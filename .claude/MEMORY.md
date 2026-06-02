@@ -1,5 +1,5 @@
 # DevForge — Orchestrator Memory
-> Last updated: 2026-06-02 (cycle 65) | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
+> Last updated: 2026-06-02 (cycle 69) | Branch: claude/exciting-galileo-7UDWc | Governance: WIKI 1.2.0 / PROTOCOL 1.1.0 / PLAYBOOK 1.1.0 / GLOSSARY 1.0.0
 
 ## Project Identity
 - **Name:** DevForge
@@ -15,10 +15,25 @@ devforge/
 ├── main.py                  # FastAPI backend (Python 3.11)
 ├── static/index.html        # Single-file frontend (HTML + CSS + JS)
 ├── requirements.txt         # Full pip-compile lock file (exact pins + SHA-256)
-├── Dockerfile               # python:3.11-slim, EXPOSE 7860
+├── Dockerfile               # python:3.11-slim, EXPOSE 7860; installs control_plane/requirements.txt
 ├── tests/
 │   ├── __init__.py
-│   └── test_main.py         # 282 tests
+│   └── test_main.py         # 331 tests
+├── control_plane/           # LangGraph + Pinecone orchestration layer
+│   ├── graph.py             # StateGraph: retrieve→reasoning→execution→synthesis
+│   ├── state.py             # AgentState TypedDict
+│   ├── config.py            # ANTHROPIC_API_KEY, PINECONE_API_KEY, GO_DATA_PLANE_URL
+│   ├── nodes/{retrieve,reasoning,execution,synthesis}.py
+│   ├── memory/pinecone_client.py  # query_context() + upsert_text()
+│   ├── schemas/tool_schemas.py    # BatchRequestSchema, BatchResponseSchema
+│   ├── agent/main.py        # CLI entry point
+│   ├── requirements.txt     # langgraph, langchain-anthropic, pinecone, httpx
+│   └── tests/               # 60 tests
+├── data_plane/              # Go Gin microservice (port 8080)
+│   ├── main.go              # /health + /tools/execute
+│   └── internal/
+│       ├── tools/{handler,dispatcher,registry}.go
+│       └── executor/{types,http_fetch,ping}.go
 └── .github/workflows/
     ├── sync-to-hf.yml
     └── sync-from-hf.yml
@@ -27,9 +42,12 @@ devforge/
 ## Stack
 - **Backend:** Python 3.11 / FastAPI / Uvicorn
 - **Frontend:** Single HTML file (Vanilla JS, marked.js, highlight.js)
-- **AI Providers:** Anthropic Claude, Groq, HuggingFace Inference API, OpenAI-compat
+- **AI Providers:** Anthropic Claude, Groq, HuggingFace Inference API, OpenAI-compat, AirLLM (local)
 - **Auth:** GitHub OAuth Device Flow (GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET env vars)
 - **HF Token:** HF_TOKEN env var (optional)
+- **Control Plane:** LangGraph 0.2+ / LangChain-Anthropic / Pinecone v5
+- **Data Plane:** Go 1.21 / Gin 1.9 microservice (port 8080); http_fetch + ping executors
+- **Infrastructure env vars:** PINECONE_API_KEY, PINECONE_INDEX, GO_DATA_PLANE_URL, GO_CALL_TIMEOUT
 
 ## Features Implemented (Cycles 1-24 Complete)
 - [x] GitHub OAuth one-click (Device Flow)
@@ -350,7 +368,30 @@ conservativeMode: false
 | Frontend | File tree search (live filter); AI Suggest button; streaming timer; keyboard shortcuts |
 | Tests | 5 new tests (TestSuggestFiles); 124 total |
 
+## Cycle 69 Summary (2026-06-02) — Project Infrastructure Integration
+| Area | Change |
+|---|---|
+| Backend | `/api/agent/run` SSE endpoint: streams LangGraph pipeline (retrieve→reasoning→execution→synthesis) |
+| Backend | `/api/memory/query` POST: RAG query against Pinecone (q, top_k 1-20) |
+| Backend | `/api/memory/upsert` POST: embed+store text in Pinecone with optional metadata |
+| Backend | `/api/tools/dispatch` POST: async proxy BatchRequest → Go data-plane /tools/execute |
+| Backend | `control_plane/memory/pinecone_client.py`: added `upsert_text(text, metadata, namespace)` |
+| Backend | `main.py`: lazy control-plane import (try/except Exception → stubs when unavailable) |
+| Dockerfile | Install `control_plane/requirements.txt` after `COPY . .` (|| true so build never fails) |
+| Frontend | Collapsible "🤖 Agent Pipeline" sidebar section: task textarea, ▶ Run button, SSE progress display |
+| Tests | 331 total (29 new: TestAgentRunEndpoint×8, TestMemoryQueryEndpoint×7, TestMemoryUpsertEndpoint×6, TestToolsDispatchEndpoint×7, TestUpsertText×7 in control_plane) |
+
+## Cycle 67-68 Summary (2026-06-02) — AirLLM + Security/Timeout hardening
+| Area | Change |
+|---|---|
+| Backend | AirLLM provider: _run_airllm(), _airllm_cache, get_runner("airllm"), _PROV_LABEL update |
+| Backend | asyncio.TimeoutError guards in release_notes, generate_readme, scan_deps inline loops |
+| Backend | Field max_length on BatchWriteBody.files, IssueBody.labels, ChatBody.messages/skills/tools |
+| Frontend | AirLLM panel + provider button + multi-agent stage selectors |
+| Dockerfile | pip install airllm || true |
+| Tests | 302→331 total |
+
 ## Git State
 - Branch: claude/exciting-galileo-7UDWc
-- Last commit: ae25c8d — Cycle 52: tfn() data-path/data-size + 264 tests
+- Last commit: a9f6532 — feat: wire LangGraph + Pinecone + Go data-plane into DevForge
 - Remote: origin/claude/exciting-galileo-7UDWc ✓ tracked
