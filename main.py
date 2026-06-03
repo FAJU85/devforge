@@ -597,8 +597,8 @@ async def github_repos(body: TokenBody):
         repos.extend(data)
         if len(data) < 100: break
         page += 1
-    return [{"full_name": r["full_name"], "name": r["name"], "description": r.get("description") or "",
-             "private": r["private"], "language": r.get("language") or ""} for r in repos]
+    return [{"full_name": r.get("full_name", ""), "name": r.get("name", ""), "description": r.get("description") or "",
+             "private": r.get("private", False), "language": r.get("language") or ""} for r in repos]
 
 def parse_gh_url(url: str) -> "tuple[str | None, str | None]":
     """Extract GitHub owner and repo name from a URL or 'owner/repo' shorthand.
@@ -654,7 +654,7 @@ async def list_branches(token: str = Query(..., min_length=1, max_length=500), o
     )
     if not r.ok:
         return JSONResponse({"error": "Failed to fetch branches"}, status_code=400)
-    return [{"name": b["name"], "sha": (b.get("commit") or {}).get("sha", "")[:7]} for b in r.json()]
+    return [{"name": b.get("name", ""), "sha": (b.get("commit") or {}).get("sha", "")[:7]} for b in r.json()]
 
 
 @app.post("/api/repo/connect")

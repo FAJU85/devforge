@@ -1304,6 +1304,40 @@ class TestSuggestFiles:
         assert resp.status_code in (200, 400)
 
 
+class TestCallAiProviderEmptyChoices:
+    """_call_ai_provider must not raise on empty or missing choices array."""
+
+    def test_groq_empty_choices_returns_empty_string(self):
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(ok=True, json=lambda: {"choices": []})
+            body = MagicMock(provider="groq", groq_key="k", groq_model="m")
+            ok, result = main._call_ai_provider(body, "sys", "prompt")
+        assert ok is True
+        assert result == ""
+
+    def test_groq_missing_choices_key_returns_empty_string(self):
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(ok=True, json=lambda: {"error": "overloaded"})
+            body = MagicMock(provider="groq", groq_key="k", groq_model="m")
+            ok, result = main._call_ai_provider(body, "sys", "prompt")
+        assert ok is True
+        assert result == ""
+
+    def test_openai_compat_empty_choices_returns_empty_string(self):
+        with patch("main.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(ok=True, json=lambda: {"choices": []})
+            body = MagicMock(
+                provider="openai_compat",
+                openai_compat_base_url="http://localhost:11434/v1",
+                openai_compat_key="",
+                openai_compat_model="llama3",
+            )
+            with patch("main._valid_http_url", return_value=True):
+                ok, result = main._call_ai_provider(body, "sys", "prompt")
+        assert ok is True
+        assert result == ""
+
+
 class TestFourStagePipeline:
     def test_chatbody_has_test_stage_fields(self):
         body = _body(ma_include_test_stage=True, ma_test_provider="groq")
