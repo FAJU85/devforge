@@ -1185,7 +1185,7 @@ async def generate_release_notes(body: ReleaseNotesBody):
         since_sha = body.since
         # Also handle tags — resolve to SHA
         tag_r = requests.get(
-            f"{_gh_base(body.owner, body.repo)}/git/refs/tags/{since_sha}",
+            f"{_gh_base(body.owner, body.repo)}/git/refs/tags/{_urlquote(since_sha, safe='')}",
             headers=gh_hdrs(body.token), timeout=10,
         )
         if tag_r.ok:
