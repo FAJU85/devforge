@@ -353,15 +353,31 @@ pre::-webkit-scrollbar{height:4px}
 /* Mobile overlay backdrop */
 .mob-overlay{display:none;position:fixed;inset:0;background:#0004;z-index:999;cursor:pointer}
 .mob-overlay.show{display:block}
-/* Settings Panel */
-.settings-panel{position:fixed;top:52px;left:0;bottom:0;width:280px;background:var(--sidebar);border-right:1px solid var(--border2);display:flex;flex-direction:column;overflow:hidden;z-index:200;animation:slideInLeft .25s ease;box-shadow:4px 0 28px #0007}
-.settings-backdrop{display:none;position:fixed;inset:0;background:#0005;z-index:199;cursor:pointer}
-@keyframes slideInLeft{from{transform:translateX(-100%)}to{transform:translateX(0)}}
-.settings-head{height:48px;padding:12px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;font-size:13px}
-.settings-body{flex:1;overflow-y:auto;padding:0 16px}
-.settings-body .prov-row{margin:0;padding:0}
-.settings-body .flabel{margin-bottom:4px}
-.settings-body .side-textarea{margin:0;width:calc(100% + 32px);margin-left:-16px;margin-right:-16px;padding:8px 16px;border-radius:0;border-left:none;border-right:none}
+/* Sidebar tab nav */
+.s-tabs{display:flex;gap:2px}
+.s-tab{background:none;border:none;color:var(--muted2);cursor:pointer;border-radius:6px;width:30px;height:28px;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.s-tab:hover{background:var(--hover);color:var(--text)}
+.s-tab.on{background:var(--panel2);color:var(--text)}
+/* Sidebar panels */
+.s-panel{flex:1;overflow-y:auto;padding:4px 0 16px;display:flex;flex-direction:column;min-height:0}
+.s-panel.hidden{display:none!important}
+/* Skill list */
+.skill-list{display:flex;flex-direction:column;padding:0 10px 6px}
+.skill-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;transition:background .1s;cursor:pointer}
+.skill-row:hover{background:var(--hover)}
+.skill-row.on{background:var(--accent-dim)}
+.skill-row-info{flex:1;min-width:0}
+.skill-row-name{font-size:12px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:5px}
+.skill-row-desc{font-size:10px;color:var(--muted2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Config/Tools section header */
+.cfg-hdr{font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:10px 10px 6px;display:flex;align-items:center;justify-content:space-between}
+/* Tools action grid */
+.tools-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 10px 8px}
+.tools-btn{background:var(--panel);border:1px solid var(--border2);color:var(--muted);cursor:pointer;padding:8px 6px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s;text-align:center;line-height:1.5}
+.tools-btn:hover{background:var(--hover2);color:var(--text);border-color:var(--border)}
+/* Topbar model badge */
+.topbar-model{background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:all .15s;flex-shrink:0;line-height:1.4}
+.topbar-model:hover{border-color:var(--accent-border);color:var(--accent2)}
 /* Hide token counter by default, show on hover */
 #stat-pill{opacity:.4;transition:opacity .2s}
 .topbar:hover #stat-pill{opacity:1}
@@ -382,8 +398,6 @@ pre::-webkit-scrollbar{height:4px}
   .empty-sub{font-size:12px;max-width:280px}
   .modal-overlay{padding:0;align-items:flex-end}
   .modal{border-radius:16px 16px 0 0!important;max-width:100%!important;max-height:92vh;overflow-y:auto}
-  .settings-panel{top:0;width:100%;max-width:100%;border-right:none;border-bottom:1px solid var(--border2)}
-  .settings-backdrop{display:block}
 }
 </style>
 </head>
@@ -393,9 +407,15 @@ pre::-webkit-scrollbar{height:4px}
 <aside class="sidebar" id="sidebar" aria-label="Navigation sidebar">
   <div class="s-head">
     <div class="s-logo"><div class="s-mark" aria-hidden="true">⚡</div><div class="s-name">DevForge</div></div>
+    <div class="s-tabs">
+      <button class="s-tab on" id="stab-files" onclick="setSideTab('files')" title="Files &amp; Repos">📁</button>
+      <button class="s-tab" id="stab-config" onclick="setSideTab('config')" title="AI Config &amp; Skills">⚙️</button>
+      <button class="s-tab" id="stab-tools" onclick="setSideTab('tools')" title="Tools &amp; Actions">🔧</button>
+    </div>
     <button class="s-coll" onclick="collSidebar()" aria-label="Collapse sidebar">‹</button>
   </div>
-  <div class="s-body">
+  <!-- ── Panel: Files & Repos ──────────────────────────────────────────── -->
+  <div id="spanel-files" class="s-panel">
     <div class="s-sec" style="padding:8px 0"><div class="theme-sw"><button class="ts" id="ts-light" onclick="setTheme('light')">☀️ Light</button><button class="ts on" id="ts-dark" onclick="setTheme('dark')">🌙 Dark</button></div></div>
     <div class="s-sec">
       <div class="s-lbl" onclick="toggleSec(this)">GitHub <span class="s-arr">▼</span></div>
@@ -447,169 +467,146 @@ pre::-webkit-scrollbar{height:4px}
     </div>
     <div class="s-sec">
       <div style="padding:0 10px 8px;display:flex;align-items:center;gap:6px">
-        <div class="model-pill" id="sidebar-model-pill" onclick="openSettings()" title="Click to change model" style="flex:1;cursor:pointer;background:var(--input-bg);border:1px solid var(--border2)">claude-sonnet-4</div>
-        <button onclick="openSettings()" title="Settings" aria-label="Open settings" style="background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;border-radius:6px;padding:6px 8px;font-size:14px;transition:all .15s">⚙️</button>
-      </div>
+        <div class="model-pill" id="sidebar-model-pill" onclick="setSideTab('config')" title="Click to change model" style="flex:1;cursor:pointer;background:var(--input-bg);border:1px solid var(--border2)">claude-sonnet-4</div>
+        <button onclick="setSideTab('config')" title="AI Config" aria-label="Open AI config" style="background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;border-radius:6px;padding:6px 8px;font-size:14px;transition:all .15s">⚙️</button>
       </div>
     </div>
   </div>
-  <!-- Settings backdrop (tap to close on mobile) -->
-  <div class="settings-backdrop" id="settings-backdrop" onclick="closeSettings()"></div>
-  <!-- Settings Panel (hidden, shown on gear icon click) -->
-  <div id="settings-panel" class="settings-panel" role="dialog" aria-modal="true" aria-label="Settings" style="display:none">
-    <div class="settings-head">
-      <span style="font-weight:600" aria-hidden="true">⚙️ Settings</span>
-      <button onclick="closeSettings()" aria-label="Close settings" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0">✕</button>
+  <!-- ── Panel: AI Config ──────────────────────────────────────────────── -->
+  <div id="spanel-config" class="s-panel hidden">
+    <div class="cfg-hdr">Provider</div>
+    <div style="padding:0 10px 8px">
+      <div class="prov-row" role="radiogroup" aria-label="AI provider">
+        <button class="prov-btn on" role="radio" aria-checked="true" id="pa" onclick="setProv('anthropic')">Claude</button>
+        <button class="prov-btn" role="radio" aria-checked="false" id="pg" onclick="setProv('groq')">⚡ Groq</button>
+        <button class="prov-btn" role="radio" aria-checked="false" id="ph" onclick="setProv('hf')">🤗 HF</button>
+        <button class="prov-btn" role="radio" aria-checked="false" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
+        <button class="prov-btn" role="radio" aria-checked="false" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
+      </div>
+      <div id="pf-a" style="flex-direction:column;margin-top:8px">
+        <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" oninput="saveEnhance()"></div>
+        <div class="model-selector" role="radiogroup" aria-label="Claude model">
+          <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
+          <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
+          <button class="msel-btn" role="radio" aria-checked="false" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent — for complex architecture">🧠<br>Opus</button>
+        </div>
+        <div class="think-opts" id="think-opts">
+          <div class="ma-row"><div><div class="ma-label" style="font-size:12px">Extended Thinking</div><div class="ma-sub">Opus reasons before answering</div></div><div><input type="checkbox" id="think-toggle" class="toggle-input" onchange="saveEnhance()"><label for="think-toggle" class="toggle-label"></label></div></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:0 2px"><span class="flabel" style="flex:1;margin:0">Budget tokens</span><select class="finput" id="think-budget" style="width:110px;padding:3px 6px" onchange="saveEnhance()"><option value="2000">2K (fast)</option><option value="4000">4K</option><option value="8000">8K (deep)</option><option value="16000">16K (max)</option></select></div>
+        </div>
+      </div>
+      <div id="pf-g" style="display:none;margin-top:8px">
+        <div class="prov-note green">✓ <strong>Free tier</strong> — <a href="https://console.groq.com" target="_blank">console.groq.com</a></div>
+        <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off" aria-label="Groq API key"></div>
+        <div><div class="flabel">Model</div><select class="finput" id="gm" aria-label="Groq model" onchange="updBadge()"><option value="llama-3.3-70b-versatile">Llama 3.3 70B — Best</option><option value="llama-3.1-8b-instant">Llama 3.1 8B — Fast</option><option value="mixtral-8x7b-32768">Mixtral 8x7B</option><option value="gemma2-9b-it">Gemma 2 9B</option><option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B</option><option value="qwen-qwq-32b">Qwen QwQ 32B</option></select></div></div>
+      </div>
+      <div id="pf-h" style="display:none;margin-top:8px">
+        <div class="prov-note green">✓ <strong>Token pre-configured</strong> — HF_TOKEN set via Space secrets.</div>
+        <div id="hf-selected" class="hf-selected" style="display:none"><span>🤗</span><span class="hf-sel-name" id="hf-sel-name">—</span><button class="hf-sel-clear" onclick="clearModel()">✕</button></div>
+        <div id="hf-browser"><div class="search-wrap" style="padding:0 0 6px"><span class="search-icon">⌕</span><input class="search-in" id="model-search" placeholder="Search HF models…" oninput="debounceSearch(this.value)"></div><div class="list-scroll" id="model-list"><div class="list-msg">Search to browse models</div></div></div>
+      </div>
+      <div id="pf-o" style="display:none;margin-top:8px">
+        <div class="prov-note">OpenAI-compatible endpoint — quick-fill or enter manually:</div>
+        <div style="padding:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">
+          <button class="qfill-btn" onclick="fillEndpoint('vercel')">🌐 Vercel Gateway</button>
+          <button class="qfill-btn" onclick="fillEndpoint('openrouter')">🔄 OpenRouter</button>
+          <button class="qfill-btn" onclick="fillEndpoint('ollama')">🦙 Ollama</button>
+          <button class="qfill-btn" onclick="fillEndpoint('lmstudio')">🖥 LM Studio</button>
+        </div>
+        <div class="pfields">
+          <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" aria-label="OpenAI-compatible base URL" oninput="updBadge()"></div>
+          <div><div class="flabel">Model</div><input class="finput" id="oci-model" placeholder="llama3" autocomplete="off" aria-label="OpenAI-compatible model name" oninput="updBadge()"></div>
+          <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off" aria-label="OpenAI-compatible API key (optional)"></div>
+        </div>
+      </div>
+      <div id="pf-al" style="display:none;margin-top:8px">
+        <div class="prov-note">Run any HuggingFace model locally with minimal GPU memory — layers stream from disk to GPU via <strong>AirLLM</strong>. Requires <code>pip install airllm</code>.</div>
+        <div style="padding:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">
+          <button class="qfill-btn" onclick="fillAirLLM('meta-llama/Llama-2-7b-chat-hf')">🦙 Llama-2 7B</button>
+          <button class="qfill-btn" onclick="fillAirLLM('mistralai/Mistral-7B-Instruct-v0.2')">✨ Mistral 7B</button>
+          <button class="qfill-btn" onclick="fillAirLLM('Qwen/Qwen2.5-7B-Instruct')">🌟 Qwen2.5 7B</button>
+          <button class="qfill-btn" onclick="fillAirLLM('microsoft/Phi-3-mini-4k-instruct')">💡 Phi-3 Mini</button>
+        </div>
+        <div class="pfields">
+          <div><div class="flabel">HuggingFace Model ID</div><input class="finput" id="al-model" placeholder="meta-llama/Llama-2-7b-chat-hf" autocomplete="off" oninput="updBadge();saveEnhance()"></div>
+          <div><div class="flabel">Max new tokens</div><input class="finput" id="al-tokens" type="number" min="1" max="4096" value="512" oninput="saveEnhance()"></div>
+        </div>
+      </div>
     </div>
-    <div class="settings-body">
-      <!-- AI Provider Section -->
-      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">Provider</div>
-        <div class="prov-row" role="radiogroup" aria-label="AI provider">
-          <button class="prov-btn on" role="radio" aria-checked="true" id="pa" onclick="setProv('anthropic')">Claude</button>
-          <button class="prov-btn" role="radio" aria-checked="false" id="pg" onclick="setProv('groq')">⚡ Groq</button>
-          <button class="prov-btn" role="radio" aria-checked="false" id="ph" onclick="setProv('hf')">🤗 HF</button>
-          <button class="prov-btn" role="radio" aria-checked="false" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
-          <button class="prov-btn" role="radio" aria-checked="false" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
-        </div>
-        <!-- Provider-specific fields (hidden except when selected) -->
-        <div id="pf-a" style="flex-direction:column;margin-top:8px">
-          <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" oninput="saveEnhance()"></div>
-          <div class="model-selector" role="radiogroup" aria-label="Claude model">
-            <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
-            <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
-            <button class="msel-btn" role="radio" aria-checked="false" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent — for complex architecture">🧠<br>Opus</button>
-          </div>
-          <div class="think-opts" id="think-opts">
-            <div class="ma-row"><div><div class="ma-label" style="font-size:12px">Extended Thinking</div><div class="ma-sub">Opus reasons before answering</div></div><div><input type="checkbox" id="think-toggle" class="toggle-input" onchange="saveEnhance()"><label for="think-toggle" class="toggle-label"></label></div></div>
-            <div style="display:flex;align-items:center;gap:8px;padding:0 2px"><span class="flabel" style="flex:1;margin:0">Budget tokens</span><select class="finput" id="think-budget" style="width:110px;padding:3px 6px" onchange="saveEnhance()"><option value="2000">2K (fast)</option><option value="4000">4K</option><option value="8000">8K (deep)</option><option value="16000">16K (max)</option></select></div>
-          </div>
-        </div>
-        <div id="pf-g" style="display:none;margin-top:8px">
-          <div class="prov-note green">✓ <strong>Free tier</strong> — <a href="https://console.groq.com" target="_blank">console.groq.com</a></div>
-          <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off" aria-label="Groq API key"></div>
-          <div><div class="flabel">Model</div><select class="finput" id="gm" aria-label="Groq model" onchange="updBadge()"><option value="llama-3.3-70b-versatile">Llama 3.3 70B — Best</option><option value="llama-3.1-8b-instant">Llama 3.1 8B — Fast</option><option value="mixtral-8x7b-32768">Mixtral 8x7B</option><option value="gemma2-9b-it">Gemma 2 9B</option><option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B</option><option value="qwen-qwq-32b">Qwen QwQ 32B</option></select></div></div>
-        </div>
-        <div id="pf-h" style="display:none;margin-top:8px">
-          <div class="prov-note green">✓ <strong>Token pre-configured</strong> — HF_TOKEN set via Space secrets.</div>
-          <div id="hf-selected" class="hf-selected" style="display:none"><span>🤗</span><span class="hf-sel-name" id="hf-sel-name">—</span><button class="hf-sel-clear" onclick="clearModel()">✕</button></div>
-          <div id="hf-browser"><div class="search-wrap" style="padding:0 0 6px"><span class="search-icon">⌕</span><input class="search-in" id="model-search" placeholder="Search HF models…" oninput="debounceSearch(this.value)"></div><div class="list-scroll" id="model-list"><div class="list-msg">Search to browse models</div></div></div>
-        </div>
-        <div id="pf-o" style="display:none;margin-top:8px">
-          <div class="prov-note">OpenAI-compatible endpoint — quick-fill or enter manually:</div>
-          <div style="padding:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">
-            <button class="qfill-btn" onclick="fillEndpoint('vercel')">🌐 Vercel Gateway</button>
-            <button class="qfill-btn" onclick="fillEndpoint('openrouter')">🔄 OpenRouter</button>
-            <button class="qfill-btn" onclick="fillEndpoint('ollama')">🦙 Ollama</button>
-            <button class="qfill-btn" onclick="fillEndpoint('lmstudio')">🖥 LM Studio</button>
-          </div>
-          <div class="pfields">
-            <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" aria-label="OpenAI-compatible base URL" oninput="updBadge()"></div>
-            <div><div class="flabel">Model</div><input class="finput" id="oci-model" placeholder="llama3" autocomplete="off" aria-label="OpenAI-compatible model name" oninput="updBadge()"></div>
-            <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off" aria-label="OpenAI-compatible API key (optional)"></div>
-          </div>
-        </div>
-        <div id="pf-al" style="display:none;margin-top:8px">
-          <div class="prov-note">Run any HuggingFace model locally with minimal GPU memory — layers stream from disk to GPU via <strong>AirLLM</strong>. Requires <code>pip install airllm</code>.</div>
-          <div style="padding:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">
-            <button class="qfill-btn" onclick="fillAirLLM('meta-llama/Llama-2-7b-chat-hf')">🦙 Llama-2 7B</button>
-            <button class="qfill-btn" onclick="fillAirLLM('mistralai/Mistral-7B-Instruct-v0.2')">✨ Mistral 7B</button>
-            <button class="qfill-btn" onclick="fillAirLLM('Qwen/Qwen2.5-7B-Instruct')">🌟 Qwen2.5 7B</button>
-            <button class="qfill-btn" onclick="fillAirLLM('microsoft/Phi-3-mini-4k-instruct')">💡 Phi-3 Mini</button>
-          </div>
-          <div class="pfields">
-            <div><div class="flabel">HuggingFace Model ID</div><input class="finput" id="al-model" placeholder="meta-llama/Llama-2-7b-chat-hf" autocomplete="off" oninput="updBadge();saveEnhance()"></div>
-            <div><div class="flabel">Max new tokens</div><input class="finput" id="al-tokens" type="number" min="1" max="4096" value="512" oninput="saveEnhance()"></div>
-          </div>
-        </div>
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">Multi-Agent</div>
+    <div style="padding:0 10px 8px">
+      <div class="ma-row"><div><div class="ma-label">Pipeline Stages</div><div class="ma-sub">Plan → Code → Review</div></div><div><input type="checkbox" id="multi-agent" class="toggle-input" onchange="updBadge();$('ma-stages').style.display=this.checked?'block':'none'"><label for="multi-agent" class="toggle-label"></label></div></div>
+      <div id="ma-stages" style="display:none;padding:8px 0">
+        <div style="padding:0 0 6px;font-size:10px;color:var(--muted2)">Per-stage provider (optional):</div>
+        <div class="ma-stage-row"><div class="ma-stage-lbl">🗺️ Plan</div><select class="finput" id="ma-plan-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
+        <div class="ma-stage-row"><div class="ma-stage-lbl">⚙️ Code</div><select class="finput" id="ma-code-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
+        <div class="ma-stage-row"><div class="ma-stage-lbl">🔍 Review</div><select class="finput" id="ma-rev-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><input type="checkbox" id="ma-test-stage" class="toggle-input" onchange="onTestStageToggle()"><label for="ma-test-stage" class="toggle-label" style="flex-shrink:0"></label><div><div style="font-size:11px;color:var(--text)">🧪 Include Test stage</div></div></div>
+        <div class="ma-stage-row" id="ma-test-row" style="display:none"><div class="ma-stage-lbl">🧪 Test</div><select class="finput" id="ma-test-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
       </div>
-
-      <!-- Multi-Agent Pipeline -->
-      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">Multi-Agent</div>
-        <div class="ma-row"><div><div class="ma-label">Pipeline Stages</div><div class="ma-sub">Plan → Code → Review</div></div><div><input type="checkbox" id="multi-agent" class="toggle-input" onchange="updBadge();$('ma-stages').style.display=this.checked?'block':'none'"><label for="multi-agent" class="toggle-label"></label></div></div>
-        <div id="ma-stages" style="display:none;padding:8px 0">
-          <div style="padding:0 0 6px;font-size:10px;color:var(--muted2)">Per-stage provider (optional):</div>
-          <div class="ma-stage-row"><div class="ma-stage-lbl">🗺️ Plan</div><select class="finput" id="ma-plan-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
-          <div class="ma-stage-row"><div class="ma-stage-lbl">⚙️ Code</div><select class="finput" id="ma-code-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
-          <div class="ma-stage-row"><div class="ma-stage-lbl">🔍 Review</div><select class="finput" id="ma-rev-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><input type="checkbox" id="ma-test-stage" class="toggle-input" onchange="onTestStageToggle()"><label for="ma-test-stage" class="toggle-label" style="flex-shrink:0"></label><div><div style="font-size:11px;color:var(--text)">🧪 Include Test stage</div></div></div>
-          <div class="ma-stage-row" id="ma-test-row" style="display:none"><div class="ma-stage-lbl">🧪 Test</div><select class="finput" id="ma-test-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
-        </div>
+    </div>
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">Skills</div>
+    <div class="skill-list">
+      <div class="skill-row" data-skill="react" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">⚛️ React</div><div class="skill-row-desc">Component patterns, hooks, JSX best practices</div></div></div>
+      <div class="skill-row" data-skill="nextjs" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🚀 Next.js</div><div class="skill-row-desc">App router, SSR, API routes, Vercel deployment</div></div></div>
+      <div class="skill-row" data-skill="tests" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🧪 Tests</div><div class="skill-row-desc">Unit, integration and E2E test generation</div></div></div>
+      <div class="skill-row" data-skill="errors" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🛡️ Error handling</div><div class="skill-row-desc">Defensive code, try/catch, typed errors</div></div></div>
+      <div class="skill-row" data-skill="security" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🔒 Security</div><div class="skill-row-desc">OWASP, input validation, SQL injection prevention</div></div></div>
+      <div class="skill-row" data-skill="docs" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">📝 Docs</div><div class="skill-row-desc">Docstrings, README, JSDoc, Markdown</div></div></div>
+      <div class="skill-row" data-skill="perf" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">⚡ Performance</div><div class="skill-row-desc">Profiling, memoization, lazy loading</div></div></div>
+      <div class="skill-row" data-skill="solid" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🎯 SOLID</div><div class="skill-row-desc">Design patterns, clean architecture principles</div></div></div>
+      <div class="skill-row" data-skill="docker" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🐳 Docker</div><div class="skill-row-desc">Containerization, compose, multi-stage builds</div></div></div>
+      <div class="skill-row" data-skill="sql" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🗄️ SQL</div><div class="skill-row-desc">Queries, migrations, indexing, ORM patterns</div></div></div>
+    </div>
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)"><span>Rules</span><label class="ul-lbl" for="rules-upload" title="Load from file">📎</label><input type="file" id="rules-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'rules-input')"></div>
+    <div style="padding:0 10px 8px"><textarea class="side-textarea" id="rules-input" placeholder="e.g. Never use var. Always return errors." oninput="saveEnhance()" style="margin:0"></textarea></div>
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)"><span>Instructions</span><label class="ul-lbl" for="instr-upload" title="Load from file">📎</label><input type="file" id="instr-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'instr-input')"></div>
+    <div style="padding:0 10px 8px"><textarea class="side-textarea" id="instr-input" placeholder="Override the default agent behavior…" oninput="saveEnhance()" style="margin:0"></textarea></div>
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">Presets</div>
+    <div style="padding:0 10px 8px">
+      <select class="finput" id="preset-sel" onchange="loadPreset(this.value)" style="margin-bottom:6px">
+        <option value="">— Load a preset —</option>
+        <optgroup label="Built-in">
+          <option value="__react_ts">⚛️ React + TypeScript</option>
+          <option value="__python">🐍 Python Backend</option>
+          <option value="__go">🐹 Go Microservice</option>
+          <option value="__security">🔒 Security Auditor</option>
+          <option value="__docs">📝 Tech Writer</option>
+          <option value="__nextjs">🚀 Next.js + Vercel</option>
+          <option value="__fastapi">⚡ FastAPI + Python</option>
+        </optgroup>
+        <optgroup label="Saved" id="preset-saved-group"></optgroup>
+      </select>
+      <div style="display:flex;gap:5px">
+        <input class="finput" id="preset-name" placeholder="Name to save current…" style="flex:1">
+        <button onclick="savePreset()" style="background:var(--accent2);border:none;border-radius:8px;padding:7px 10px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;transition:opacity .15s">Save</button>
       </div>
-
-      <!-- Skills -->
-      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">Skills</div>
-        <div class="skills-grid">
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="react" class="skill-check"> ⚛️ React</label>
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="nextjs" class="skill-check"> 🚀 Next.js</label>
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="tests" class="skill-check"> 🧪 Tests</label>
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="errors" class="skill-check"> 🛡️ Errors</label>
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="security" class="skill-check"> 🔒 Security</label>
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="docs" class="skill-check"> 📝 Docs</label>
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="perf" class="skill-check"> ⚡ Perf</label>
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="solid" class="skill-check"> 🎯 SOLID</label>
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="docker" class="skill-check"> 🐳 Docker</label>
-          <label class="skill-chip" onclick="toggleSkill(this)"><input type="checkbox" value="sql" class="skill-check"> 🗄️ SQL</label>
-        </div>
-      </div>
-
-      <!-- Rules -->
-      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 6px;display:flex;align-items:center;justify-content:space-between"><span>Rules</span><label class="ul-lbl" for="rules-upload" title="Load from file">📎 Upload</label><input type="file" id="rules-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'rules-input')"></div>
-        <textarea class="side-textarea" id="rules-input" placeholder="e.g. Never use var. Always return errors." oninput="saveEnhance()" style="margin:0"></textarea>
-      </div>
-
-      <!-- Instructions -->
-      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 6px;display:flex;align-items:center;justify-content:space-between"><span>Instructions</span><label class="ul-lbl" for="instr-upload" title="Load from file">📎 Upload</label><input type="file" id="instr-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'instr-input')"></div>
-        <textarea class="side-textarea" id="instr-input" placeholder="Override the default agent behavior…" oninput="saveEnhance()" style="margin:0"></textarea>
-      </div>
-
-      <!-- Presets -->
-      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">Presets</div>
-        <select class="finput" id="preset-sel" onchange="loadPreset(this.value)" style="margin-bottom:6px">
-          <option value="">— Load a preset —</option>
-          <optgroup label="Built-in">
-            <option value="__react_ts">⚛️ React + TypeScript</option>
-            <option value="__python">🐍 Python Backend</option>
-            <option value="__go">🐹 Go Microservice</option>
-            <option value="__security">🔒 Security Auditor</option>
-            <option value="__docs">📝 Tech Writer</option>
-            <option value="__nextjs">🚀 Next.js + Vercel</option>
-            <option value="__fastapi">⚡ FastAPI + Python</option>
-          </optgroup>
-          <optgroup label="Saved" id="preset-saved-group"></optgroup>
-        </select>
-        <div style="display:flex;gap:5px">
-          <input class="finput" id="preset-name" placeholder="Name to save current…" style="flex:1">
-          <button onclick="savePreset()" style="background:var(--accent2);border:none;border-radius:8px;padding:7px 10px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;transition:opacity .15s">Save</button>
-        </div>
-      </div>
-
-      <!-- Snippets -->
-      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">📌 Snippets</div>
-        <div id="snip-list" style="display:none;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto;margin-bottom:6px"></div>
-        <button onclick="saveSnippet()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--purple)';this.style.color='var(--purple)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📌 Save prompt</button>
-      </div>
-
-      <!-- Tools -->
-      <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">🔧 Tools</div>
-        <div id="tool-list" style="background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;display:none;margin-bottom:6px"></div>
-        <button onclick="openAddTool()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+ Define Tool</button>
-      </div>
-
-      <!-- Agent Pipeline -->
-      <div style="padding:12px 0">
-        <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">🤖 Agent Pipeline</div>
-        <textarea id="agent-task" class="side-textarea" placeholder="Describe a task for the agent pipeline…" style="resize:vertical;min-height:60px;margin-bottom:6px"></textarea>
-        <button onclick="runAgentPipeline()" style="width:100%;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent2);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-weight:600;font-family:inherit;transition:all .15s;margin-bottom:6px">▶ Run Pipeline</button>
-        <div id="agent-progress" style="display:none;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;color:var(--muted);max-height:200px;overflow-y:auto;word-break:break-word"></div>
-      </div>
+    </div>
+  </div>
+  <!-- ── Panel: Tools ──────────────────────────────────────────────────── -->
+  <div id="spanel-tools" class="s-panel hidden">
+    <div class="cfg-hdr">📌 Snippets</div>
+    <div style="padding:0 10px 8px">
+      <div id="snip-list" style="display:none;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto;margin-bottom:6px"></div>
+      <button onclick="saveSnippet()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--purple)';this.style.color='var(--purple)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">📌 Save prompt</button>
+    </div>
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🔧 Custom Tools</div>
+    <div style="padding:0 10px 8px">
+      <div id="tool-list" style="background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;display:none;margin-bottom:6px"></div>
+      <button onclick="openAddTool()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+ Define Tool</button>
+    </div>
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🤖 Agent Pipeline</div>
+    <div style="padding:0 10px 8px">
+      <textarea id="agent-task" class="side-textarea" placeholder="Describe a task for the agent pipeline…" style="resize:vertical;min-height:60px;margin-bottom:6px"></textarea>
+      <button onclick="runAgentPipeline()" style="width:100%;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent2);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-weight:600;font-family:inherit;transition:all .15s;margin-bottom:6px">▶ Run Pipeline</button>
+      <div id="agent-progress" style="display:none;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;color:var(--muted);max-height:200px;overflow-y:auto;word-break:break-word"></div>
+    </div>
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">⚡ Quick Actions</div>
+    <div class="tools-grid">
+      <button class="tools-btn" onclick="openIssueModal()">📋<br>Create Issue</button>
+      <button class="tools-btn" onclick="openReleaseNotes()">🏷️<br>Release Notes</button>
+      <button class="tools-btn" onclick="openReadmeModal()">📝<br>Gen README</button>
+      <button class="tools-btn" onclick="openDepsModal()">🔍<br>Scan Deps</button>
     </div>
   </div>
 </aside>
@@ -626,11 +623,11 @@ pre::-webkit-scrollbar{height:4px}
       <button class="atab" role="tab" aria-selected="false" data-agent="testgen" onclick="setAgent(this)">🧪 Tests</button>
     </div>
     <div class="tbr">
+      <button class="topbar-model" id="topbar-model-badge" onclick="setSideTab('config');expSidebar()" title="Click to switch AI model">claude-sonnet</button>
       <div class="ctx-pill" id="ctx-pill" style="display:none">0 files</div>
       <div class="ma-pill" id="ma-pill" style="display:none">🤖 Multi-Agent</div>
       <div class="mem-pill" id="mem-pill" onclick="clearMemory()" title="Session memory active — click to clear">🧠 Memory</div>
       <div class="stat-pill" id="stat-pill">~0 tok</div>
-      <button onclick="openSettings()" title="Settings" style="background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;border-radius:6px;padding:6px 8px;font-size:14px;transition:all .15s;flex-shrink:0;display:flex;align-items:center">⚙️</button>
       <div style="position:relative;flex-shrink:0">
         <button class="export-btn" id="more-btn" onclick="toggleMoreMenu()" title="More actions" style="font-size:15px;letter-spacing:.05em;padding:4px 9px">⋯</button>
         <div class="more-menu" id="more-menu">
@@ -983,19 +980,8 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  // Settings panel focus trap (Tab/Shift+Tab cycle within panel)
-  const _sp=$('settings-panel');
-  if(_sp&&_sp.style.display!=='none'&&e.key==='Tab'){
-    const foc=_settingsFocusables();
-    if(foc.length){
-      e.preventDefault();
-      const idx=foc.indexOf(document.activeElement);
-      foc[e.shiftKey?(idx<=0?foc.length-1:idx-1):(idx>=foc.length-1?0:idx+1)].focus();
-    }
-    return;
-  }
-  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}const sp=$('settings-panel');if(sp&&sp.style.display!=='none'){closeSettings();}}
-  if((e.metaKey||e.ctrlKey)&&e.key==='k'&&!e.target?.matches('input,textarea')){e.preventDefault();const sp=$('settings-panel');if(sp&&sp.style.display!=='none')closeSettings();else openSettings();}
+  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}}
+  if((e.metaKey||e.ctrlKey)&&e.key==='k'&&!e.target?.matches('input,textarea')){e.preventDefault();setSideTab('config');expSidebar();}
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&S.prov==='anthropic'&&!e.target?.matches('input,textarea')){if(e.key==='1'){e.preventDefault();setAnthModel('claude-haiku-4-5-20251001');toast('⚡ Haiku');}else if(e.key==='2'){e.preventDefault();setAnthModel('claude-sonnet-4-6');toast('⚖️ Sonnet');}else if(e.key==='3'){e.preventDefault();setAnthModel('claude-opus-4-8');toast('🧠 Opus');}}
   if((e.metaKey||e.ctrlKey)&&e.key==='f'&&!e.target?.matches('input,textarea')){e.preventDefault();toggleChatSearch();}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
@@ -1019,8 +1005,8 @@ function fillEndpoint(key){const ep=ENDPOINT_PRESETS[key];if(!ep)return;$('oci-u
 
 // ── Instruction Presets ──────────────────────────────────────────────────────
 const BUILTIN_PRESETS={react_ts:{instructions:'You are an expert React + TypeScript developer. Write modern functional components with hooks. Use TypeScript strictly (no any). Prefer named exports. Use Tailwind CSS for styling. Follow React best practices.',rules:'Never use class components. Always use const arrow functions. Export types separately. Use React.FC sparingly.',skills:['react','zod','tests','errors']},python:{instructions:'You are an expert Python backend developer. Write clean, idiomatic Python 3.11+. Use type hints everywhere. Prefer FastAPI for APIs, SQLAlchemy for ORM, Pydantic for validation.',rules:'No bare except. Use specific exception types. Add type annotations to all functions.',skills:['tests','errors','security']},go:{instructions:'You are an expert Go developer. Write idiomatic Go. Use explicit error returns, never panic for business logic. Use interfaces for abstraction.',rules:'Always handle errors. No global state. Use context.Context for cancellation. Prefer stdlib.',skills:['go','errors','tests']},security:{instructions:'You are a security expert. Identify vulnerabilities, insecure patterns, and attack surfaces. Reference OWASP Top 10. Provide remediation code with severity labels.',rules:'Flag all hardcoded credentials, injection risks, missing auth checks. Be specific about severity.',skills:['security','errors']},docs:{instructions:'You are a technical writer. Write clear, comprehensive documentation. Include usage examples, parameter descriptions, return values, and edge cases.',rules:'Always include a quick-start example. Use consistent formatting. Explain the why, not just the what.',skills:['docs']},nextjs:{instructions:'You are an expert Next.js + Vercel developer. Use App Router with React Server Components. Deploy to Vercel. Use Tailwind CSS, TypeScript, and modern tooling.',rules:"Prefer Server Components. Add 'use client' only when needed. Use route handlers for APIs. Follow Vercel deployment best practices.",skills:['react','nextjs','zod','perf']},fastapi:{instructions:'You are an expert FastAPI developer. Build async Python APIs with FastAPI, SQLAlchemy 2.0 async, Pydantic v2, and Alembic for migrations.',rules:'Use async/await everywhere. Use Depends() for dependency injection. Write Pydantic models for all request/response bodies. Include proper HTTP status codes.',skills:['tests','errors','security','sql']}};
-function loadPreset(key){if(!key)return;let p;if(key.startsWith('__')){p=BUILTIN_PRESETS[key.slice(2)];}else{try{const s=JSON.parse(localStorage.getItem('df-presets')||'{}');p=s[key];}catch(e){}}if(!p)return;if(p.instructions!==undefined)$('instr-input').value=p.instructions;if(p.rules!==undefined)$('rules-input').value=p.rules;if(p.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=p.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});saveEnhance();toast('Loaded: '+key.replace('__','').replace(/_/g,' '));setTimeout(()=>{$('preset-sel').value='';},0);}
-function savePreset(){const name=$('preset-name').value.trim();if(!name){toast('Enter a preset name',true);return;}const saved=JSON.parse(localStorage.getItem('df-presets')||'{}');saved[name]={instructions:$('instr-input').value,rules:$('rules-input').value,skills:Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value)};localStorage.setItem('df-presets',JSON.stringify(saved));$('preset-name').value='';renderSavedPresets();toast('Saved: '+name);}
+function loadPreset(key){if(!key)return;let p;if(key.startsWith('__')){p=BUILTIN_PRESETS[key.slice(2)];}else{try{const s=JSON.parse(localStorage.getItem('df-presets')||'{}');p=s[key];}catch(e){}}if(!p)return;if(p.instructions!==undefined)$('instr-input').value=p.instructions;if(p.rules!==undefined)$('rules-input').value=p.rules;if(p.skills)document.querySelectorAll('.skill-row[data-skill]').forEach(el=>{el.classList.toggle('on',p.skills.includes(el.dataset.skill));});saveEnhance();toast('Loaded: '+key.replace('__','').replace(/_/g,' '));setTimeout(()=>{$('preset-sel').value='';},0);}
+function savePreset(){const name=$('preset-name').value.trim();if(!name){toast('Enter a preset name',true);return;}const saved=JSON.parse(localStorage.getItem('df-presets')||'{}');saved[name]={instructions:$('instr-input').value,rules:$('rules-input').value,skills:Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill)};localStorage.setItem('df-presets',JSON.stringify(saved));$('preset-name').value='';renderSavedPresets();toast('Saved: '+name);}
 function renderSavedPresets(){try{const saved=JSON.parse(localStorage.getItem('df-presets')||'{}');const g=$('preset-saved-group');if(!g)return;g.innerHTML='';Object.keys(saved).forEach(name=>{const o=document.createElement('option');o.value=name;o.textContent='★ '+name;g.appendChild(o);});}catch(e){}}
 
 // ── Session Memory ────────────────────────────────────────────────────────────
@@ -1112,29 +1098,23 @@ function setTheme(t){document.documentElement.setAttribute('data-theme',t);$('ts
 function saveSession(){if(S.ghToken&&S.ghUser)localStorage.setItem('df-session',JSON.stringify({ghToken:S.ghToken,ghUser:S.ghUser}));}
 function clearSession(){localStorage.removeItem('df-session');}
 function restoreSession(){try{const raw=localStorage.getItem('df-session');if(!raw)return false;const{ghToken,ghUser}=JSON.parse(raw);if(!ghToken||!ghUser)return false;S.ghToken=ghToken;S.ghUser=ghUser;$('gh-av').src=ghUser.avatar_url||'';$('gh-nm').textContent=ghUser.name||ghUser.login;$('gh-lg').textContent='@'+ghUser.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();return true;}catch(e){return false;}}
-function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);const ts=$('ma-test-stage');const tt=$('think-toggle');const tb=$('think-budget');const data={prov:S.prov,anthropicKey:$('ak').value||'',anthropicModel:S.anthropicModel||'claude-sonnet-4-6',thinkingMode:tt?tt.checked:false,thinkingBudget:tb?tb.value:'2000',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',alModel:$('al-model')?$('al-model').value||'':'',alTokens:$('al-tokens')?$('al-tokens').value||'512':'512',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||'',maTestStage:ts?ts.checked:false,maTestProv:$('ma-test-prov')?$('ma-test-prov').value||'':''};localStorage.setItem('df-enhance',JSON.stringify(data));}
-function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.alModel&&$('al-model'))$('al-model').value=d.alModel;if(d.alTokens&&$('al-tokens'))$('al-tokens').value=d.alTokens;if(d.skills)document.querySelectorAll('.skill-check').forEach(el=>{el.checked=d.skills.includes(el.value);el.closest('.skill-chip').classList.toggle('checked',el.checked);});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
+function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill);const ts=$('ma-test-stage');const tt=$('think-toggle');const tb=$('think-budget');const data={prov:S.prov,anthropicKey:$('ak').value||'',anthropicModel:S.anthropicModel||'claude-sonnet-4-6',thinkingMode:tt?tt.checked:false,thinkingBudget:tb?tb.value:'2000',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',alModel:$('al-model')?$('al-model').value||'':'',alTokens:$('al-tokens')?$('al-tokens').value||'512':'512',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||'',maTestStage:ts?ts.checked:false,maTestProv:$('ma-test-prov')?$('ma-test-prov').value||'':''};localStorage.setItem('df-enhance',JSON.stringify(data));}
+function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.alModel&&$('al-model'))$('al-model').value=d.alModel;if(d.alTokens&&$('al-tokens'))$('al-tokens').value=d.alTokens;if(d.skills)document.querySelectorAll('.skill-row[data-skill]').forEach(el=>{el.classList.toggle('on',d.skills.includes(el.dataset.skill));});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
 function toggleMoreMenu(){$('more-menu').classList.toggle('open');}
 function closeMoreMenu(){const m=$('more-menu');if(m)m.classList.remove('open');}
 document.addEventListener('click',e=>{if(!e.target.closest('#more-menu')&&!e.target.closest('#more-btn'))closeMoreMenu();});
 function isMob(){return window.innerWidth<=768;}
 function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
 function expSidebar(){$('sidebar').classList.remove('col');if(!isMob())$('exp-btn').classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
-let _settingsPrevFocus=null;
-function _settingsFocusables(){const panel=$('settings-panel');if(!panel)return[];return[...panel.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(el=>el.offsetParent!==null);}
-function openSettings(){
-  const panel=$('settings-panel');if(!panel)return;
-  _settingsPrevFocus=document.activeElement;
-  panel.style.display='flex';
-  const bd=$('settings-backdrop');if(bd)bd.style.display='block';
-  const foc=_settingsFocusables();if(foc.length)foc[0].focus();
+function setSideTab(tab){
+  ['files','config','tools'].forEach(t=>{
+    const p=$('spanel-'+t);if(p)p.classList.toggle('hidden',t!==tab);
+    const b=$('stab-'+t);if(b)b.classList.toggle('on',t===tab);
+  });
 }
-function closeSettings(){
-  const panel=$('settings-panel');if(!panel)return;
-  panel.style.display='none';
-  const bd=$('settings-backdrop');if(bd)bd.style.display='none';
-  if(_settingsPrevFocus&&typeof _settingsPrevFocus.focus==='function')_settingsPrevFocus.focus();
-}
+function openSettings(){setSideTab('config');expSidebar();}
+function closeSettings(){}
+function toggleSkillRow(row){row.classList.toggle('on');saveEnhance();}
 marked.setOptions({breaks:true,gfm:true});
 function explainCode(btn){const code=btn.closest('.cblock').querySelector('code');if(!code)return;const snippet=code.textContent.slice(0,800);const ti=$('ti');ti.value=`Explain what this code does, step by step:\n\`\`\`\n${snippet}\n\`\`\``;ti.focus();ti.dispatchEvent(new Event('input'));$('msgs').scrollTo(0,$('msgs').scrollHeight);}
 async function createGist(btn,lang){
@@ -1317,7 +1297,6 @@ function updCtx(){
   else{S._budgetWarned=false;}
   updHint();
 }
-function toggleSkill(chip){const cb=chip.querySelector('input');setTimeout(()=>{chip.classList.toggle('checked',cb.checked);saveEnhance();},0);}
 // ── Code search + commit history ──────────────────────────────────────────────
 async function searchCode(){
   const q=($('repo-search-code')?.value||'').trim();
@@ -1550,7 +1529,7 @@ async function switchBranch(branch){
   toast(`Switched to ${branch}`);
 }
 function setProv(p,silent=false){S.prov=p;const _pb=[['pa','anthropic'],['pg','groq'],['ph','hf'],['po','openai_compat'],['pal','airllm']];_pb.forEach(([id,pv])=>{const b=$(id);if(b){b.classList.toggle('on',p===pv);b.setAttribute('aria-checked',p===pv?'true':'false');}});$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';$('pf-al').style.display=p==='airllm'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
-function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';let text='claude-sonnet';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';text=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';}else if(S.prov==='groq')text=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')text=($('oci-model')&&$('oci-model').value)||'custom';else if(S.prov==='airllm')text=(($('al-model')&&$('al-model').value)||'airllm').split('/').pop();else text=S.hfModel.split('/').pop();const p=$('model-pill');const sp=$('sidebar-model-pill');if(p)p.textContent=text;if(sp)sp.textContent=text;}
+function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';let text='claude-sonnet';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';text=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';}else if(S.prov==='groq')text=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')text=($('oci-model')&&$('oci-model').value)||'custom';else if(S.prov==='airllm')text=(($('al-model')&&$('al-model').value)||'airllm').split('/').pop();else text=S.hfModel.split('/').pop();const p=$('model-pill');const sp=$('sidebar-model-pill');const tb=$('topbar-model-badge');if(p)p.textContent=text;if(sp)sp.textContent=text;if(tb)tb.textContent=text;}
 function fillAirLLM(model){$('al-model').value=model;updBadge();saveEnhance();toast('AirLLM model: '+model.split('/').pop());}
 let searchTimer=null;
 function debounceSearch(q){clearTimeout(searchTimer);searchTimer=setTimeout(()=>fetchModels(q),400);}
@@ -1581,7 +1560,7 @@ async function send(){
   $('msgs').appendChild(tw);scrollB();
   S.streaming=true;$('send-btn').disabled=true;$('stop-btn').style.display='flex';
   S.abortCtrl=new AbortController();
-  const skills=Array.from(document.querySelectorAll('.skill-check:checked')).map(e=>e.value);
+  const skills=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill);
   const streamId='sb'+Date.now()+Math.random().toString(36).slice(2);
   let reply='';let gotUsage=false;
   try{
