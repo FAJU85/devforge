@@ -969,7 +969,10 @@ function promptRenameTab(id){
   if(name&&name.trim()){tab.name=name.trim().slice(0,30);renderTabBar();saveTabs();}
 }
 function clearChatDOM(){
-  $('msgs').innerHTML='<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">DevForge</div><div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button><button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button><button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button></div></div>';
+  const repoTitle=S.repo?esc(S.repo.repo):'DevForge';
+  const repoSub=S.repo?'Select files from the tree · type @ to mention a file · or describe a task below':'Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task';
+  const egs=S.repo?[['🔍','Review the codebase for security vulnerabilities'],['🐛','Find and fix the most critical bugs'],['🏗️','Explain the architecture and suggest improvements'],['🧪','Write tests for the main business logic']]:[['⚙️','Add input validation to the login function'],['🔍','Review this file for security vulnerabilities'],['🐛','Find and fix the bug causing tests to fail'],['📝','Write documentation for all public functions']];
+  $('msgs').innerHTML=`<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">${repoTitle}</div><div class="empty-sub">${repoSub}</div><div class="eg-grid">${egs.map(([ico,txt])=>`<button class="eg" onclick="fill(this)"><span>${ico}</span>${esc(txt)}</button>`).join('')}</div></div>`;
   $('stat-pill').style.display=S.stats.tokens>0?'flex':'none';
   if(S.stats.tokens>0)$('stat-pill').textContent=tokFmt(S.stats.tokens)+' tok · '+S.stats.messages+' msg';
 }
