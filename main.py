@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from typing import Callable, List, Optional
 import ast as _ast
 import json, os, requests, base64, re, asyncio, threading
+from urllib.parse import quote as _urlquote
 from concurrent.futures import ThreadPoolExecutor, as_completed as _futs_done
 
 from anthropic import Anthropic
@@ -45,6 +46,16 @@ except Exception:
 app = FastAPI(title="DevForge")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.middleware("http")
+async def _security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-XSS-Protection", "0")
+    response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    return response
 
 GITHUB_CLIENT_ID     = os.environ.get("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "")
@@ -599,17 +610,26 @@ def gh_hdrs(token: str) -> dict:
     """
     return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
 
+def _gh_base(owner: str, repo: str) -> str:
+    """Build the GitHub API repos base URL with owner/repo safely encoded."""
+    return f"https://api.github.com/repos/{_urlquote(owner, safe='')}/{_urlquote(repo, safe='')}"
+
+def _gh_path(p: str) -> str:
+    """Sanitise a file path for GitHub API URLs: drop ./.., encode special chars."""
+    segments = [_urlquote(s, safe="") for s in p.lstrip("/").split("/") if s not in (".", "..")]
+    return "/".join(segments) or "_"
+
 class RepoBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     url: str = Field(max_length=300)
     branch: Optional[str] = Field(default="", max_length=255)
 
 
 @app.get("/api/repo/branches")
-async def list_branches(token: str = Query(...), owner: str = Query(..., max_length=100), repo: str = Query(..., max_length=100)):
+async def list_branches(token: str = Query(..., max_length=500), owner: str = Query(..., max_length=100), repo: str = Query(..., max_length=100)):
     """List all branches for a repository."""
     r = requests.get(
-        f"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100",
+        f"{_gh_base(owner, repo)}/branches?per_page=100",
         headers=gh_hdrs(token), timeout=15,
     )
     if not r.ok:
@@ -621,11 +641,11 @@ async def list_branches(token: str = Query(...), owner: str = Query(..., max_len
 async def repo_connect(body: RepoBody):
     owner, repo = parse_gh_url(body.url)
     if not owner: return JSONResponse({"error": "Invalid repository"}, status_code=400)
-    r = requests.get(f"https://api.github.com/repos/{owner}/{repo}", headers=gh_hdrs(body.token), timeout=10)
+    r = requests.get(f"{_gh_base(owner, repo)}", headers=gh_hdrs(body.token), timeout=10)
     if not r.ok: return JSONResponse({"error": r.json().get("message", "Not found")}, status_code=400)
     default_branch = r.json()["default_branch"]
     branch = (body.branch or "").strip() or default_branch
-    t = requests.get(f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1",
+    t = requests.get(f"{_gh_base(owner, repo)}/git/trees/{_urlquote(branch, safe='')}?recursive=1",
         headers=gh_hdrs(body.token), timeout=15)
     if not t.ok: return JSONResponse({"error": "Failed to fetch file tree"}, status_code=400)
     files = sorted([{"path": f["path"], "size": f.get("size", 0)} for f in t.json().get("tree", [])
@@ -633,14 +653,14 @@ async def repo_connect(body: RepoBody):
     return {"owner": owner, "repo": repo, "branch": branch, "default_branch": default_branch, "files": files}
 
 class FileBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     path: str = Field(max_length=1000)
 
 @app.post("/api/repo/file")
 async def repo_file(body: FileBody):
-    r = requests.get(f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{body.path}",
+    r = requests.get(f"{_gh_base(body.owner, body.repo)}/contents/{_gh_path(body.path)}",
         headers=gh_hdrs(body.token), timeout=10)
     if not r.ok: return JSONResponse({"error": f"Cannot fetch {body.path}"}, status_code=400)
     try:
@@ -650,7 +670,7 @@ async def repo_file(body: FileBody):
     return {"path": body.path, "content": content}
 
 class WriteFileBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     path: str = Field(max_length=1000)
@@ -662,8 +682,9 @@ class WriteFileBody(BaseModel):
 async def repo_write(body: WriteFileBody):
     """Create or update a file in the repository via the GitHub Contents API."""
     sha = None
+    _safe_p = _gh_path(body.path)
     existing = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{body.path}",
+        f"{_gh_base(body.owner, body.repo)}/contents/{_safe_p}",
         headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
     )
     if existing.ok:
@@ -681,7 +702,7 @@ async def repo_write(body: WriteFileBody):
         payload["sha"] = sha
 
     w = requests.put(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{body.path}",
+        f"{_gh_base(body.owner, body.repo)}/contents/{_safe_p}",
         headers=gh_hdrs(body.token), json=payload, timeout=15,
     )
     if not w.ok:
@@ -701,15 +722,15 @@ async def repo_write(body: WriteFileBody):
     }
 
 class SuggestFilesBody(BaseModel):
-    provider: str
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    groq_model: Optional[str] = "llama-3.3-70b-versatile"
-    openai_compat_key: Optional[str] = ""
-    openai_compat_base_url: Optional[str] = ""
-    openai_compat_model: Optional[str] = ""
-    hf_token: Optional[str] = ""
-    hf_model: Optional[str] = ""
+    provider: str = Field(max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    groq_model: Optional[str] = Field(default="llama-3.3-70b-versatile", max_length=200)
+    openai_compat_key: Optional[str] = Field(default="", max_length=500)
+    openai_compat_base_url: Optional[str] = Field(default="", max_length=2000)
+    openai_compat_model: Optional[str] = Field(default="", max_length=200)
+    hf_token: Optional[str] = Field(default="", max_length=500)
+    hf_model: Optional[str] = Field(default="", max_length=200)
     task: str = Field(max_length=2000)
     files: List[str]
     max_suggestions: int = Field(default=6, ge=1, le=20)
@@ -792,13 +813,13 @@ async def suggest_files(body: SuggestFilesBody):
 class SummarizeFileBody(BaseModel):
     content: str = Field(max_length=200_000)
     filename: str = Field(max_length=500)
-    provider: str
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    groq_model: Optional[str] = "llama-3.3-70b-versatile"
-    openai_compat_key: Optional[str] = ""
-    openai_compat_base_url: Optional[str] = ""
-    openai_compat_model: Optional[str] = ""
+    provider: str = Field(max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    groq_model: Optional[str] = Field(default="llama-3.3-70b-versatile", max_length=200)
+    openai_compat_key: Optional[str] = Field(default="", max_length=500)
+    openai_compat_base_url: Optional[str] = Field(default="", max_length=2000)
+    openai_compat_model: Optional[str] = Field(default="", max_length=200)
 
 
 @app.post("/api/repo/summarize-file")
@@ -821,7 +842,7 @@ class BatchWriteItem(BaseModel):
     message: str = Field(max_length=500)
 
 class BatchWriteBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     branch: str = Field(max_length=255)
@@ -832,10 +853,11 @@ async def repo_write_batch(body: BatchWriteBody):
     """Commit multiple files to the repository, reporting per-file results."""
 
     def write_file(item):
+        safe_p = _gh_path(item.path)
         sha = None
         try:
             existing = requests.get(
-                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+                f"{_gh_base(body.owner, body.repo)}/contents/{safe_p}",
                 headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
             )
             if existing.ok:
@@ -853,7 +875,7 @@ async def repo_write_batch(body: BatchWriteBody):
 
         try:
             w = requests.put(
-                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+                f"{_gh_base(body.owner, body.repo)}/contents/{safe_p}",
                 headers=gh_hdrs(body.token), json=payload, timeout=15,
             )
             if w.ok:
@@ -886,7 +908,7 @@ async def repo_write_batch(body: BatchWriteBody):
 
 
 class GistBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     filename: str = Field(max_length=255)
     content: str = Field(max_length=1_000_000)
     description: Optional[str] = Field(default="", max_length=255)
@@ -917,7 +939,7 @@ async def create_gist(body: GistBody):
 
 
 class IssueBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     title: str = Field(max_length=500)
@@ -928,7 +950,7 @@ class IssueBody(BaseModel):
 async def create_issue(body: IssueBody):
     """Create a GitHub issue in the connected repository."""
     r = requests.post(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/issues",
+        f"{_gh_base(body.owner, body.repo)}/issues",
         headers=gh_hdrs(body.token),
         json={"title": body.title, "body": body.body, "labels": body.labels},
         timeout=15,
@@ -944,7 +966,7 @@ async def create_issue(body: IssueBody):
 
 
 class PRBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     title: str = Field(max_length=500)
@@ -956,7 +978,7 @@ class PRBody(BaseModel):
 async def create_pr(body: PRBody):
     """Create a GitHub pull request from head branch into base branch."""
     r = requests.post(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls",
+        f"{_gh_base(body.owner, body.repo)}/pulls",
         headers=gh_hdrs(body.token),
         json={"title": body.title, "body": body.body, "head": body.head, "base": body.base},
         timeout=15,
@@ -972,7 +994,7 @@ async def create_pr(body: PRBody):
 
 
 class PRDiffBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     pr_number: int = Field(ge=1)
@@ -982,7 +1004,7 @@ async def get_pr_diff(body: PRDiffBody):
     """Fetch a pull request's metadata and unified diff."""
     # Get PR metadata
     pr_r = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls/{body.pr_number}",
+        f"{_gh_base(body.owner, body.repo)}/pulls/{body.pr_number}",
         headers=gh_hdrs(body.token),
         timeout=15,
     )
@@ -991,7 +1013,7 @@ async def get_pr_diff(body: PRDiffBody):
     pr = pr_r.json()
     # Get diff (cap at 40KB)
     diff_r = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls/{body.pr_number}",
+        f"{_gh_base(body.owner, body.repo)}/pulls/{body.pr_number}",
         headers={**gh_hdrs(body.token), "Accept": "application/vnd.github.diff"},
         timeout=20,
     )
@@ -1012,7 +1034,7 @@ async def get_pr_diff(body: PRDiffBody):
 
 
 class RepoSearchBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     query: str = Field(max_length=500)
@@ -1058,7 +1080,7 @@ async def repo_search(body: RepoSearchBody):
 
 
 class RepoCommitsBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     branch: Optional[str] = Field(default="main", max_length=255)
@@ -1069,7 +1091,7 @@ class RepoCommitsBody(BaseModel):
 async def repo_commits(body: RepoCommitsBody):
     """Fetch recent commits for a branch."""
     r = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/commits",
+        f"{_gh_base(body.owner, body.repo)}/commits",
         headers=gh_hdrs(body.token),
         params={"sha": body.branch or "main", "per_page": min(body.max_results, 30)},
         timeout=15,
@@ -1089,7 +1111,7 @@ async def repo_commits(body: RepoCommitsBody):
 
 
 class WorkflowRunsBody(BaseModel):
-    token: str
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     max_results: int = Field(default=10, ge=1, le=50)
@@ -1099,7 +1121,7 @@ class WorkflowRunsBody(BaseModel):
 async def repo_workflow_runs(body: WorkflowRunsBody):
     """Fetch recent GitHub Actions workflow runs."""
     r = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/actions/runs",
+        f"{_gh_base(body.owner, body.repo)}/actions/runs",
         headers=gh_hdrs(body.token),
         params={"per_page": min(body.max_results, 20)},
         timeout=15,
@@ -1131,16 +1153,16 @@ RELEASE_NOTES_SYSTEM = (
 )
 
 class ReleaseNotesBody(BaseModel):
-    provider: str = "anthropic"
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    token: str
+    provider: str = Field(default="anthropic", max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    token: str = Field(max_length=500)
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     since: Optional[str] = Field(default="", max_length=255)
     until: Optional[str] = Field(default="", max_length=255)
     max_commits: int = Field(default=50, ge=1, le=100)
-    anthropic_model: Optional[str] = "claude-sonnet-4-6"
+    anthropic_model: Optional[str] = Field(default="claude-sonnet-4-6", max_length=200)
 
 @app.post("/api/repo/release-notes")
 async def generate_release_notes(body: ReleaseNotesBody):
@@ -1150,7 +1172,7 @@ async def generate_release_notes(body: ReleaseNotesBody):
     if body.until:
         params["sha"] = body.until
     r = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/commits",
+        f"{_gh_base(body.owner, body.repo)}/commits",
         headers=gh_hdrs(body.token),
         params=params,
         timeout=15,
@@ -1163,7 +1185,7 @@ async def generate_release_notes(body: ReleaseNotesBody):
         since_sha = body.since
         # Also handle tags — resolve to SHA
         tag_r = requests.get(
-            f"https://api.github.com/repos/{body.owner}/{body.repo}/git/refs/tags/{since_sha}",
+            f"{_gh_base(body.owner, body.repo)}/git/refs/tags/{_urlquote(since_sha, safe='')}",
             headers=gh_hdrs(body.token), timeout=10,
         )
         if tag_r.ok:
@@ -1199,13 +1221,13 @@ COMMIT_MSG_SYSTEM = (
 )
 
 class CommitMsgBody(BaseModel):
-    provider: str = "anthropic"
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    groq_model: Optional[str] = ""
-    openai_compat_key: Optional[str] = ""
-    openai_compat_base_url: Optional[str] = ""
-    openai_compat_model: Optional[str] = ""
+    provider: str = Field(default="anthropic", max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    groq_model: Optional[str] = Field(default="", max_length=200)
+    openai_compat_key: Optional[str] = Field(default="", max_length=500)
+    openai_compat_base_url: Optional[str] = Field(default="", max_length=2000)
+    openai_compat_model: Optional[str] = Field(default="", max_length=200)
     path: str = Field(max_length=1000)
     content: Optional[str] = Field(default="", max_length=50_000)
     diff: Optional[str] = Field(default="", max_length=50_000)
@@ -1294,10 +1316,10 @@ async def scan_code(body: CodeScanBody):
     if not code:
         return {"issues": [], "safe": True, "language": lang, "total": 0}
 
-    # Python AST deep scan
+    # Python AST deep scan (limit to 50K to bound parse time)
     if lang == "python":
         try:
-            tree = _ast.parse(code)
+            tree = _ast.parse(code[:50_000])
             for node in _ast.walk(tree):
                 ln = getattr(node, "lineno", None)
                 if isinstance(node, _ast.Call):
@@ -1357,10 +1379,10 @@ README_SYSTEM = (
 )
 
 class ReadmeBody(BaseModel):
-    provider: str = "anthropic"
-    anthropic_key: Optional[str] = ""
-    anthropic_model: Optional[str] = "claude-sonnet-4-6"
-    groq_key: Optional[str] = ""
+    provider: str = Field(default="anthropic", max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    anthropic_model: Optional[str] = Field(default="claude-sonnet-4-6", max_length=200)
+    groq_key: Optional[str] = Field(default="", max_length=500)
     repo_name: Optional[str] = Field(default="", max_length=200)
     file_context: str = Field(max_length=500_000)
 
@@ -1503,10 +1525,10 @@ def _parse_cargo_toml(content: str) -> list:
 class ScanDepsBody(BaseModel):
     filename: str = Field(max_length=255)
     content: str = Field(max_length=200_000)
-    provider: str = "anthropic"
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    anthropic_model: Optional[str] = "claude-haiku-4-5-20251001"
+    provider: str = Field(default="anthropic", max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    anthropic_model: Optional[str] = Field(default="claude-haiku-4-5-20251001", max_length=200)
 
 
 @app.post("/api/repo/scan-deps")
@@ -1595,16 +1617,44 @@ class ToolCallBody(BaseModel):
     body_json: Optional[dict] = None
 
 
+_SSRF_BLOCKED = re.compile(
+    r"^https?://"
+    r"(?:localhost|127\.|0\.0\.0\.0|"
+    r"10\.\d+\.\d+\.\d+|"
+    r"172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+|"
+    r"192\.168\.\d+\.\d+|"
+    r"169\.254\.\d+\.\d+|"   # link-local / AWS metadata
+    r"\[::1\])",              # IPv6 loopback
+    re.IGNORECASE,
+)
+
 @app.post("/api/tools/call")
 async def call_tool(body: ToolCallBody):
     """Proxy a user-defined tool HTTP call to avoid CORS issues."""
     if not re.match(r"^https?://", body.url):
         return JSONResponse({"error": "Only http:// and https:// URLs are supported"}, status_code=400)
+    if _SSRF_BLOCKED.match(body.url):
+        return JSONResponse({"error": "Requests to internal/private addresses are not allowed"}, status_code=400)
     method = body.method.upper()
     if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
         return JSONResponse({"error": f"Unsupported method: {method}"}, status_code=400)
+    if body.body_json is not None:
+        try:
+            _payload_size = len(json.dumps(body.body_json))
+        except Exception:
+            return JSONResponse({"error": "body_json is not JSON-serialisable"}, status_code=400)
+        if _payload_size > 65_536:
+            return JSONResponse({"error": "body_json exceeds 64 KB limit"}, status_code=413)
+    # Sanitize headers: string values only, block hop-by-hop / sensitive headers
+    _BLOCKED_HDRS = {"host", "transfer-encoding", "connection", "upgrade",
+                     "proxy-authorization", "te", "trailers", "keep-alive"}
     try:
-        hdrs = dict(body.headers or {})
+        raw_hdrs = dict(list((body.headers or {}).items())[:50])
+        hdrs = {
+            str(k)[:200]: str(v)[:2000]
+            for k, v in raw_hdrs.items()
+            if str(k).lower() not in _BLOCKED_HDRS
+        }
         if method != "GET":
             hdrs.setdefault("Content-Type", "application/json")
         if method == "GET":
@@ -1623,14 +1673,14 @@ ENHANCE_SYSTEM = (
 )
 
 class PromptEnhanceBody(BaseModel):
-    provider: str = "anthropic"
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    groq_model: Optional[str] = ""
-    openai_compat_key: Optional[str] = ""
-    openai_compat_base_url: Optional[str] = ""
-    openai_compat_model: Optional[str] = ""
-    hf_token: Optional[str] = ""
+    provider: str = Field(default="anthropic", max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    groq_model: Optional[str] = Field(default="", max_length=200)
+    openai_compat_key: Optional[str] = Field(default="", max_length=500)
+    openai_compat_base_url: Optional[str] = Field(default="", max_length=2000)
+    openai_compat_model: Optional[str] = Field(default="", max_length=200)
+    hf_token: Optional[str] = Field(default="", max_length=500)
     prompt: str = Field(max_length=4000)
 
 @app.post("/api/prompt/enhance")
@@ -1665,16 +1715,16 @@ class Msg(BaseModel):
     content: str = Field(max_length=200_000)
 
 class ChatBody(BaseModel):
-    provider: str
-    anthropic_key: Optional[str] = ""
-    groq_key: Optional[str] = ""
-    groq_model: Optional[str] = "llama-3.3-70b-versatile"
-    hf_token: Optional[str] = ""
-    hf_model: Optional[str] = "Qwen/Qwen2.5-Coder-32B-Instruct"
-    openai_compat_key: Optional[str] = ""
-    openai_compat_base_url: Optional[str] = "http://localhost:11434/v1"
-    openai_compat_model: Optional[str] = "llama3"
-    agent: str = "code"
+    provider: str = Field(max_length=50)
+    anthropic_key: Optional[str] = Field(default="", max_length=500)
+    groq_key: Optional[str] = Field(default="", max_length=500)
+    groq_model: Optional[str] = Field(default="llama-3.3-70b-versatile", max_length=200)
+    hf_token: Optional[str] = Field(default="", max_length=500)
+    hf_model: Optional[str] = Field(default="Qwen/Qwen2.5-Coder-32B-Instruct", max_length=200)
+    openai_compat_key: Optional[str] = Field(default="", max_length=500)
+    openai_compat_base_url: Optional[str] = Field(default="http://localhost:11434/v1", max_length=2000)
+    openai_compat_model: Optional[str] = Field(default="llama3", max_length=200)
+    agent: str = Field(default="code", max_length=50)
     messages: List[Msg] = Field(max_length=500)
     file_context: Optional[str] = Field(default="", max_length=500_000)
     owner: Optional[str] = Field(default="", max_length=100)
@@ -1684,14 +1734,14 @@ class ChatBody(BaseModel):
     instructions: Optional[str] = Field(default="", max_length=10_000)
     multi_agent: Optional[bool] = False
     # Per-stage provider overrides for multi-agent (empty = use body.provider)
-    ma_plan_provider: Optional[str] = ""
-    ma_code_provider: Optional[str] = ""
-    ma_test_provider: Optional[str] = ""
-    ma_review_provider: Optional[str] = ""
+    ma_plan_provider: Optional[str] = Field(default="", max_length=50)
+    ma_code_provider: Optional[str] = Field(default="", max_length=50)
+    ma_test_provider: Optional[str] = Field(default="", max_length=50)
+    ma_review_provider: Optional[str] = Field(default="", max_length=50)
     ma_include_test_stage: Optional[bool] = False
     memory: Optional[str] = Field(default="", max_length=50_000)
     tools: Optional[List[ToolDef]] = Field(default=[], max_length=20)
-    anthropic_model: Optional[str] = "claude-sonnet-4-6"
+    anthropic_model: Optional[str] = Field(default="claude-sonnet-4-6", max_length=200)
     thinking_mode: Optional[bool] = False
     thinking_budget: Optional[int] = Field(default=2000, ge=1000, le=100_000)
     airllm_model: Optional[str] = Field(default="meta-llama/Llama-2-7b-chat-hf", max_length=200)

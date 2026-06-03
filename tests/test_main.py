@@ -1218,6 +1218,21 @@ class TestBatchWriteEndpoint:
         call_json = mock_put.call_args.kwargs.get("json") or mock_put.call_args[1].get("json")
         assert call_json["sha"] == "existing-sha"
 
+    def test_batch_write_encodes_path_traversal(self):
+        """Dot-dot segments and query chars must be percent-encoded in the GitHub URL."""
+        with patch("main.requests.get") as mock_get, patch("main.requests.put") as mock_put:
+            mock_get.return_value = MagicMock(ok=False)
+            mock_put.return_value = MagicMock(
+                ok=True, json=lambda: {"commit": {"html_url": ""}, "content": {}},
+            )
+            client.post("/api/repo/write/batch", json={
+                "token": "tok", "owner": "o", "repo": "r", "branch": "main",
+                "files": [{"path": "../etc/passwd?ref=evil", "content": "x", "message": "m"}],
+            })
+        url_called = mock_put.call_args.args[0] if mock_put.call_args.args else mock_put.call_args[0][0]
+        assert "?ref=evil" not in url_called
+        assert ".." not in url_called.split("/repos/o/r/contents/", 1)[-1]
+
 
 class TestSuggestFiles:
     def test_suggest_files_with_groq(self):
@@ -1706,6 +1721,57 @@ class TestToolCallEndpoint:
         assert r.status_code == 400
         assert "error" in r.json()
 
+    def test_tool_call_blocks_localhost(self):
+        r = client.post("/api/tools/call", json={"url": "http://localhost/secret", "method": "GET"})
+        assert r.status_code == 400
+        assert "internal" in r.json()["error"].lower()
+
+    def test_tool_call_blocks_loopback_ip(self):
+        r = client.post("/api/tools/call", json={"url": "http://127.0.0.1/secret", "method": "GET"})
+        assert r.status_code == 400
+
+    def test_tool_call_blocks_private_10_range(self):
+        r = client.post("/api/tools/call", json={"url": "http://10.0.0.1/internal", "method": "GET"})
+        assert r.status_code == 400
+
+    def test_tool_call_blocks_private_192_168_range(self):
+        r = client.post("/api/tools/call", json={"url": "http://192.168.1.1/admin", "method": "GET"})
+        assert r.status_code == 400
+
+    def test_tool_call_blocks_aws_metadata(self):
+        r = client.post("/api/tools/call", json={"url": "http://169.254.169.254/latest/meta-data/", "method": "GET"})
+        assert r.status_code == 400
+
+    def test_tool_call_allows_external_https(self):
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = "ok"
+            r = client.post("/api/tools/call", json={"url": "https://api.example.com/data", "method": "GET"})
+        assert r.status_code == 200
+
+    def test_tool_call_rejects_oversized_body_json(self):
+        big = {"k" + str(i): "x" * 1000 for i in range(100)}  # ~100 KB
+        r = client.post("/api/tools/call", json={"url": "https://api.example.com/", "method": "POST", "body_json": big})
+        assert r.status_code == 413
+        assert "64 KB" in r.json()["error"]
+
+    def test_tool_call_accepts_small_body_json(self):
+        with patch("requests.request") as mock_req:
+            mock_req.return_value.status_code = 201
+            mock_req.return_value.text = "created"
+            r = client.post("/api/tools/call", json={"url": "https://api.example.com/", "method": "POST", "body_json": {"key": "value"}})
+        assert r.status_code == 200
+
+    def test_tool_call_truncates_excess_headers(self):
+        many_hdrs = {"H" + str(i): "v" for i in range(200)}
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = "ok"
+            r = client.post("/api/tools/call", json={"url": "https://api.example.com/", "method": "GET", "headers": many_hdrs})
+        assert r.status_code == 200
+        _passed = mock_get.call_args.kwargs.get("headers", mock_get.call_args[1].get("headers", {}))
+        assert len(_passed) <= 50
+
 
 class TestOpenAICompatBaseUrlValidation:
     def test_suggest_files_rejects_file_scheme_base_url(self):
@@ -2033,6 +2099,16 @@ class TestRepoBranchesEndpoint:
         assert r.status_code == 400
         assert "error" in r.json()
 
+    def test_owner_repo_encoded_in_github_url(self):
+        """Injected ? or / in owner/repo must be percent-encoded, not raw in URL."""
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = []
+            client.get("/api/repo/branches?token=tok&owner=evil%3Fq%3D1&repo=bad%2Frepo")
+        url_called = mock_get.call_args.args[0] if mock_get.call_args.args else mock_get.call_args[0][0]
+        assert "?q=1" not in url_called.split("branches")[0]
+        assert "/repos/evil%3Fq%3D1/bad%2Frepo/" in url_called or "/repos/evil%3Fq%3D1/" in url_called
+
     def test_repo_connect_with_branch_override(self):
         with patch("requests.get") as mock_get:
             repo_response = MagicMock()
@@ -2053,9 +2129,10 @@ class TestRepoBranchesEndpoint:
         data = r.json()
         # Branch override should be used for tree fetch
         assert data["branch"] == "feature/new-api"
-        # Tree fetch URL should use the overridden branch
+        # Tree fetch URL should use the overridden branch (/ is encoded as %2F)
         tree_call = mock_get.call_args_list[1]
-        assert "feature/new-api" in tree_call[0][0]
+        tree_url = tree_call[0][0]
+        assert "feature%2Fnew-api" in tree_url or "feature/new-api" in tree_url
 
 # ── Cycle 14: Code Search + Commit History ────────────────────────────────────
 
@@ -4016,3 +4093,26 @@ class TestConfigEndpoint:
         monkeypatch.setenv("ENVIRONMENT", "staging")
         r = client.get("/api/config")
         assert r.json()["environment"] == "staging"
+
+
+class TestSecurityHeaders:
+    """Every response must carry the mandatory security headers."""
+
+    def _check(self, r):
+        assert r.headers.get("x-content-type-options") == "nosniff"
+        assert r.headers.get("x-frame-options") == "DENY"
+        assert r.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+        assert r.headers.get("x-xss-protection") == "0"
+        assert r.headers.get("permissions-policy") == "geolocation=(), microphone=(), camera=()"
+
+    def test_get_root_has_security_headers(self):
+        r = client.get("/")
+        self._check(r)
+
+    def test_api_config_has_security_headers(self):
+        r = client.get("/api/config")
+        self._check(r)
+
+    def test_json_endpoint_has_security_headers(self):
+        r = client.get("/api/tools/list")
+        self._check(r)

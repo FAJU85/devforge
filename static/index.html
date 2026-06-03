@@ -351,10 +351,11 @@ pre::-webkit-scrollbar{height:4px}
 .more-menu button:last-child{border-bottom:none}
 .more-menu button:hover{background:var(--hover2)}
 /* Mobile overlay backdrop */
-.mob-overlay{display:none;position:fixed;inset:0;background:#0007;z-index:999;cursor:pointer}
+.mob-overlay{display:none;position:fixed;inset:0;background:#0004;z-index:999;cursor:pointer}
 .mob-overlay.show{display:block}
 /* Settings Panel */
-.settings-panel{position:fixed;top:52px;left:0;bottom:0;width:280px;background:var(--sidebar);border-right:1px solid var(--border2);display:flex;flex-direction:column;overflow:hidden;z-index:100;animation:slideInLeft .25s ease;box-shadow:4px 0 28px #0007}
+.settings-panel{position:fixed;top:52px;left:0;bottom:0;width:280px;background:var(--sidebar);border-right:1px solid var(--border2);display:flex;flex-direction:column;overflow:hidden;z-index:200;animation:slideInLeft .25s ease;box-shadow:4px 0 28px #0007}
+.settings-backdrop{display:none;position:fixed;inset:0;background:#0005;z-index:199;cursor:pointer}
 @keyframes slideInLeft{from{transform:translateX(-100%)}to{transform:translateX(0)}}
 .settings-head{height:48px;padding:12px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;font-size:13px}
 .settings-body{flex:1;overflow-y:auto;padding:0 16px}
@@ -381,6 +382,8 @@ pre::-webkit-scrollbar{height:4px}
   .empty-sub{font-size:12px;max-width:280px}
   .modal-overlay{padding:0;align-items:flex-end}
   .modal{border-radius:16px 16px 0 0!important;max-width:100%!important;max-height:92vh;overflow-y:auto}
+  .settings-panel{top:0;width:100%;max-width:100%;border-right:none;border-bottom:1px solid var(--border2)}
+  .settings-backdrop{display:block}
 }
 </style>
 </head>
@@ -450,6 +453,8 @@ pre::-webkit-scrollbar{height:4px}
       </div>
     </div>
   </div>
+  <!-- Settings backdrop (tap to close on mobile) -->
+  <div class="settings-backdrop" id="settings-backdrop" onclick="closeSettings()"></div>
   <!-- Settings Panel (hidden, shown on gear icon click) -->
   <div id="settings-panel" class="settings-panel" role="dialog" aria-modal="true" aria-label="Settings" style="display:none">
     <div class="settings-head">
@@ -460,20 +465,20 @@ pre::-webkit-scrollbar{height:4px}
       <!-- AI Provider Section -->
       <div style="padding:12px 0;border-bottom:1px solid var(--border2)">
         <div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:0 0 8px">Provider</div>
-        <div class="prov-row">
-          <button class="prov-btn on" id="pa" onclick="setProv('anthropic')">Claude</button>
-          <button class="prov-btn" id="pg" onclick="setProv('groq')">⚡ Groq</button>
-          <button class="prov-btn" id="ph" onclick="setProv('hf')">🤗 HF</button>
-          <button class="prov-btn" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
-          <button class="prov-btn" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
+        <div class="prov-row" role="radiogroup" aria-label="AI provider">
+          <button class="prov-btn on" role="radio" aria-checked="true" id="pa" onclick="setProv('anthropic')">Claude</button>
+          <button class="prov-btn" role="radio" aria-checked="false" id="pg" onclick="setProv('groq')">⚡ Groq</button>
+          <button class="prov-btn" role="radio" aria-checked="false" id="ph" onclick="setProv('hf')">🤗 HF</button>
+          <button class="prov-btn" role="radio" aria-checked="false" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
+          <button class="prov-btn" role="radio" aria-checked="false" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
         </div>
         <!-- Provider-specific fields (hidden except when selected) -->
         <div id="pf-a" style="flex-direction:column;margin-top:8px">
-          <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" oninput="saveEnhance()"></div>
-          <div class="model-selector">
-            <button class="msel-btn" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
-            <button class="msel-btn on" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
-            <button class="msel-btn" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent — for complex architecture">🧠<br>Opus</button>
+          <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" oninput="saveEnhance()"></div>
+          <div class="model-selector" role="radiogroup" aria-label="Claude model">
+            <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
+            <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
+            <button class="msel-btn" role="radio" aria-checked="false" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent — for complex architecture">🧠<br>Opus</button>
           </div>
           <div class="think-opts" id="think-opts">
             <div class="ma-row"><div><div class="ma-label" style="font-size:12px">Extended Thinking</div><div class="ma-sub">Opus reasons before answering</div></div><div><input type="checkbox" id="think-toggle" class="toggle-input" onchange="saveEnhance()"><label for="think-toggle" class="toggle-label"></label></div></div>
@@ -482,8 +487,8 @@ pre::-webkit-scrollbar{height:4px}
         </div>
         <div id="pf-g" style="display:none;margin-top:8px">
           <div class="prov-note green">✓ <strong>Free tier</strong> — <a href="https://console.groq.com" target="_blank">console.groq.com</a></div>
-          <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off"></div>
-          <div><div class="flabel">Model</div><select class="finput" id="gm" onchange="updBadge()"><option value="llama-3.3-70b-versatile">Llama 3.3 70B — Best</option><option value="llama-3.1-8b-instant">Llama 3.1 8B — Fast</option><option value="mixtral-8x7b-32768">Mixtral 8x7B</option><option value="gemma2-9b-it">Gemma 2 9B</option><option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B</option><option value="qwen-qwq-32b">Qwen QwQ 32B</option></select></div></div>
+          <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off" aria-label="Groq API key"></div>
+          <div><div class="flabel">Model</div><select class="finput" id="gm" aria-label="Groq model" onchange="updBadge()"><option value="llama-3.3-70b-versatile">Llama 3.3 70B — Best</option><option value="llama-3.1-8b-instant">Llama 3.1 8B — Fast</option><option value="mixtral-8x7b-32768">Mixtral 8x7B</option><option value="gemma2-9b-it">Gemma 2 9B</option><option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B</option><option value="qwen-qwq-32b">Qwen QwQ 32B</option></select></div></div>
         </div>
         <div id="pf-h" style="display:none;margin-top:8px">
           <div class="prov-note green">✓ <strong>Token pre-configured</strong> — HF_TOKEN set via Space secrets.</div>
@@ -499,9 +504,9 @@ pre::-webkit-scrollbar{height:4px}
             <button class="qfill-btn" onclick="fillEndpoint('lmstudio')">🖥 LM Studio</button>
           </div>
           <div class="pfields">
-            <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" oninput="updBadge()"></div>
-            <div><div class="flabel">Model</div><input class="finput" id="oci-model" placeholder="llama3" autocomplete="off" oninput="updBadge()"></div>
-            <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off"></div>
+            <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" aria-label="OpenAI-compatible base URL" oninput="updBadge()"></div>
+            <div><div class="flabel">Model</div><input class="finput" id="oci-model" placeholder="llama3" autocomplete="off" aria-label="OpenAI-compatible model name" oninput="updBadge()"></div>
+            <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off" aria-label="OpenAI-compatible API key (optional)"></div>
           </div>
         </div>
         <div id="pf-al" style="display:none;margin-top:8px">
@@ -817,9 +822,9 @@ pre::-webkit-scrollbar{height:4px}
 <script>
 const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),fileSizes:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',anthropicModel:'claude-sonnet-4-6',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[],promptHistory:[],histIdx:-1,_draftText:'',_budgetWarned:false,tabs:[],activeTabId:null};
 const $=id=>document.getElementById(id);
-const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
-const get=p=>fetch(p).then(r=>r.json());
-function toast(m,err=false){document.querySelectorAll('.toast').forEach(t=>t.remove());const t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),4500);}
+const post=(p,b)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(e=>({error:e.message||'Network error'}));
+const get=p=>fetch(p).then(r=>r.json()).catch(e=>({error:e.message||'Network error'}));
+function toast(m,err=false){document.querySelectorAll('.toast').forEach(t=>t.remove());const t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=m;t.setAttribute('role',err?'alert':'status');t.setAttribute('aria-live',err?'assertive':'polite');document.body.appendChild(t);setTimeout(()=>t.remove(),4500);}
 function ar(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,180)+'px';}
 function now(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
 function fext(p){const e=p.split('.');return e.length>1?e.pop().toLowerCase():'';}
@@ -978,6 +983,17 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
+  // Settings panel focus trap (Tab/Shift+Tab cycle within panel)
+  const _sp=$('settings-panel');
+  if(_sp&&_sp.style.display!=='none'&&e.key==='Tab'){
+    const foc=_settingsFocusables();
+    if(foc.length){
+      e.preventDefault();
+      const idx=foc.indexOf(document.activeElement);
+      foc[e.shiftKey?(idx<=0?foc.length-1:idx-1):(idx>=foc.length-1?0:idx+1)].focus();
+    }
+    return;
+  }
   if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}const sp=$('settings-panel');if(sp&&sp.style.display!=='none'){closeSettings();}}
   if((e.metaKey||e.ctrlKey)&&e.key==='k'&&!e.target?.matches('input,textarea')){e.preventDefault();const sp=$('settings-panel');if(sp&&sp.style.display!=='none')closeSettings();else openSettings();}
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&S.prov==='anthropic'&&!e.target?.matches('input,textarea')){if(e.key==='1'){e.preventDefault();setAnthModel('claude-haiku-4-5-20251001');toast('⚡ Haiku');}else if(e.key==='2'){e.preventDefault();setAnthModel('claude-sonnet-4-6');toast('⚖️ Sonnet');}else if(e.key==='3'){e.preventDefault();setAnthModel('claude-opus-4-8');toast('🧠 Opus');}}
@@ -1104,8 +1120,21 @@ document.addEventListener('click',e=>{if(!e.target.closest('#more-menu')&&!e.tar
 function isMob(){return window.innerWidth<=768;}
 function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
 function expSidebar(){$('sidebar').classList.remove('col');if(!isMob())$('exp-btn').classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
-function openSettings(){const panel=$('settings-panel');if(panel)panel.style.display='flex';}
-function closeSettings(){const panel=$('settings-panel');if(panel)panel.style.display='none';}
+let _settingsPrevFocus=null;
+function _settingsFocusables(){const panel=$('settings-panel');if(!panel)return[];return[...panel.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(el=>el.offsetParent!==null);}
+function openSettings(){
+  const panel=$('settings-panel');if(!panel)return;
+  _settingsPrevFocus=document.activeElement;
+  panel.style.display='flex';
+  const bd=$('settings-backdrop');if(bd)bd.style.display='block';
+  const foc=_settingsFocusables();if(foc.length)foc[0].focus();
+}
+function closeSettings(){
+  const panel=$('settings-panel');if(!panel)return;
+  panel.style.display='none';
+  const bd=$('settings-backdrop');if(bd)bd.style.display='none';
+  if(_settingsPrevFocus&&typeof _settingsPrevFocus.focus==='function')_settingsPrevFocus.focus();
+}
 marked.setOptions({breaks:true,gfm:true});
 function explainCode(btn){const code=btn.closest('.cblock').querySelector('code');if(!code)return;const snippet=code.textContent.slice(0,800);const ti=$('ti');ti.value=`Explain what this code does, step by step:\n\`\`\`\n${snippet}\n\`\`\``;ti.focus();ti.dispatchEvent(new Event('input'));$('msgs').scrollTo(0,$('msgs').scrollHeight);}
 async function createGist(btn,lang){
@@ -1159,7 +1188,7 @@ function autoFixCode(btn){
   $('msgs').scrollTo(0,$('msgs').scrollHeight);
   toast('🔧 Security fix request ready — click Send');
 }
-function rmd(text){const d=document.createElement('div');d.innerHTML=marked.parse(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase().replace(/[^a-z0-9+#._-]/g,'');const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';const gistBtn=S.ghToken?`<button class="ccopy" onclick="createGist(this,'${lang}')" title="Save as GitHub Gist">Gist</button>`:'';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" onclick="cp(this)">copy</button><button class="ccopy" onclick="explainCode(this)" title="Explain this code">?</button><button class="ccopy" onclick="scanCode(this,'${lang}')" title="Scan for security issues">🛡️</button>${gistBtn}`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{const ce=h.querySelector('code');if(!ce)return;const fp=ce.textContent.trim();if(!/[./]/.test(fp))return;const nx=h.nextElementSibling;if(nx&&nx.classList.contains('cblock')){const hd=nx.querySelector('.cblock-head');if(hd){const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);}}});}return d.innerHTML;}
+function rmd(text){const d=document.createElement('div');d.innerHTML=marked.parse(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase().replace(/[^a-z0-9+#._-]/g,'');const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';const gistBtn=S.ghToken?`<button class="ccopy" aria-label="Save as GitHub Gist" onclick="createGist(this,'${lang}')" title="Save as GitHub Gist">Gist</button>`:'';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" aria-label="Copy code" onclick="cp(this)">copy</button><button class="ccopy" aria-label="Explain this code" onclick="explainCode(this)" title="Explain this code">?</button><button class="ccopy" aria-label="Scan for security issues" onclick="scanCode(this,'${lang}')" title="Scan for security issues">🛡️</button>${gistBtn}`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{const ce=h.querySelector('code');if(!ce)return;const fp=ce.textContent.trim();if(!/[./]/.test(fp))return;const nx=h.nextElementSibling;if(nx&&nx.classList.contains('cblock')){const hd=nx.querySelector('.cblock-head');if(hd){const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);}}});}return d.innerHTML;}
 function cp(btn){const c=btn.closest('.cblock').querySelector('code');navigator.clipboard.writeText(c.textContent);btn.textContent='copied!';btn.classList.add('ok');setTimeout(()=>{btn.textContent='copy';btn.classList.remove('ok');},2000);}
 function uploadToArea(input,targetId){const file=input.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{$(targetId).value=e.target.result;saveEnhance();toast(`Loaded ${file.name}`);};r.readAsText(file);input.value='';}
 function uploadContext(input){const files=Array.from(input.files);if(!files.length)return;let done=0;const max=8-S.selFiles.size-S.localFiles.size;if(max<=0){toast('Max 8 files',true);input.value='';return;}const toLoad=files.slice(0,max);if(files.length>max)toast(`Max 8 files — loaded first ${max}`,true);toLoad.forEach(file=>{const r=new FileReader();r.onload=e=>{S.localFiles.set(file.name,e.target.result);done++;if(done===toLoad.length){updCtx();if(!S.streaming)toast(`Added ${done} file${done>1?'s':''}`);}};r.readAsText(file);});input.value='';}
@@ -1495,10 +1524,9 @@ function copyDepsAudit(){navigator.clipboard.writeText(_depsAuditRaw);toast('Cop
 
 function setAnthModel(model){
   S.anthropicModel=model;
-  ['haiku','sonnet','opus'].forEach(m=>$(`msel-${m}`)?.classList.remove('on'));
-  if(model.includes('haiku'))$('msel-haiku')?.classList.add('on');
-  else if(model.includes('opus'))$('msel-opus')?.classList.add('on');
-  else $('msel-sonnet')?.classList.add('on');
+  ['haiku','sonnet','opus'].forEach(m=>{const b=$(`msel-${m}`);if(b){b.classList.remove('on');b.setAttribute('aria-checked','false');}});
+  const active=model.includes('haiku')?$('msel-haiku'):model.includes('opus')?$('msel-opus'):$('msel-sonnet');
+  if(active){active.classList.add('on');active.setAttribute('aria-checked','true');}
   const to=$('think-opts');if(to){if(model.includes('opus'))to.classList.add('on');else{to.classList.remove('on');const tt=$('think-toggle');if(tt)tt.checked=false;}}
   updBadge();saveEnhance();
 }
@@ -1521,7 +1549,7 @@ async function switchBranch(branch){
   buildTree(d.files);quickScanRepo(d.files);
   toast(`Switched to ${branch}`);
 }
-function setProv(p,silent=false){S.prov=p;$('pa').classList.toggle('on',p==='anthropic');$('pg').classList.toggle('on',p==='groq');$('ph').classList.toggle('on',p==='hf');$('po').classList.toggle('on',p==='openai_compat');$('pal').classList.toggle('on',p==='airllm');$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';$('pf-al').style.display=p==='airllm'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
+function setProv(p,silent=false){S.prov=p;const _pb=[['pa','anthropic'],['pg','groq'],['ph','hf'],['po','openai_compat'],['pal','airllm']];_pb.forEach(([id,pv])=>{const b=$(id);if(b){b.classList.toggle('on',p===pv);b.setAttribute('aria-checked',p===pv?'true':'false');}});$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';$('pf-al').style.display=p==='airllm'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
 function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';let text='claude-sonnet';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';text=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';}else if(S.prov==='groq')text=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')text=($('oci-model')&&$('oci-model').value)||'custom';else if(S.prov==='airllm')text=(($('al-model')&&$('al-model').value)||'airllm').split('/').pop();else text=S.hfModel.split('/').pop();const p=$('model-pill');const sp=$('sidebar-model-pill');if(p)p.textContent=text;if(sp)sp.textContent=text;}
 function fillAirLLM(model){$('al-model').value=model;updBadge();saveEnhance();toast('AirLLM model: '+model.split('/').pop());}
 let searchTimer=null;
