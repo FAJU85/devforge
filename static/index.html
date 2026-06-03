@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" id="hljs-theme">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script src="https://browser.sentry-cdn.com/8.54.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
 <script>
 (async()=>{
@@ -1168,6 +1169,7 @@ function openSettings(){setSideTab('config');expSidebar();}
 function closeSettings(){}
 function toggleSkillRow(row){row.classList.toggle('on');saveEnhance();updHint();}
 marked.setOptions({breaks:true,gfm:true});
+function safeMD(text){return DOMPurify.sanitize(marked.parse(text),{ADD_TAGS:['mark'],ADD_ATTR:['class','id','aria-label','title','href','target','rel','style']});}
 function explainCode(btn){const code=btn.closest('.cblock').querySelector('code');if(!code)return;const snippet=code.textContent.slice(0,800);const ti=$('ti');ti.value=`Explain what this code does, step by step:\n\`\`\`\n${snippet}\n\`\`\``;ti.focus();ti.dispatchEvent(new Event('input'));$('msgs').scrollTo(0,$('msgs').scrollHeight);}
 async function createGist(btn,lang){
   if(!S.ghToken){toast('Connect GitHub first',true);return;}
@@ -1220,7 +1222,7 @@ function autoFixCode(btn){
   $('msgs').scrollTo(0,$('msgs').scrollHeight);
   toast('🔧 Security fix request ready — click Send');
 }
-function rmd(text){const d=document.createElement('div');d.innerHTML=marked.parse(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase().replace(/[^a-z0-9+#._-]/g,'');const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';const gistBtn=S.ghToken?`<button class="ccopy" aria-label="Save as GitHub Gist" onclick="createGist(this,'${lang}')" title="Save as GitHub Gist">Gist</button>`:'';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" aria-label="Copy code" onclick="cp(this)">copy</button><button class="ccopy" aria-label="Explain this code" onclick="explainCode(this)" title="Explain this code">?</button><button class="ccopy" aria-label="Scan for security issues" onclick="scanCode(this,'${lang}')" title="Scan for security issues">🛡️</button>${gistBtn}`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){
+function rmd(text){const d=document.createElement('div');d.innerHTML=safeMD(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase().replace(/[^a-z0-9+#._-]/g,'');const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';const gistBtn=S.ghToken?`<button class="ccopy" aria-label="Save as GitHub Gist" onclick="createGist(this,'${lang}')" title="Save as GitHub Gist">Gist</button>`:'';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" aria-label="Copy code" onclick="cp(this)">copy</button><button class="ccopy" aria-label="Explain this code" onclick="explainCode(this)" title="Explain this code">?</button><button class="ccopy" aria-label="Scan for security issues" onclick="scanCode(this,'${lang}')" title="Scan for security issues">🛡️</button>${gistBtn}`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){
   const _FILE_EXT=/\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|cpp|c|h|css|scss|html|json|yaml|yml|sh|bash|toml|md|vue|svelte|sql|proto|kt|swift|dart|scala|conf|config|xml|gradle|env)$/i;
   const _addWriteBtn=(cb,fp)=>{if(cb.querySelector('.cwrite'))return;const hd=cb.querySelector('.cblock-head');if(!hd)return;const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);};
   // Method 1: heading with inline-code path immediately before cblock
@@ -1471,7 +1473,7 @@ async function generateReleaseNotes(){
     $('rn-output').innerHTML='';
     const out=$('rn-output');
     const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
-    while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;try{const ev=JSON.parse(line.slice(5).trim());if(ev.t==='text'){raw+=ev.v;out.innerHTML=marked.parse(raw);}else if(ev.t==='error'){out.innerHTML+=`<span style="color:var(--red)">Error: ${esc(ev.v)}</span>`;}else if(ev.t==='done')break;}catch{}}}
+    while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;try{const ev=JSON.parse(line.slice(5).trim());if(ev.t==='text'){raw+=ev.v;out.innerHTML=safeMD(raw);}else if(ev.t==='error'){out.innerHTML+=`<span style="color:var(--red)">Error: ${esc(ev.v)}</span>`;}else if(ev.t==='done')break;}catch{}}}
     if(raw)$('rn-copy-btn').style.display='block';
   }catch(e){if(e.name!=='AbortError')$('rn-output').innerHTML=`<span style="color:var(--red)">${esc(e.message)}</span>`;}
   finally{btn.disabled=false;btn.textContent='✨ Generate';_rnAbort=null;}
@@ -1502,7 +1504,7 @@ async function generateReadme(){
     $('readme-output').innerHTML='';
     const out=$('readme-output');
     const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
-    while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;try{const ev=JSON.parse(line.slice(5).trim());if(ev.t==='text'){_readmeRaw+=ev.v;out.innerHTML=marked.parse(_readmeRaw);}else if(ev.t==='error'){out.innerHTML+=`<span style="color:var(--red)">Error: ${esc(ev.v)}</span>`;}else if(ev.t==='done')break;}catch{}}}
+    while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data:'))continue;try{const ev=JSON.parse(line.slice(5).trim());if(ev.t==='text'){_readmeRaw+=ev.v;out.innerHTML=safeMD(_readmeRaw);}else if(ev.t==='error'){out.innerHTML+=`<span style="color:var(--red)">Error: ${esc(ev.v)}</span>`;}else if(ev.t==='done')break;}catch{}}}
     if(_readmeRaw){$('readme-copy-btn').style.display='block';$('readme-save-btn').style.display='block';}
   }catch(e){if(e.name!=='AbortError')$('readme-output').innerHTML=`<span style="color:var(--red)">${esc(e.message)}</span>`;}
   finally{btn.disabled=false;btn.textContent='✨ Generate';_readmeAbort=null;}
@@ -1565,7 +1567,7 @@ async function runDepsAudit(){
             out.innerHTML='<span style="color:var(--muted)">🤖 AI analyzing security implications…</span>';
           }else if(ev.t==='text'){
             if(out.querySelector('span'))out.innerHTML='';
-            _depsAuditRaw+=ev.v;out.innerHTML=marked.parse(_depsAuditRaw);
+            _depsAuditRaw+=ev.v;out.innerHTML=safeMD(_depsAuditRaw);
           }else if(ev.t==='error'){
             out.innerHTML+=`<span style="color:var(--red)">Error: ${esc(ev.v)}</span>`;
           }else if(ev.t==='done'){
