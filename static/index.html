@@ -694,6 +694,7 @@ pre::-webkit-scrollbar{height:4px}
           <button id="readme-btn" onclick="openReadmeModal();closeMoreMenu()">📝 Gen README</button>
           <button id="deps-btn" onclick="openDepsModal();closeMoreMenu()">🔍 Scan Deps</button>
           <button id="search-chat-btn" onclick="toggleChatSearch();closeMoreMenu()">🔎 Search chat</button>
+          <button id="shortcuts-btn" onclick="openShortcutsHelp();closeMoreMenu()">⌨️ Keyboard shortcuts</button>
           <button id="clear-btn" onclick="clearChat();closeMoreMenu()">🗑️ Clear chat</button>
         </div>
       </div>
@@ -870,6 +871,36 @@ pre::-webkit-scrollbar{height:4px}
       <button class="modal-ok" id="deps-run-btn" onclick="runDepsAudit()">🔍 Audit</button>
       <button class="modal-cancel" onclick="$('deps-modal').style.display='none'">Close</button>
     </div>
+  </div>
+</div>
+
+<!-- Keyboard shortcuts help -->
+<div class="modal-overlay" id="shortcuts-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-head">⌨️ Keyboard Shortcuts</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px">
+      <div><div style="font-size:10px;font-weight:700;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Chat</div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Send message</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘↵</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Clear chat</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘L</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Search messages</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘F</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Focus input</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">/</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">History ↑↓</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">↑↓</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Mention file</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">@</kbd></div>
+        </div>
+      </div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Navigation</div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Command palette</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘K</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Quick file open</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘P</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">AI Config</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘,</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Switch model</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘1/2/3</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Shortcuts help</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">?</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Dismiss / focus</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">Esc</kbd></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="modal-cancel" onclick="$('shortcuts-modal').style.display='none'">Close</button></div>
   </div>
 </div>
 
@@ -1066,11 +1097,14 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){const modals=['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'];const anyOpen=modals.some(id=>{const m=$(id);if(m&&m.style.display!=='none'){m.style.display='none';return true;}return false;});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}else if(!anyOpen&&!_atMenu&&!e.target?.matches('input,textarea')){$('ti')?.focus();}}
+  if(e.key==='Escape'){const modals=['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal','shortcuts-modal'];const anyOpen=modals.some(id=>{const m=$(id);if(m&&m.style.display!=='none'){m.style.display='none';return true;}return false;});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}else if(!anyOpen&&!_atMenu&&!e.target?.matches('input,textarea')){$('ti')?.focus();}}
   if((e.metaKey||e.ctrlKey)&&e.key==='k'&&!e.target?.matches('input,textarea')){e.preventDefault();openCmdPalette();}
   if((e.metaKey||e.ctrlKey)&&e.key==='p'&&!e.target?.matches('input,textarea')){e.preventDefault();openCmdPalette('@');}
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&S.prov==='anthropic'&&!e.target?.matches('input,textarea')){if(e.key==='1'){e.preventDefault();setAnthModel('claude-haiku-4-5-20251001');toast('⚡ Haiku');}else if(e.key==='2'){e.preventDefault();setAnthModel('claude-sonnet-4-6');toast('⚖️ Sonnet');}else if(e.key==='3'){e.preventDefault();setAnthModel('claude-opus-4-8');toast('🧠 Opus');}}
   if((e.metaKey||e.ctrlKey)&&e.key==='f'&&!e.target?.matches('input,textarea')){e.preventDefault();toggleChatSearch();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='l'&&!e.target?.matches('input,textarea')){e.preventDefault();clearChat();}
+  if((e.metaKey||e.ctrlKey)&&e.key===','&&!e.target?.matches('input,textarea')){e.preventDefault();setSideTab('config');expSidebar();}
+  if(e.key==='?'&&!e.metaKey&&!e.ctrlKey&&!e.altKey&&!e.target?.matches('input,textarea,select')){e.preventDefault();openShortcutsHelp();}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
   if(e.key==='/'&&!e.metaKey&&!e.ctrlKey&&!e.altKey&&!e.target?.matches('input,textarea,select')){e.preventDefault();$('ti')?.focus();}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key==='Backspace'){e.preventDefault();if($('ti'))$('ti').value='';}
@@ -1173,6 +1207,8 @@ function regenerate(){
 
 // ── Test stage toggle ─────────────────────────────────────────────────────────
 function onTestStageToggle(){const tr=$('ma-test-row');if(tr)tr.style.display=$('ma-test-stage').checked?'flex':'none';saveEnhance();}
+// ── Keyboard shortcuts help ───────────────────────────────────────────────────
+function openShortcutsHelp(){$('shortcuts-modal').style.display='flex';}
 
 // ── Batch commit all AI-generated files ──────────────────────────────────────
 function extractFileBlocks(msgBody){const blocks=[];msgBody.querySelectorAll('.cblock').forEach(block=>{const writeBtn=block.querySelector('.cwrite[data-filepath]');if(!writeBtn)return;const path=writeBtn.getAttribute('data-filepath');const code=block.querySelector('code');if(path&&code)blocks.push({path,content:code.textContent});});return blocks;}
