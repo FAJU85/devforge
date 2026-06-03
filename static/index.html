@@ -260,6 +260,10 @@ pre::-webkit-scrollbar{height:4px}
 .msg-act{background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;padding:2px 8px;border-radius:5px;font-size:11px;font-family:inherit;transition:all .15s;line-height:1.6}
 .msg-act:hover{color:var(--text);border-color:var(--border)}
 .msg-act.del:hover{color:var(--red);border-color:var(--red)}
+/* Follow-up suggestion chips */
+.follow-chips{display:flex;gap:5px;flex-wrap:wrap;padding:6px 0 2px 31px}
+.follow-chip{background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;padding:3px 10px;border-radius:20px;font-size:11px;font-family:inherit;transition:all .15s;line-height:1.6;white-space:nowrap}
+.follow-chip:hover{border-color:var(--accent-border);color:var(--accent2);background:var(--hover)}
 .diff-panel{padding:10px 14px;background:var(--code-bg);border-top:1px solid var(--border2);max-height:260px;overflow-y:auto}
 .diff-panel pre{font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;margin:0}
 .diff-add{background:#1a3a1a;color:#7ee787;display:block;padding:0 4px}
@@ -1643,7 +1647,27 @@ async function send(){
   S.streaming=false;$('send-btn').disabled=false;$('stop-btn').style.display='none';S.abortCtrl=null;
   // Offer batch commit if multiple writable files detected
   if(reply&&!multiAgent&&S.repo&&S.ghToken){const blocks=extractFileBlocks(tw);if(blocks.length>1){const bBtn=document.createElement('button');bBtn.className='msg-act';bBtn.style.cssText='margin:4px 0 0 31px;padding:4px 12px;display:inline-flex;align-items:center;gap:5px';bBtn.textContent=`📦 Commit ${blocks.length} files`;bBtn.onclick=()=>showBatchPanel(tw);tw.querySelector('.msg-inner').appendChild(bBtn);}}
+  // Follow-up suggestion chips
+  if(reply&&!multiAgent)addFollowChips(tw,reply);
   scrollB();
+}
+function addFollowChips(tw,reply){
+  const inner=tw.querySelector('.msg-inner');if(!inner)return;
+  const hasCode=reply.includes('```');
+  const hasError=/error|exception|bug|fail|crash|fix/i.test(reply);
+  const hasArch=/architect|refactor|design|pattern|structure|module/i.test(reply);
+  const chips=[];
+  if(hasCode){chips.push('Write tests for this','Review this code for bugs','Explain this code step by step');}
+  else if(hasArch){chips.push('Show a concrete example','How would you implement this?','What are the trade-offs?');}
+  else if(hasError){chips.push('Show the fix','How do I prevent this?','Are there other related issues?');}
+  else{chips.push('Continue','What should I do next?','Summarize the key changes');}
+  const row=document.createElement('div');row.className='follow-chips';
+  chips.slice(0,3).forEach(label=>{
+    const btn=document.createElement('button');btn.className='follow-chip';btn.textContent=label;
+    btn.onclick=()=>{row.remove();const ti=$('ti');ti.value=label;ar(ti);ti.focus();};
+    row.appendChild(btn);
+  });
+  inner.appendChild(row);
 }
 // ── GitHub Issue / PR modals ──────────────────────────────────────────────────
 function openIssueModal(){
