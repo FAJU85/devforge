@@ -178,7 +178,7 @@ select.finput{cursor:pointer;font-family:inherit;font-size:12px}
 .msg-body th{background:var(--panel2);font-weight:600}
 .msg-body hr{border:none;border-top:1px solid var(--border2);margin:1em 0}
 .cblock{margin:.7em 0;border-radius:10px;overflow:hidden;border:1px solid var(--border2)}
-.cblock-head{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;background:var(--panel);border-bottom:1px solid var(--border2)}
+.cblock-head{display:flex;align-items:center;gap:4px;padding:7px 14px;background:var(--panel);border-bottom:1px solid var(--border2)}
 .clang{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent2);font-weight:600}
 .ccopy{background:none;border:none;color:var(--muted2);font-size:11px;cursor:pointer;border-radius:5px;padding:2px 8px;transition:all .15s;font-family:inherit}
 .ccopy:hover{background:var(--hover2);color:var(--text)}.ccopy.ok{color:var(--accent2)}
@@ -428,6 +428,28 @@ pre::-webkit-scrollbar{height:4px}
   .modal-overlay{padding:0;align-items:flex-end}
   .modal{border-radius:16px 16px 0 0!important;max-width:100%!important;max-height:92vh;overflow-y:auto}
 }
+/* ── Command palette ───────────────────────────────────────────────────────── */
+.cmd-overlay{position:fixed;inset:0;background:#0007;z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding-top:15vh}
+.cmd-box{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:100%;max-width:540px;box-shadow:0 24px 64px #0009;overflow:hidden;margin:0 16px;animation:fadein .15s ease}
+.cmd-in-wrap{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border2)}
+.cmd-icon{font-size:16px;flex-shrink:0;color:var(--muted2)}
+.cmd-in{flex:1;background:none;border:none;color:var(--text);font-size:15px;outline:none;font-family:inherit}
+.cmd-in::placeholder{color:var(--muted2)}
+.cmd-esc-badge{font-size:11px;color:var(--muted2);padding:2px 7px;border:1px solid var(--border2);border-radius:5px;flex-shrink:0;font-family:'JetBrains Mono',monospace;cursor:pointer}
+.cmd-list{max-height:340px;overflow-y:auto;padding:6px 0}
+.cmd-section{padding:6px 16px 2px;font-size:10px;font-weight:700;color:var(--muted2);letter-spacing:.1em;text-transform:uppercase}
+.cmd-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background .08s;border-left:2px solid transparent}
+.cmd-item.hi,.cmd-item:hover{background:var(--hover);border-left-color:var(--accent2)}
+.cmd-item-icon{font-size:14px;width:20px;text-align:center;flex-shrink:0}
+.cmd-item-label{flex:1;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmd-item-sub{font-size:11px;color:var(--muted2);white-space:nowrap;margin-left:6px}
+.cmd-item-kbd{font-size:10px;color:var(--muted2);background:var(--input-bg);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-family:'JetBrains Mono',monospace;flex-shrink:0;white-space:nowrap}
+.cmd-empty{padding:24px;text-align:center;font-size:13px;color:var(--muted2)}
+.cmd-hint{padding:8px 16px;font-size:11px;color:var(--muted2);border-top:1px solid var(--border2);display:flex;gap:14px}
+/* Sidebar resize handle */
+.resize-handle{width:3px;background:transparent;cursor:col-resize;flex-shrink:0;transition:background .15s;position:relative;z-index:10}
+.resize-handle:hover,.resize-handle.dragging{background:var(--accent-border)}
+@media(max-width:768px){.resize-handle{display:none}}
 </style>
 </head>
 <body>
@@ -641,6 +663,7 @@ pre::-webkit-scrollbar{height:4px}
     </div>
   </div>
 </aside>
+<div class="resize-handle" id="resize-handle"></div>
 <main class="workspace" aria-label="Chat workspace">
   <div class="topbar">
     <button class="exp-btn" id="exp-btn" onclick="expSidebar()" aria-label="Expand sidebar">›</button>
@@ -850,6 +873,19 @@ pre::-webkit-scrollbar{height:4px}
   </div>
 </div>
 
+<!-- Command Palette -->
+<div class="cmd-overlay" id="cmd-overlay" style="display:none" onclick="if(event.target===this)closeCmdPalette()">
+  <div class="cmd-box" onclick="event.stopPropagation()">
+    <div class="cmd-in-wrap">
+      <span class="cmd-icon">⌘</span>
+      <input class="cmd-in" id="cmd-in" placeholder="Type a command or @ to search files…" oninput="filterCmdPalette(this.value)" onkeydown="hkCmd(event)" autocomplete="off" autocorrect="off" spellcheck="false">
+      <kbd class="cmd-esc-badge" onclick="closeCmdPalette()">esc</kbd>
+    </div>
+    <div class="cmd-list" id="cmd-list"></div>
+    <div class="cmd-hint"><span>↑↓ navigate</span><span>↵ execute</span><span>@ search files</span><span>esc close</span></div>
+  </div>
+</div>
+
 <script>
 const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),fileSizes:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',anthropicModel:'claude-sonnet-4-6',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[],promptHistory:[],histIdx:-1,_draftText:'',_budgetWarned:false,tabs:[],activeTabId:null};
 const $=id=>document.getElementById(id);
@@ -858,6 +894,7 @@ const get=p=>fetch(p).then(r=>r.json()).catch(e=>({error:e.message||'Network err
 function toast(m,err=false){document.querySelectorAll('.toast').forEach(t=>t.remove());const t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=m;t.setAttribute('role',err?'alert':'status');t.setAttribute('aria-live',err?'assertive':'polite');document.body.appendChild(t);setTimeout(()=>t.remove(),4500);}
 function ar(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,180)+'px';}
 function now(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+function relTime(ts){const d=Date.now()-ts;if(d<5000)return'just now';if(d<60000)return Math.floor(d/1000)+'s ago';if(d<3600000)return Math.floor(d/60000)+'m ago';if(d<86400000)return Math.floor(d/3600000)+'h ago';return new Date(ts).toLocaleDateString();}
 function fext(p){const e=p.split('.');return e.length>1?e.pop().toLowerCase():'';}
 function ficon(p){const e=fext(p);const m={js:'🟨',jsx:'⚛️',ts:'🔷',tsx:'⚛️',py:'🐍',go:'🐹',rs:'🦀',md:'📝',json:'📋',css:'🎨',html:'🌐',sh:'🐚',yml:'⚙️',yaml:'⚙️',toml:'⚙️',lock:'🔒',sql:'🗄️'};return m[e]||'📄';}
 function tokEst(size){return Math.max(1,Math.round((size||0)/4));}
@@ -1030,7 +1067,8 @@ async function suggestFiles(){
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){const modals=['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'];const anyOpen=modals.some(id=>{const m=$(id);if(m&&m.style.display!=='none'){m.style.display='none';return true;}return false;});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}else if(!anyOpen&&!_atMenu&&!e.target?.matches('input,textarea')){$('ti')?.focus();}}
-  if((e.metaKey||e.ctrlKey)&&e.key==='k'&&!e.target?.matches('input,textarea')){e.preventDefault();setSideTab('config');expSidebar();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='k'&&!e.target?.matches('input,textarea')){e.preventDefault();openCmdPalette();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='p'&&!e.target?.matches('input,textarea')){e.preventDefault();openCmdPalette('@');}
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&S.prov==='anthropic'&&!e.target?.matches('input,textarea')){if(e.key==='1'){e.preventDefault();setAnthModel('claude-haiku-4-5-20251001');toast('⚡ Haiku');}else if(e.key==='2'){e.preventDefault();setAnthModel('claude-sonnet-4-6');toast('⚖️ Sonnet');}else if(e.key==='3'){e.preventDefault();setAnthModel('claude-opus-4-8');toast('🧠 Opus');}}
   if((e.metaKey||e.ctrlKey)&&e.key==='f'&&!e.target?.matches('input,textarea')){e.preventDefault();toggleChatSearch();}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
@@ -1222,9 +1260,9 @@ function autoFixCode(btn){
   $('msgs').scrollTo(0,$('msgs').scrollHeight);
   toast('🔧 Security fix request ready — click Send');
 }
-function rmd(text){const d=document.createElement('div');d.innerHTML=safeMD(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase().replace(/[^a-z0-9+#._-]/g,'');const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';const gistBtn=S.ghToken?`<button class="ccopy" aria-label="Save as GitHub Gist" onclick="createGist(this,'${lang}')" title="Save as GitHub Gist">Gist</button>`:'';head.innerHTML=`<span class="clang">${lang}</span><button class="ccopy" aria-label="Copy code" onclick="cp(this)">copy</button><button class="ccopy" aria-label="Explain this code" onclick="explainCode(this)" title="Explain this code">?</button><button class="ccopy" aria-label="Scan for security issues" onclick="scanCode(this,'${lang}')" title="Scan for security issues">🛡️</button>${gistBtn}`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){
+function rmd(text){const d=document.createElement('div');d.innerHTML=safeMD(text);d.querySelectorAll('pre').forEach(pre=>{const code=pre.querySelector('code');if(!code)return;const lang=(code.className.replace('language-','')||'code').toLowerCase().replace(/[^a-z0-9+#._-]/g,'');const wrap=document.createElement('div');wrap.className='cblock';const head=document.createElement('div');head.className='cblock-head';const gistBtn=S.ghToken?`<button class="ccopy" aria-label="Save as GitHub Gist" onclick="createGist(this,'${lang}')" title="Save as GitHub Gist">Gist</button>`:'';head.innerHTML=`<span class="clang">${lang}</span><span style="flex:1"></span><button class="ccopy" aria-label="Copy code" onclick="cp(this)">copy</button><button class="ccopy" aria-label="Explain this code" onclick="explainCode(this)" title="Explain this code">?</button><button class="ccopy" aria-label="Scan for security issues" onclick="scanCode(this,'${lang}')" title="Scan for security issues">🛡️</button>${gistBtn}`;wrap.appendChild(head);pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);hljs.highlightElement(code);});if(S.repo&&S.ghToken){
   const _FILE_EXT=/\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|cpp|c|h|css|scss|html|json|yaml|yml|sh|bash|toml|md|vue|svelte|sql|proto|kt|swift|dart|scala|conf|config|xml|gradle|env)$/i;
-  const _addWriteBtn=(cb,fp)=>{if(cb.querySelector('.cwrite'))return;const hd=cb.querySelector('.cblock-head');if(!hd)return;const b=document.createElement('button');b.className='cwrite';b.textContent='📤 Write';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);};
+  const _addWriteBtn=(cb,fp)=>{if(cb.querySelector('.cwrite'))return;const hd=cb.querySelector('.cblock-head');if(!hd)return;const chip=document.createElement('span');chip.style.cssText='font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--accent2);padding:1px 7px;background:var(--accent-dim);border-radius:4px;border:1px solid var(--accent-border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;flex-shrink:1';chip.title=fp;chip.textContent=fp.split('/').length>2?fp.split('/').slice(-2).join('/'):fp;const spacer=hd.querySelector('span[style*="flex:1"]');if(spacer)hd.insertBefore(chip,spacer);else{const langSpan=hd.querySelector('.clang');if(langSpan&&langSpan.nextSibling)hd.insertBefore(chip,langSpan.nextSibling);else hd.appendChild(chip);}const b=document.createElement('button');b.className='cwrite';b.textContent='Apply';b.setAttribute('data-filepath',fp);b.setAttribute('onclick','showWritePanel(this)');hd.appendChild(b);};
   // Method 1: heading with inline-code path immediately before cblock
   d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{const ce=h.querySelector('code');if(!ce)return;const fp=ce.textContent.trim();if(!_FILE_EXT.test(fp))return;const nx=h.nextElementSibling;if(nx&&nx.classList.contains('cblock'))_addWriteBtn(nx,fp);});
   // Method 2: inline-code path in paragraph/text immediately before cblock
@@ -1617,7 +1655,7 @@ async function fetchModels(q=''){$('model-list').innerHTML='<div class="list-msg
 function selectModel(id,el){S.hfModel=id;document.querySelectorAll('#model-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');$('hf-sel-name').textContent=id;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';updBadge();saveEnhance();}
 function clearModel(){$('hf-selected').style.display='none';$('hf-browser').style.display='block';$('model-search').value='';fetchModels('');}
 function setAgent(el){document.querySelectorAll('.atab').forEach(t=>{t.classList.remove('on');t.setAttribute('aria-selected','false');});el.classList.add('on');el.setAttribute('aria-selected','true');S.agent=el.dataset.agent;}
-function updHint(){const h=$('hint');const n=S.selFiles.size+S.localFiles.size;if(!S.ghToken){h.textContent='Open sidebar · Connect GitHub to get started';return;}if(!S.repo&&!n){h.textContent='Select a repo (sidebar) or 📎 upload a file';return;}if(S.repo&&!n){h.textContent=`@ to mention a file · click files to add context · ⌘K config`;return;}const skill=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill).join('+');h.textContent=`${n} file${n!==1?'s':''} ready${skill?' · '+skill:''}  ·  ⌘↵ send  ·  ⌘1/2/3 model`;}
+function updHint(){const h=$('hint');const n=S.selFiles.size+S.localFiles.size;if(!S.ghToken){h.textContent='Open sidebar · Connect GitHub to get started · ⌘K commands';return;}if(!S.repo&&!n){h.textContent='Select a repo (sidebar) or 📎 upload a file · ⌘K commands';return;}if(S.repo&&!n){h.textContent=`@ to mention a file · ⌘P quick open · ⌘K commands`;return;}const skill=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill).join('+');h.textContent=`${n} file${n!==1?'s':''} ready${skill?' · '+skill:''}  ·  ⌘↵ send  ·  ⌘K commands`;}
 function fill(btn){$('ti').value=btn.textContent.trim();$('ti').focus();ar($('ti'));}
 // ── @file mention autocomplete ────────────────────────────────────────────────
 let _atPos=-1,_atMenu=null,_atMatches=[],_atIdx=0;
@@ -1655,7 +1693,7 @@ async function send(){
   S.abortCtrl=new AbortController();
   const skills=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill);
   const streamId='sb'+Date.now()+Math.random().toString(36).slice(2);
-  let reply='';let gotUsage=false;
+  let reply='';let gotUsage=false;let _streamUsage=null;
   try{
     let histMsgs=S.memory?[...S.memory.msgs,...S.msgs.slice(-8)]:S.msgs.slice(-10);
     // Smart trim: if total estimated tokens > 90K, drop oldest messages
@@ -1679,8 +1717,8 @@ async function send(){
       const be=document.getElementById(streamId);
       const reader=res.body.getReader();const dec=new TextDecoder();let buf='';
       let thinkBlock=null,thinkBody=null;
-      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='thinking'){if(!thinkBlock){thinkBlock=document.createElement('div');thinkBlock.className='thinking-block';thinkBlock.innerHTML='<div class="think-hd" onclick="this.parentElement.classList.toggle(\'collapsed\')">🧠 Thinking… <span class="think-arr">▼</span></div><div class="think-body"></div>';be.parentElement.insertBefore(thinkBlock,be);thinkBody=thinkBlock.querySelector('.think-body');}thinkBody.textContent+=ev.v;scrollB();}else if(ev.t==='text'){if(thinkBlock){thinkBlock.querySelector('.think-hd').innerHTML='🧠 Thoughts <span class="think-arr">▼</span>';thinkBlock.classList.add('collapsed');}reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='usage'){gotUsage=true;addTokens('',ev.v.input+ev.v.output);}else if(ev.t==='tool_call'){insertToolCallCard(ev.v);}else if(ev.t==='tool_result'){updateToolResultCard(ev.v);}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${esc(String(ev.v||''))}</span>`;}}catch{}}}
-      const timeEl=document.getElementById(`${streamId}-time`);if(timeEl){const elapsed=((Date.now()-timerStart)/1000).toFixed(1);timeEl.textContent=now()+' · '+elapsed+'s';}
+      while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;const raw=line.slice(6).trim();if(!raw)continue;try{const ev=JSON.parse(raw);if(ev.t==='thinking'){if(!thinkBlock){thinkBlock=document.createElement('div');thinkBlock.className='thinking-block';thinkBlock.innerHTML='<div class="think-hd" onclick="this.parentElement.classList.toggle(\'collapsed\')">🧠 Thinking… <span class="think-arr">▼</span></div><div class="think-body"></div>';be.parentElement.insertBefore(thinkBlock,be);thinkBody=thinkBlock.querySelector('.think-body');}thinkBody.textContent+=ev.v;scrollB();}else if(ev.t==='text'){if(thinkBlock){thinkBlock.querySelector('.think-hd').innerHTML='🧠 Thoughts <span class="think-arr">▼</span>';thinkBlock.classList.add('collapsed');}reply+=ev.v;be.innerHTML=rmd(reply);scrollB();}else if(ev.t==='usage'){gotUsage=true;_streamUsage={in:ev.v.input||0,out:ev.v.output||0};addTokens('',ev.v.input+ev.v.output);}else if(ev.t==='tool_call'){insertToolCallCard(ev.v);}else if(ev.t==='tool_result'){updateToolResultCard(ev.v);}else if(ev.t==='error'){be.innerHTML=`<span style="color:var(--red)">❌ ${esc(String(ev.v||''))}</span>`;}}catch{}}}
+      const timeEl=document.getElementById(`${streamId}-time`);if(timeEl){const elapsed=((Date.now()-timerStart)/1000).toFixed(1);const tokInfo=_streamUsage?` · ↑${tokFmt(_streamUsage.in)} ↓${tokFmt(_streamUsage.out)}`:'';timeEl.textContent=now()+' · '+elapsed+'s'+tokInfo;}
     }
     if(reply){S.msgs.push({role:'assistant',content:reply});if(!gotUsage)addTokens(reply);
       // Auto-name the tab from first user message
@@ -1873,7 +1911,99 @@ function quickScanRepo(files){
   $('rs-info').innerHTML=`${fw}<span style="color:var(--muted2);font-size:10px">${files.length} files · ~${sizeStr}</span>`;
 }
 
-(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();if(!restoreSession())expSidebar();if(isMob())collSidebar();})();
+// ── Command Palette ────────────────────────────────────────────────────────────
+const CMD_ACTIONS=[
+  {icon:'⚡',label:'Switch to Haiku',sub:'Fastest & cheapest',kbd:'⌘1',fn:()=>{setAnthModel('claude-haiku-4-5-20251001');toast('⚡ Haiku');},group:'Model'},
+  {icon:'⚖️',label:'Switch to Sonnet',sub:'Best for most tasks',kbd:'⌘2',fn:()=>{setAnthModel('claude-sonnet-4-6');toast('⚖️ Sonnet');},group:'Model'},
+  {icon:'🧠',label:'Switch to Opus',sub:'Most intelligent',kbd:'⌘3',fn:()=>{setAnthModel('claude-opus-4-8');toast('🧠 Opus');},group:'Model'},
+  {icon:'⚙️',label:'Code agent',fn:()=>{const t=document.querySelector('.atab[data-agent="code"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'🔍',label:'Review agent',fn:()=>{const t=document.querySelector('.atab[data-agent="review"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'🏗️',label:'Architect agent',fn:()=>{const t=document.querySelector('.atab[data-agent="architect"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'🐛',label:'Debug agent',fn:()=>{const t=document.querySelector('.atab[data-agent="debug"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'🧪',label:'Test generation agent',fn:()=>{const t=document.querySelector('.atab[data-agent="testgen"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'📝',label:'Docs agent',fn:()=>{const t=document.querySelector('.atab[data-agent="docs"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'🔀',label:'Refactor agent',fn:()=>{const t=document.querySelector('.atab[data-agent="refactor"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'📁',label:'Browse files',sub:'Open file browser',fn:()=>{setSideTab('files');expSidebar();},group:'Navigation'},
+  {icon:'⚙️',label:'AI Config & Skills',sub:'Models, skills, rules',fn:()=>{setSideTab('config');expSidebar();},group:'Navigation'},
+  {icon:'🔧',label:'Tools panel',sub:'Snippets, custom tools',fn:()=>{setSideTab('tools');expSidebar();},group:'Navigation'},
+  {icon:'➕',label:'New conversation tab',fn:()=>newTab(),group:'Chat'},
+  {icon:'🗑️',label:'Clear current chat',fn:()=>clearChat(),group:'Chat'},
+  {icon:'⬇️',label:'Export chat as Markdown',fn:()=>exportChat(),group:'Chat'},
+  {icon:'🔎',label:'Search in chat',kbd:'⌘F',fn:()=>toggleChatSearch(),group:'Chat'},
+  {icon:'🔄',label:'Regenerate last response',fn:()=>regenerate(),group:'Chat'},
+  {icon:'☀️',label:'Light theme',fn:()=>setTheme('light'),group:'Settings'},
+  {icon:'🌙',label:'Dark theme',fn:()=>setTheme('dark'),group:'Settings'},
+  {icon:'📋',label:'Create GitHub Issue',fn:()=>openIssueModal(),group:'GitHub'},
+  {icon:'🏷️',label:'Generate Release Notes',fn:()=>openReleaseNotes(),group:'GitHub'},
+  {icon:'📝',label:'Generate README',fn:()=>openReadmeModal(),group:'GitHub'},
+  {icon:'🔍',label:'Scan Dependencies',fn:()=>openDepsModal(),group:'GitHub'},
+];
+let _cmdIdx=0,_cmdFiltered=[];
+function openCmdPalette(prefix){
+  const overlay=$('cmd-overlay');if(!overlay)return;
+  overlay.style.display='flex';
+  const inp=$('cmd-in');inp.value=prefix||'';
+  requestAnimationFrame(()=>inp.focus());
+  filterCmdPalette(inp.value);
+}
+function closeCmdPalette(){const overlay=$('cmd-overlay');if(overlay)overlay.style.display='none';}
+function filterCmdPalette(q){
+  const low=(q||'').toLowerCase().trim();
+  if(low.startsWith('@')&&S.repo?.files?.length){
+    const fq=low.slice(1);
+    _cmdFiltered=S.repo.files.filter(f=>f.path.toLowerCase().includes(fq)).slice(0,12).map(f=>({
+      icon:ficon(f.path),label:f.path.split('/').pop(),sub:f.path,
+      fn:()=>{closeCmdPalette();if(!S.selFiles.has(f.path)){if(S.selFiles.size+S.localFiles.size>=8){toast('Max 8 files',true);return;}togF(f.path);}else{toast('Already in context');}},
+      group:'Files'
+    }));
+  } else {
+    _cmdFiltered=CMD_ACTIONS.filter(a=>!low||(a.label+' '+(a.sub||'')+' '+(a.group||'')).toLowerCase().includes(low));
+  }
+  _cmdIdx=0;renderCmdList();
+}
+function renderCmdList(){
+  const list=$('cmd-list');if(!list)return;
+  if(!_cmdFiltered.length){list.innerHTML='<div class="cmd-empty">No matching commands</div>';return;}
+  const groups={};
+  _cmdFiltered.forEach((a,i)=>{const g=a.group||'Other';if(!groups[g])groups[g]=[];groups[g].push({...a,_i:i});});
+  let html='';
+  for(const [g,items] of Object.entries(groups)){
+    html+=`<div class="cmd-section">${esc(g)}</div>`;
+    items.forEach(a=>{html+=`<div class="cmd-item${a._i===_cmdIdx?' hi':''}" data-idx="${a._i}" onclick="execCmd(${a._i})"><span class="cmd-item-icon">${a.icon}</span><span class="cmd-item-label">${esc(a.label)}</span>${a.sub?`<span class="cmd-item-sub">${esc(a.sub)}</span>`:''}${a.kbd?`<kbd class="cmd-item-kbd">${esc(a.kbd)}</kbd>`:''}</div>`;});
+  }
+  list.innerHTML=html;
+  const hi=list.querySelector('.cmd-item.hi');if(hi)hi.scrollIntoView({block:'nearest'});
+}
+function execCmd(i){const a=_cmdFiltered[i];if(!a)return;closeCmdPalette();a.fn();}
+function hkCmd(e){
+  if(e.key==='ArrowDown'){e.preventDefault();_cmdIdx=Math.min(_cmdIdx+1,_cmdFiltered.length-1);renderCmdList();}
+  else if(e.key==='ArrowUp'){e.preventDefault();_cmdIdx=Math.max(_cmdIdx-1,0);renderCmdList();}
+  else if(e.key==='Enter'){e.preventDefault();execCmd(_cmdIdx);}
+  else if(e.key==='Escape'){e.stopPropagation();closeCmdPalette();}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('cmd-overlay')?.style.display==='flex'){closeCmdPalette();e.stopPropagation();}},{capture:true});
+// ── Sidebar resize ─────────────────────────────────────────────────────────────
+function initResizeHandle(){
+  const rh=$('resize-handle');const sb=$('sidebar');if(!rh||!sb)return;
+  let dragging=false,startX=0,startW=0;
+  rh.addEventListener('mousedown',e=>{
+    if(isMob())return;
+    dragging=true;startX=e.clientX;startW=sb.offsetWidth;
+    rh.classList.add('dragging');document.body.style.cursor='col-resize';document.body.style.userSelect='none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    const w=Math.max(200,Math.min(480,startW+(e.clientX-startX)));
+    sb.style.width=w+'px';sb.style.minWidth=w+'px';
+  });
+  document.addEventListener('mouseup',()=>{
+    if(!dragging)return;
+    dragging=false;rh.classList.remove('dragging');document.body.style.cursor='';document.body.style.userSelect='';
+  });
+  rh.addEventListener('dblclick',()=>{sb.style.width='270px';sb.style.minWidth='270px';toast('Sidebar reset to default');});
+}
+(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();if(!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();})();
 </script>
 </body>
 </html>
