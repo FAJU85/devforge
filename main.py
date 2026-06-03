@@ -614,6 +614,11 @@ def _gh_base(owner: str, repo: str) -> str:
     """Build the GitHub API repos base URL with owner/repo safely encoded."""
     return f"https://api.github.com/repos/{_urlquote(owner, safe='')}/{_urlquote(repo, safe='')}"
 
+def _gh_path(p: str) -> str:
+    """Sanitise a file path for GitHub API URLs: drop ./.., encode special chars."""
+    segments = [_urlquote(s, safe="") for s in p.lstrip("/").split("/") if s not in (".", "..")]
+    return "/".join(segments) or "_"
+
 class RepoBody(BaseModel):
     token: str = Field(max_length=500)
     url: str = Field(max_length=300)
@@ -655,7 +660,7 @@ class FileBody(BaseModel):
 
 @app.post("/api/repo/file")
 async def repo_file(body: FileBody):
-    r = requests.get(f"{_gh_base(body.owner, body.repo)}/contents/{body.path}",
+    r = requests.get(f"{_gh_base(body.owner, body.repo)}/contents/{_gh_path(body.path)}",
         headers=gh_hdrs(body.token), timeout=10)
     if not r.ok: return JSONResponse({"error": f"Cannot fetch {body.path}"}, status_code=400)
     try:
@@ -677,8 +682,9 @@ class WriteFileBody(BaseModel):
 async def repo_write(body: WriteFileBody):
     """Create or update a file in the repository via the GitHub Contents API."""
     sha = None
+    _safe_p = _gh_path(body.path)
     existing = requests.get(
-        f"{_gh_base(body.owner, body.repo)}/contents/{body.path}",
+        f"{_gh_base(body.owner, body.repo)}/contents/{_safe_p}",
         headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
     )
     if existing.ok:
@@ -696,7 +702,7 @@ async def repo_write(body: WriteFileBody):
         payload["sha"] = sha
 
     w = requests.put(
-        f"{_gh_base(body.owner, body.repo)}/contents/{body.path}",
+        f"{_gh_base(body.owner, body.repo)}/contents/{_safe_p}",
         headers=gh_hdrs(body.token), json=payload, timeout=15,
     )
     if not w.ok:
@@ -846,21 +852,8 @@ class BatchWriteBody(BaseModel):
 async def repo_write_batch(body: BatchWriteBody):
     """Commit multiple files to the repository, reporting per-file results."""
 
-    def _safe_path(p: str) -> str:
-        """Sanitise a file path for GitHub API URL interpolation.
-
-        Drops traversal segments (./..) and percent-encodes everything else so
-        characters like ?/#/@ cannot inject query-string or fragment components.
-        """
-        clean = [
-            _urlquote(seg, safe="")
-            for seg in p.lstrip("/").split("/")
-            if seg not in (".", "..")
-        ]
-        return "/".join(clean) or "_"
-
     def write_file(item):
-        safe_p = _safe_path(item.path)
+        safe_p = _gh_path(item.path)
         sha = None
         try:
             existing = requests.get(
