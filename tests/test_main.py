@@ -2129,9 +2129,10 @@ class TestRepoBranchesEndpoint:
         data = r.json()
         # Branch override should be used for tree fetch
         assert data["branch"] == "feature/new-api"
-        # Tree fetch URL should use the overridden branch
+        # Tree fetch URL should use the overridden branch (/ is encoded as %2F)
         tree_call = mock_get.call_args_list[1]
-        assert "feature/new-api" in tree_call[0][0]
+        tree_url = tree_call[0][0]
+        assert "feature%2Fnew-api" in tree_url or "feature/new-api" in tree_url
 
 # ── Cycle 14: Code Search + Commit History ────────────────────────────────────
 
