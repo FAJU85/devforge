@@ -958,7 +958,7 @@ class IssueBody(BaseModel):
     token: str = Field(min_length=1, max_length=500)
     owner: str = Field(min_length=1, max_length=100)
     repo: str = Field(min_length=1, max_length=100)
-    title: str = Field(max_length=500)
+    title: str = Field(min_length=1, max_length=500)
     body: str = Field(max_length=65_536)
     labels: Optional[List[str]] = Field(default=[], max_length=10)
 
@@ -985,10 +985,10 @@ class PRBody(BaseModel):
     token: str = Field(min_length=1, max_length=500)
     owner: str = Field(min_length=1, max_length=100)
     repo: str = Field(min_length=1, max_length=100)
-    title: str = Field(max_length=500)
+    title: str = Field(min_length=1, max_length=500)
     body: str = Field(max_length=65_536)
-    head: str = Field(max_length=255)
-    base: str = Field(max_length=255)
+    head: str = Field(min_length=1, max_length=255)
+    base: str = Field(min_length=1, max_length=255)
 
 @app.post("/api/github/pr/create")
 async def create_pr(body: PRBody):
