@@ -1577,7 +1577,7 @@ async function switchBranch(branch){
   const d=await post('/api/repo/connect',{token:S.ghToken,url:`https://github.com/${S.repo.owner}/${S.repo.repo}`,branch});
   if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}
   S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';
-  buildTree(d.files);quickScanRepo(d.files);
+  buildTree(d.files);quickScanRepo(d.files);updRepoPill();
   toast(`Switched to ${branch}`);
 }
 function setProv(p,silent=false){S.prov=p;const _pb=[['pa','anthropic'],['pg','groq'],['ph','hf'],['po','openai_compat'],['pal','airllm']];_pb.forEach(([id,pv])=>{const b=$(id);if(b){b.classList.toggle('on',p===pv);b.setAttribute('aria-checked',p===pv?'true':'false');}});$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';$('pf-al').style.display=p==='airllm'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
