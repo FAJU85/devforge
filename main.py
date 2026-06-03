@@ -493,7 +493,10 @@ async def _stream_ai_sse(body, system: str, user_prompt: str, max_tokens: int = 
             timeout=max(30, timeout // 2),
         )
         if r.ok:
-            text = r.json()["choices"][0]["message"]["content"]
+            _choices = r.json().get("choices") or []
+            text = ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
+            if not text:
+                yield f"data: {json.dumps({'t':'error','v':'Empty response from Groq'})}\n\n"; return
             for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
                 yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
         else:
@@ -785,7 +788,10 @@ def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> 
                 ], "max_tokens": max_tokens, "stream": False},
                 timeout=20,
             )
-            return r.ok, r.json()["choices"][0]["message"]["content"] if r.ok else ""
+            if r.ok:
+                _choices = r.json().get("choices") or []
+                return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
+            return False, ""
         elif body.provider == "openai_compat" and body.openai_compat_base_url:
             if not _valid_http_url(body.openai_compat_base_url):
                 return False, "openai_compat_base_url must be http:// or https://"
@@ -798,7 +804,10 @@ def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> 
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
                 "max_tokens": max_tokens, "stream": False,
             }, timeout=20)
-            return r.ok, r.json()["choices"][0]["message"]["content"] if r.ok else ""
+            if r.ok:
+                _choices = r.json().get("choices") or []
+                return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
+            return False, ""
         else:
             return False, "No usable provider configured"
     except Exception as e:
@@ -1097,7 +1106,7 @@ async def repo_search(body: RepoSearchBody):
                 if t:
                     snippets.append(t[:120])
         items.append({
-            "path": item["path"],
+            "path": item.get("path", ""),
             "sha": (item.get("sha") or "")[:7],
             "url": item.get("html_url", ""),
             "snippets": snippets[:3],
@@ -1157,7 +1166,7 @@ async def repo_workflow_runs(body: WorkflowRunsBody):
     runs = r.json().get("workflow_runs", [])
     return [
         {
-            "id": run["id"],
+            "id": run.get("id"),
             "name": (run.get("name") or run.get("display_title") or "Workflow")[:60],
             "status": run.get("status", ""),        # queued / in_progress / completed
             "conclusion": run.get("conclusion") or "",  # success / failure / cancelled / ...
