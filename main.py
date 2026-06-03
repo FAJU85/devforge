@@ -108,7 +108,15 @@ def build_system(body: "ChatBody") -> str:
     else:
         base = AGENT_PROMPTS.get(body.agent, AGENT_PROMPTS["code"])
     if body.owner and body.repo:
-        base += f"\n\nRepository: {body.owner}/{body.repo}. Always specify full file paths."
+        branch_info = f", branch: {body.branch}" if getattr(body, 'branch', '') else ""
+        base += (
+            f"\n\nRepository: {body.owner}/{body.repo}{branch_info}. "
+            "Before EVERY code block that creates or modifies a file, place the full file path "
+            "in a Markdown heading using inline code — e.g. `### \\`src/utils/api.ts\\``. "
+            "Alternatively, write it as a comment on the very first line of the code block — "
+            "e.g. `// src/components/Button.tsx` or `# app/models/user.py`. "
+            "This enables one-click GitHub commit for each file. Always use full paths, never relative."
+        )
     skills = getattr(body, 'skills', []) or []
     if skills:
         base += "\n\n## Active Skills:\n"
@@ -657,10 +665,12 @@ class FileBody(BaseModel):
     owner: str = Field(max_length=100)
     repo: str = Field(max_length=100)
     path: str = Field(max_length=1000)
+    branch: str = Field(default="", max_length=255)
 
 @app.post("/api/repo/file")
 async def repo_file(body: FileBody):
-    r = requests.get(f"{_gh_base(body.owner, body.repo)}/contents/{_gh_path(body.path)}",
+    ref_param = f"?ref={_urlquote(body.branch, safe='')}" if body.branch else ""
+    r = requests.get(f"{_gh_base(body.owner, body.repo)}/contents/{_gh_path(body.path)}{ref_param}",
         headers=gh_hdrs(body.token), timeout=10)
     if not r.ok: return JSONResponse({"error": f"Cannot fetch {body.path}"}, status_code=400)
     try:
@@ -1729,6 +1739,7 @@ class ChatBody(BaseModel):
     file_context: Optional[str] = Field(default="", max_length=500_000)
     owner: Optional[str] = Field(default="", max_length=100)
     repo: Optional[str] = Field(default="", max_length=100)
+    branch: Optional[str] = Field(default="", max_length=255)
     skills: Optional[List[str]] = Field(default=[], max_length=12)
     rules: Optional[str] = Field(default="", max_length=10_000)
     instructions: Optional[str] = Field(default="", max_length=10_000)
