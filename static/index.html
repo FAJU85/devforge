@@ -1011,7 +1011,7 @@ async function suggestFiles(){
     for(const path of res.files){
       if(S.selFiles.size+S.localFiles.size>=8)break;
       if(!S.selFiles.has(path)){
-        const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});
+        const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,branch:S.repo?.branch||''});
         if(!d.error){S.selFiles.set(path,d.content);S.fileSizes.set(path,d.content.length);updTF(path);loaded++;}
       }
     }
@@ -1277,7 +1277,7 @@ function tfd(name,files){const subs={};const direct=[];for(const f of files){con
 async function addFolderToCtx(btn){if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}const folder=btn.closest('.tfolder');const files=Array.from(folder.querySelectorAll('.tfile')).filter(el=>el.style.display!=='none');const toAdd=files.filter(el=>!S.selFiles.has(el.dataset.path));const slots=8-(S.selFiles.size+S.localFiles.size);if(!toAdd.length){toast('All files already in context');return;}const adding=toAdd.slice(0,slots);if(adding.length<toAdd.length)toast(`Adding ${adding.length} of ${toAdd.length} files (max 8 total)`);btn.textContent='⏳';btn.disabled=true;let added=0;for(const el of adding){const path=el.dataset.path;const size=+el.dataset.size||0;const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,branch:S.repo.branch||''});if(!d.error){S.selFiles.set(path,d.content);S.fileSizes.set(path,size||d.content.length);updTF(path);added++;}}updCtx();btn.textContent='+all';btn.disabled=false;if(added)toast(`Added ${added} file${added!==1?'s':''} to context`);}
 function tfn(f){const sel=S.selFiles.has(f.path);const sz=f.size||0;const tok=tokEst(sz);const tc=sz?tokCls(tok):'';const tokHtml=sz?`<span class="tok-badge ${tc}">${tokFmt(tok)}</span>`:'';return`<div class="tfile${sel?' sel':''}" id="tf-${btoa(unescape(encodeURIComponent(f.path))).replace(/[+=\/]/g,'')}" data-path="${escA(f.path)}" data-size="${sz}" onclick="togF(this.dataset.path,+this.dataset.size)"><input type="checkbox"${sel?' checked':''} onclick="event.stopPropagation();togF(this.parentElement.dataset.path,+this.parentElement.dataset.size)"><span>${ficon(f.path)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${esc(f.path.split('/').pop())}</span>${tokHtml}<button class="ask-btn" data-path="${escA(f.path)}" data-size="${sz}" onclick="event.stopPropagation();askAboutFile(this.dataset.path,+this.dataset.size)" title="Ask AI about this file">?</button><button class="peek-btn" data-path="${escA(f.path)}" data-size="${sz}" onclick="event.stopPropagation();peekFile(this.dataset.path,+this.dataset.size)" title="Preview file">👁</button></div>`;}
 function tfid(p){return'tf-'+btoa(unescape(encodeURIComponent(p))).replace(/[+=\/]/g,'');}
-async function togF(path,size=0){if(S.selFiles.has(path)){S.selFiles.delete(path);S.fileSizes.delete(path);updTF(path);updCtx();return;}if(S.selFiles.size+S.localFiles.size>=8){toast('Max 8 files');return;}const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});if(d.error){toast(d.error,true);return;}S.selFiles.set(path,d.content);S.fileSizes.set(path,size||d.content.length);updTF(path);updCtx();}
+async function togF(path,size=0){if(S.selFiles.has(path)){S.selFiles.delete(path);S.fileSizes.delete(path);updTF(path);updCtx();return;}if(S.selFiles.size+S.localFiles.size>=8){toast('Max 8 files');return;}const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,branch:S.repo?.branch||''});if(d.error){toast(d.error,true);return;}S.selFiles.set(path,d.content);S.fileSizes.set(path,size||d.content.length);updTF(path);updCtx();}
 
 // ── File peek modal ───────────────────────────────────────────────────────────
 let _peekPath='',_peekSize=0;
@@ -1293,7 +1293,7 @@ async function peekFile(path,size=0){
   // Fetch if not already in context
   let content=S.selFiles.get(path)||null;
   if(!content){
-    const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path});
+    const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,branch:S.repo?.branch||''});
     if(d.error){$('peek-body').textContent='Error: '+d.error;return;}
     content=d.content;
   }
