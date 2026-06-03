@@ -670,7 +670,7 @@ class FileBody(BaseModel):
     token: str = Field(min_length=1, max_length=500)
     owner: str = Field(min_length=1, max_length=100)
     repo: str = Field(min_length=1, max_length=100)
-    path: str = Field(max_length=1000)
+    path: str = Field(min_length=1, max_length=1000)
     branch: str = Field(default="", max_length=255)
 
 @app.post("/api/repo/file")
@@ -689,10 +689,10 @@ class WriteFileBody(BaseModel):
     token: str = Field(min_length=1, max_length=500)
     owner: str = Field(min_length=1, max_length=100)
     repo: str = Field(min_length=1, max_length=100)
-    path: str = Field(max_length=1000)
+    path: str = Field(min_length=1, max_length=1000)
     content: str = Field(max_length=2_000_000)
-    message: str = Field(max_length=500)
-    branch: str = Field(max_length=255)
+    message: str = Field(min_length=1, max_length=500)
+    branch: str = Field(min_length=1, max_length=255)
 
 @app.post("/api/repo/write")
 async def repo_write(body: WriteFileBody):
@@ -748,7 +748,7 @@ class SuggestFilesBody(BaseModel):
     hf_token: Optional[str] = Field(default="", max_length=500)
     hf_model: Optional[str] = Field(default="", max_length=200)
     task: str = Field(max_length=2000)
-    files: List[str]
+    files: List[str] = Field(max_length=500)
     max_suggestions: int = Field(default=6, ge=1, le=20)
 
 def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> tuple[bool, str]:
@@ -853,16 +853,16 @@ async def summarize_file(body: SummarizeFileBody):
 
 
 class BatchWriteItem(BaseModel):
-    path: str = Field(max_length=1000)
+    path: str = Field(min_length=1, max_length=1000)
     content: str = Field(max_length=2_000_000)
-    message: str = Field(max_length=500)
+    message: str = Field(min_length=1, max_length=500)
 
 class BatchWriteBody(BaseModel):
     token: str = Field(min_length=1, max_length=500)
     owner: str = Field(min_length=1, max_length=100)
     repo: str = Field(min_length=1, max_length=100)
-    branch: str = Field(max_length=255)
-    files: List[BatchWriteItem] = Field(max_length=50)
+    branch: str = Field(min_length=1, max_length=255)
+    files: List[BatchWriteItem] = Field(min_length=1, max_length=50)
 
 @app.post("/api/repo/write/batch")
 async def repo_write_batch(body: BatchWriteBody):
@@ -1053,7 +1053,7 @@ class RepoSearchBody(BaseModel):
     token: str = Field(min_length=1, max_length=500)
     owner: str = Field(min_length=1, max_length=100)
     repo: str = Field(min_length=1, max_length=100)
-    query: str = Field(max_length=500)
+    query: str = Field(min_length=1, max_length=500)
     max_results: int = Field(default=10, ge=1, le=30)
 
 
