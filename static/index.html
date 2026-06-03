@@ -460,8 +460,9 @@ pre::-webkit-scrollbar{height:4px}
     <div class="s-logo"><div class="s-mark" aria-hidden="true">⚡</div><div class="s-name">DevForge</div></div>
     <div class="s-tabs">
       <button class="s-tab on" id="stab-files" onclick="setSideTab('files')" title="Files &amp; Repos">📁</button>
-      <button class="s-tab" id="stab-config" onclick="setSideTab('config')" title="AI Config &amp; Skills">⚙️</button>
-      <button class="s-tab" id="stab-tools" onclick="setSideTab('tools')" title="Tools &amp; Actions">🔧</button>
+      <button class="s-tab" id="stab-config" onclick="setSideTab('config')" title="AI Config">⚙️</button>
+      <button class="s-tab" id="stab-skills" onclick="setSideTab('skills')" title="Skills &amp; Presets">⚡</button>
+      <button class="s-tab" id="stab-tools" onclick="setSideTab('tools')" title="MCP &amp; Tools">🔌</button>
     </div>
     <button class="s-coll" onclick="collSidebar()" aria-label="Collapse sidebar">‹</button>
   </div>
@@ -596,7 +597,10 @@ pre::-webkit-scrollbar{height:4px}
         <div class="ma-stage-row" id="ma-test-row" style="display:none"><div class="ma-stage-lbl">🧪 Test</div><select class="finput" id="ma-test-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
       </div>
     </div>
-    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">Skills</div>
+  </div>
+  <!-- ── Panel: Skills ────────────────────────────────────────────────── -->
+  <div id="spanel-skills" class="s-panel hidden">
+    <div class="cfg-hdr">⚡ Skills</div>
     <div class="skill-list">
       <div class="skill-row" data-skill="react" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">⚛️ React</div><div class="skill-row-desc">Component patterns, hooks, JSX best practices</div></div></div>
       <div class="skill-row" data-skill="nextjs" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🚀 Next.js</div><div class="skill-row-desc">App router, SSR, API routes, Vercel deployment</div></div></div>
@@ -655,11 +659,11 @@ pre::-webkit-scrollbar{height:4px}
       <div id="agent-progress" style="display:none;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;color:var(--muted);max-height:200px;overflow-y:auto;word-break:break-word"></div>
     </div>
     <div class="cfg-hdr" style="border-top:1px solid var(--border2)">⚡ Quick Actions</div>
-    <div class="tools-grid">
-      <button class="tools-btn" onclick="openIssueModal()">📋<br>Create Issue</button>
-      <button class="tools-btn" onclick="openReleaseNotes()">🏷️<br>Release Notes</button>
-      <button class="tools-btn" onclick="openReadmeModal()">📝<br>Gen README</button>
-      <button class="tools-btn" onclick="openDepsModal()">🔍<br>Scan Deps</button>
+    <div class="skill-list">
+      <div class="skill-row" onclick="openIssueModal()"><div class="skill-row-info"><div class="skill-row-name">📋 Create Issue</div><div class="skill-row-desc">Open a GitHub issue from the current context</div></div></div>
+      <div class="skill-row" onclick="openReleaseNotes()"><div class="skill-row-info"><div class="skill-row-name">🏷️ Release Notes</div><div class="skill-row-desc">Generate changelog from recent commits</div></div></div>
+      <div class="skill-row" onclick="openReadmeModal()"><div class="skill-row-info"><div class="skill-row-name">📝 Gen README</div><div class="skill-row-desc">Auto-generate a repository README</div></div></div>
+      <div class="skill-row" onclick="openDepsModal()"><div class="skill-row-info"><div class="skill-row-name">🔍 Scan Deps</div><div class="skill-row-desc">Audit dependencies for vulnerabilities</div></div></div>
     </div>
   </div>
 </aside>
@@ -1234,7 +1238,7 @@ function isMob(){return window.innerWidth<=768;}
 function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
 function expSidebar(){$('sidebar').classList.remove('col');if(!isMob())$('exp-btn').classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
 function setSideTab(tab){
-  ['files','config','tools'].forEach(t=>{
+  ['files','config','skills','tools'].forEach(t=>{
     const p=$('spanel-'+t);if(p)p.classList.toggle('hidden',t!==tab);
     const b=$('stab-'+t);if(b)b.classList.toggle('on',t===tab);
   });
@@ -1960,8 +1964,9 @@ const CMD_ACTIONS=[
   {icon:'📝',label:'Docs agent',fn:()=>{const t=document.querySelector('.atab[data-agent="docs"]');if(t)setAgent(t);},group:'Agent'},
   {icon:'🔀',label:'Refactor agent',fn:()=>{const t=document.querySelector('.atab[data-agent="refactor"]');if(t)setAgent(t);},group:'Agent'},
   {icon:'📁',label:'Browse files',sub:'Open file browser',fn:()=>{setSideTab('files');expSidebar();},group:'Navigation'},
-  {icon:'⚙️',label:'AI Config & Skills',sub:'Models, skills, rules',fn:()=>{setSideTab('config');expSidebar();},group:'Navigation'},
-  {icon:'🔧',label:'Tools panel',sub:'Snippets, custom tools',fn:()=>{setSideTab('tools');expSidebar();},group:'Navigation'},
+  {icon:'⚙️',label:'AI Config',sub:'Models, provider keys',fn:()=>{setSideTab('config');expSidebar();},group:'Navigation'},
+  {icon:'⚡',label:'Skills & Presets',sub:'Enable skills, load presets',fn:()=>{setSideTab('skills');expSidebar();},group:'Navigation'},
+  {icon:'🔌',label:'MCP & Tools',sub:'Custom tools, snippets',fn:()=>{setSideTab('tools');expSidebar();},group:'Navigation'},
   {icon:'➕',label:'New conversation tab',fn:()=>newTab(),group:'Chat'},
   {icon:'🗑️',label:'Clear current chat',fn:()=>clearChat(),group:'Chat'},
   {icon:'⬇️',label:'Export chat as Markdown',fn:()=>exportChat(),group:'Chat'},

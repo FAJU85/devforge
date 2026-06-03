@@ -304,7 +304,7 @@ def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="
                             url = tool_def.url
                             inp = block.input or {}
                             for k, v in inp.items():
-                                url = url.replace(f"{{{k}}}", str(v))
+                                url = url.replace(f"{{{k}}}", _urlquote(str(v), safe=''))
                             method = (tool_def.method or "GET").upper()
                             if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
                                 result_content = f"Error: Unsupported method {method}"
@@ -562,10 +562,10 @@ async def github_auth_poll(body: DeviceCodeBody):
     r = requests.post("https://github.com/login/oauth/access_token", headers={"Accept": "application/json"},
         data={"client_id": GITHUB_CLIENT_ID, "client_secret": GITHUB_CLIENT_SECRET,
               "device_code": body.device_code, "grant_type": "urn:ietf:params:oauth:grant-type:device_code"}, timeout=10)
-    return JSONResponse(r.json())
+    return JSONResponse(r.json(), status_code=200)
 
 class TokenBody(BaseModel):
-    token: str = Field(max_length=500)
+    token: str = Field(min_length=1, max_length=500)
 
 @app.post("/api/github/user")
 async def github_user(body: TokenBody):
@@ -628,13 +628,13 @@ def _gh_path(p: str) -> str:
     return "/".join(segments) or "_"
 
 class RepoBody(BaseModel):
-    token: str = Field(max_length=500)
+    token: str = Field(min_length=1, max_length=500)
     url: str = Field(max_length=300)
     branch: Optional[str] = Field(default="", max_length=255)
 
 
 @app.get("/api/repo/branches")
-async def list_branches(token: str = Query(..., max_length=500), owner: str = Query(..., max_length=100), repo: str = Query(..., max_length=100)):
+async def list_branches(token: str = Query(..., min_length=1, max_length=500), owner: str = Query(..., min_length=1, max_length=100), repo: str = Query(..., min_length=1, max_length=100)):
     """List all branches for a repository."""
     r = requests.get(
         f"{_gh_base(owner, repo)}/branches?per_page=100",
@@ -642,7 +642,7 @@ async def list_branches(token: str = Query(..., max_length=500), owner: str = Qu
     )
     if not r.ok:
         return JSONResponse({"error": "Failed to fetch branches"}, status_code=400)
-    return [{"name": b["name"], "sha": b["commit"]["sha"][:7]} for b in r.json()]
+    return [{"name": b["name"], "sha": (b.get("commit") or {}).get("sha", "")[:7]} for b in r.json()]
 
 
 @app.post("/api/repo/connect")
@@ -650,8 +650,14 @@ async def repo_connect(body: RepoBody):
     owner, repo = parse_gh_url(body.url)
     if not owner: return JSONResponse({"error": "Invalid repository"}, status_code=400)
     r = requests.get(f"{_gh_base(owner, repo)}", headers=gh_hdrs(body.token), timeout=10)
-    if not r.ok: return JSONResponse({"error": r.json().get("message", "Not found")}, status_code=400)
-    default_branch = r.json()["default_branch"]
+    if not r.ok:
+        try:
+            msg = r.json().get("message", "Not found")
+        except Exception:
+            msg = "Not found"
+        return JSONResponse({"error": msg}, status_code=400)
+    repo_data = r.json()
+    default_branch = repo_data.get("default_branch", "main")
     branch = (body.branch or "").strip() or default_branch
     t = requests.get(f"{_gh_base(owner, repo)}/git/trees/{_urlquote(branch, safe='')}?recursive=1",
         headers=gh_hdrs(body.token), timeout=15)
@@ -661,9 +667,9 @@ async def repo_connect(body: RepoBody):
     return {"owner": owner, "repo": repo, "branch": branch, "default_branch": default_branch, "files": files}
 
 class FileBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     path: str = Field(max_length=1000)
     branch: str = Field(default="", max_length=255)
 
@@ -680,9 +686,9 @@ async def repo_file(body: FileBody):
     return {"path": body.path, "content": content}
 
 class WriteFileBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     path: str = Field(max_length=1000)
     content: str = Field(max_length=2_000_000)
     message: str = Field(max_length=500)
@@ -852,9 +858,9 @@ class BatchWriteItem(BaseModel):
     message: str = Field(max_length=500)
 
 class BatchWriteBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     branch: str = Field(max_length=255)
     files: List[BatchWriteItem] = Field(max_length=50)
 
@@ -918,7 +924,7 @@ async def repo_write_batch(body: BatchWriteBody):
 
 
 class GistBody(BaseModel):
-    token: str = Field(max_length=500)
+    token: str = Field(min_length=1, max_length=500)
     filename: str = Field(max_length=255)
     content: str = Field(max_length=1_000_000)
     description: Optional[str] = Field(default="", max_length=255)
@@ -949,9 +955,9 @@ async def create_gist(body: GistBody):
 
 
 class IssueBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     title: str = Field(max_length=500)
     body: str = Field(max_length=65_536)
     labels: Optional[List[str]] = Field(default=[], max_length=10)
@@ -976,9 +982,9 @@ async def create_issue(body: IssueBody):
 
 
 class PRBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     title: str = Field(max_length=500)
     body: str = Field(max_length=65_536)
     head: str = Field(max_length=255)
@@ -1004,9 +1010,9 @@ async def create_pr(body: PRBody):
 
 
 class PRDiffBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     pr_number: int = Field(ge=1)
 
 @app.post("/api/github/pr/diff")
@@ -1044,9 +1050,9 @@ async def get_pr_diff(body: PRDiffBody):
 
 
 class RepoSearchBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     query: str = Field(max_length=500)
     max_results: int = Field(default=10, ge=1, le=30)
 
@@ -1072,8 +1078,9 @@ async def repo_search(body: RepoSearchBody):
         except Exception:
             err = "Search failed"
         return JSONResponse({"error": err}, status_code=400)
+    data = r.json()
     items = []
-    for item in r.json().get("items", []):
+    for item in data.get("items", []):
         snippets = []
         for tm in item.get("text_matches", []):
             for m in tm.get("matches", []):
@@ -1086,13 +1093,13 @@ async def repo_search(body: RepoSearchBody):
             "url": item.get("html_url", ""),
             "snippets": snippets[:3],
         })
-    return {"items": items, "total": r.json().get("total_count", 0)}
+    return {"items": items, "total": data.get("total_count", 0)}
 
 
 class RepoCommitsBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     branch: Optional[str] = Field(default="main", max_length=255)
     max_results: int = Field(default=10, ge=1, le=50)
 
@@ -1121,9 +1128,9 @@ async def repo_commits(body: RepoCommitsBody):
 
 
 class WorkflowRunsBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     max_results: int = Field(default=10, ge=1, le=50)
 
 
@@ -1166,9 +1173,9 @@ class ReleaseNotesBody(BaseModel):
     provider: str = Field(default="anthropic", max_length=50)
     anthropic_key: Optional[str] = Field(default="", max_length=500)
     groq_key: Optional[str] = Field(default="", max_length=500)
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     since: Optional[str] = Field(default="", max_length=255)
     until: Optional[str] = Field(default="", max_length=255)
     max_commits: int = Field(default=50, ge=1, le=100)
