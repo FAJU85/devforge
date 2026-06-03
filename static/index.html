@@ -1346,6 +1346,7 @@ function updCtx(){
     const rmSpan=p.querySelector('span[style*="cursor"]');if(rmSpan)rmSpan.onclick=()=>{S.localFiles.delete(name);updCtx();};
     strip.appendChild(p);
   }
+  if(n>1){const clr=document.createElement('button');clr.textContent='clear all';clr.style.cssText='background:none;border:none;color:var(--muted2);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;flex-shrink:0;font-family:inherit;opacity:.7;transition:opacity .1s';clr.onmouseover=()=>clr.style.opacity='1';clr.onmouseout=()=>clr.style.opacity='.7';clr.onclick=()=>{S.selFiles.clear();S.fileSizes.clear();S.localFiles.clear();document.querySelectorAll('.tfile.sel').forEach(el=>{el.classList.remove('sel');const cb=el.querySelector('input');if(cb)cb.checked=false;});updCtx();toast('Context cleared');};strip.appendChild(clr);}
   const bw=$('budget-wrap');
   if(bw){
     bw.style.display=n?'block':'none';
