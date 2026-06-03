@@ -304,7 +304,7 @@ def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="
                             url = tool_def.url
                             inp = block.input or {}
                             for k, v in inp.items():
-                                url = url.replace(f"{{{k}}}", str(v))
+                                url = url.replace(f"{{{k}}}", _urlquote(str(v), safe=''))
                             method = (tool_def.method or "GET").upper()
                             if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
                                 result_content = f"Error: Unsupported method {method}"
@@ -493,7 +493,10 @@ async def _stream_ai_sse(body, system: str, user_prompt: str, max_tokens: int = 
             timeout=max(30, timeout // 2),
         )
         if r.ok:
-            text = r.json()["choices"][0]["message"]["content"]
+            _choices = r.json().get("choices") or []
+            text = ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
+            if not text:
+                yield f"data: {json.dumps({'t':'error','v':'Empty response from Groq'})}\n\n"; return
             for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
                 yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
         else:
@@ -550,10 +553,13 @@ async def github_auth_start():
     if not GITHUB_CLIENT_ID: return JSONResponse({"error": "GITHUB_CLIENT_ID not set."}, status_code=500)
     r = requests.post("https://github.com/login/device/code", headers={"Accept": "application/json"},
         data={"client_id": GITHUB_CLIENT_ID, "scope": "repo read:user"}, timeout=10)
-    return JSONResponse(r.json(), status_code=200 if r.ok else 500)
+    try:
+        return JSONResponse(r.json(), status_code=200 if r.ok else 500)
+    except Exception:
+        return JSONResponse({"error": "GitHub returned an unexpected response"}, status_code=500)
 
 class DeviceCodeBody(BaseModel):
-    device_code: str = Field(max_length=100)
+    device_code: str = Field(min_length=1, max_length=100)
 
 @app.post("/api/github/auth/poll")
 async def github_auth_poll(body: DeviceCodeBody):
@@ -562,16 +568,22 @@ async def github_auth_poll(body: DeviceCodeBody):
     r = requests.post("https://github.com/login/oauth/access_token", headers={"Accept": "application/json"},
         data={"client_id": GITHUB_CLIENT_ID, "client_secret": GITHUB_CLIENT_SECRET,
               "device_code": body.device_code, "grant_type": "urn:ietf:params:oauth:grant-type:device_code"}, timeout=10)
-    return JSONResponse(r.json())
+    try:
+        return JSONResponse(r.json(), status_code=200)
+    except Exception:
+        return JSONResponse({"error": "GitHub returned an unexpected response"}, status_code=500)
 
 class TokenBody(BaseModel):
-    token: str = Field(max_length=500)
+    token: str = Field(min_length=1, max_length=500)
 
 @app.post("/api/github/user")
 async def github_user(body: TokenBody):
     r = requests.get("https://api.github.com/user",
         headers={"Authorization": f"token {body.token}", "Accept": "application/vnd.github.v3+json"}, timeout=10)
-    return JSONResponse(r.json(), status_code=200 if r.ok else 400)
+    try:
+        return JSONResponse(r.json(), status_code=200 if r.ok else 400)
+    except Exception:
+        return JSONResponse({"error": "GitHub returned an unexpected response"}, status_code=400)
 
 @app.post("/api/github/repos")
 async def github_repos(body: TokenBody):
@@ -585,8 +597,8 @@ async def github_repos(body: TokenBody):
         repos.extend(data)
         if len(data) < 100: break
         page += 1
-    return [{"full_name": r["full_name"], "name": r["name"], "description": r.get("description") or "",
-             "private": r["private"], "language": r.get("language") or ""} for r in repos]
+    return [{"full_name": r.get("full_name", ""), "name": r.get("name", ""), "description": r.get("description") or "",
+             "private": r.get("private", False), "language": r.get("language") or ""} for r in repos]
 
 def parse_gh_url(url: str) -> "tuple[str | None, str | None]":
     """Extract GitHub owner and repo name from a URL or 'owner/repo' shorthand.
@@ -628,13 +640,13 @@ def _gh_path(p: str) -> str:
     return "/".join(segments) or "_"
 
 class RepoBody(BaseModel):
-    token: str = Field(max_length=500)
+    token: str = Field(min_length=1, max_length=500)
     url: str = Field(max_length=300)
     branch: Optional[str] = Field(default="", max_length=255)
 
 
 @app.get("/api/repo/branches")
-async def list_branches(token: str = Query(..., max_length=500), owner: str = Query(..., max_length=100), repo: str = Query(..., max_length=100)):
+async def list_branches(token: str = Query(..., min_length=1, max_length=500), owner: str = Query(..., min_length=1, max_length=100), repo: str = Query(..., min_length=1, max_length=100)):
     """List all branches for a repository."""
     r = requests.get(
         f"{_gh_base(owner, repo)}/branches?per_page=100",
@@ -642,7 +654,7 @@ async def list_branches(token: str = Query(..., max_length=500), owner: str = Qu
     )
     if not r.ok:
         return JSONResponse({"error": "Failed to fetch branches"}, status_code=400)
-    return [{"name": b["name"], "sha": b["commit"]["sha"][:7]} for b in r.json()]
+    return [{"name": b.get("name", ""), "sha": (b.get("commit") or {}).get("sha", "")[:7]} for b in r.json()]
 
 
 @app.post("/api/repo/connect")
@@ -650,8 +662,14 @@ async def repo_connect(body: RepoBody):
     owner, repo = parse_gh_url(body.url)
     if not owner: return JSONResponse({"error": "Invalid repository"}, status_code=400)
     r = requests.get(f"{_gh_base(owner, repo)}", headers=gh_hdrs(body.token), timeout=10)
-    if not r.ok: return JSONResponse({"error": r.json().get("message", "Not found")}, status_code=400)
-    default_branch = r.json()["default_branch"]
+    if not r.ok:
+        try:
+            msg = r.json().get("message", "Not found")
+        except Exception:
+            msg = "Not found"
+        return JSONResponse({"error": msg}, status_code=400)
+    repo_data = r.json()
+    default_branch = repo_data.get("default_branch", "main")
     branch = (body.branch or "").strip() or default_branch
     t = requests.get(f"{_gh_base(owner, repo)}/git/trees/{_urlquote(branch, safe='')}?recursive=1",
         headers=gh_hdrs(body.token), timeout=15)
@@ -661,10 +679,10 @@ async def repo_connect(body: RepoBody):
     return {"owner": owner, "repo": repo, "branch": branch, "default_branch": default_branch, "files": files}
 
 class FileBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
-    path: str = Field(max_length=1000)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
+    path: str = Field(min_length=1, max_length=1000)
     branch: str = Field(default="", max_length=255)
 
 @app.post("/api/repo/file")
@@ -680,13 +698,13 @@ async def repo_file(body: FileBody):
     return {"path": body.path, "content": content}
 
 class WriteFileBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
-    path: str = Field(max_length=1000)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
+    path: str = Field(min_length=1, max_length=1000)
     content: str = Field(max_length=2_000_000)
-    message: str = Field(max_length=500)
-    branch: str = Field(max_length=255)
+    message: str = Field(min_length=1, max_length=500)
+    branch: str = Field(min_length=1, max_length=255)
 
 @app.post("/api/repo/write")
 async def repo_write(body: WriteFileBody):
@@ -741,8 +759,8 @@ class SuggestFilesBody(BaseModel):
     openai_compat_model: Optional[str] = Field(default="", max_length=200)
     hf_token: Optional[str] = Field(default="", max_length=500)
     hf_model: Optional[str] = Field(default="", max_length=200)
-    task: str = Field(max_length=2000)
-    files: List[str]
+    task: str = Field(min_length=1, max_length=2000)
+    files: List[str] = Field(max_length=500)
     max_suggestions: int = Field(default=6, ge=1, le=20)
 
 def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> tuple[bool, str]:
@@ -770,7 +788,10 @@ def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> 
                 ], "max_tokens": max_tokens, "stream": False},
                 timeout=20,
             )
-            return r.ok, r.json()["choices"][0]["message"]["content"] if r.ok else ""
+            if r.ok:
+                _choices = r.json().get("choices") or []
+                return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
+            return False, ""
         elif body.provider == "openai_compat" and body.openai_compat_base_url:
             if not _valid_http_url(body.openai_compat_base_url):
                 return False, "openai_compat_base_url must be http:// or https://"
@@ -783,7 +804,10 @@ def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> 
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
                 "max_tokens": max_tokens, "stream": False,
             }, timeout=20)
-            return r.ok, r.json()["choices"][0]["message"]["content"] if r.ok else ""
+            if r.ok:
+                _choices = r.json().get("choices") or []
+                return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
+            return False, ""
         else:
             return False, "No usable provider configured"
     except Exception as e:
@@ -821,7 +845,7 @@ async def suggest_files(body: SuggestFilesBody):
 
 
 class SummarizeFileBody(BaseModel):
-    content: str = Field(max_length=200_000)
+    content: str = Field(min_length=1, max_length=200_000)
     filename: str = Field(max_length=500)
     provider: str = Field(max_length=50)
     anthropic_key: Optional[str] = Field(default="", max_length=500)
@@ -847,16 +871,16 @@ async def summarize_file(body: SummarizeFileBody):
 
 
 class BatchWriteItem(BaseModel):
-    path: str = Field(max_length=1000)
+    path: str = Field(min_length=1, max_length=1000)
     content: str = Field(max_length=2_000_000)
-    message: str = Field(max_length=500)
+    message: str = Field(min_length=1, max_length=500)
 
 class BatchWriteBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
-    branch: str = Field(max_length=255)
-    files: List[BatchWriteItem] = Field(max_length=50)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
+    branch: str = Field(min_length=1, max_length=255)
+    files: List[BatchWriteItem] = Field(min_length=1, max_length=50)
 
 @app.post("/api/repo/write/batch")
 async def repo_write_batch(body: BatchWriteBody):
@@ -918,7 +942,7 @@ async def repo_write_batch(body: BatchWriteBody):
 
 
 class GistBody(BaseModel):
-    token: str = Field(max_length=500)
+    token: str = Field(min_length=1, max_length=500)
     filename: str = Field(max_length=255)
     content: str = Field(max_length=1_000_000)
     description: Optional[str] = Field(default="", max_length=255)
@@ -949,10 +973,10 @@ async def create_gist(body: GistBody):
 
 
 class IssueBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
-    title: str = Field(max_length=500)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
+    title: str = Field(min_length=1, max_length=500)
     body: str = Field(max_length=65_536)
     labels: Optional[List[str]] = Field(default=[], max_length=10)
 
@@ -976,13 +1000,13 @@ async def create_issue(body: IssueBody):
 
 
 class PRBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
-    title: str = Field(max_length=500)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
+    title: str = Field(min_length=1, max_length=500)
     body: str = Field(max_length=65_536)
-    head: str = Field(max_length=255)
-    base: str = Field(max_length=255)
+    head: str = Field(min_length=1, max_length=255)
+    base: str = Field(min_length=1, max_length=255)
 
 @app.post("/api/github/pr/create")
 async def create_pr(body: PRBody):
@@ -1004,9 +1028,9 @@ async def create_pr(body: PRBody):
 
 
 class PRDiffBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     pr_number: int = Field(ge=1)
 
 @app.post("/api/github/pr/diff")
@@ -1044,10 +1068,10 @@ async def get_pr_diff(body: PRDiffBody):
 
 
 class RepoSearchBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
-    query: str = Field(max_length=500)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
+    query: str = Field(min_length=1, max_length=500)
     max_results: int = Field(default=10, ge=1, le=30)
 
 
@@ -1072,8 +1096,9 @@ async def repo_search(body: RepoSearchBody):
         except Exception:
             err = "Search failed"
         return JSONResponse({"error": err}, status_code=400)
+    data = r.json()
     items = []
-    for item in r.json().get("items", []):
+    for item in data.get("items", []):
         snippets = []
         for tm in item.get("text_matches", []):
             for m in tm.get("matches", []):
@@ -1081,18 +1106,18 @@ async def repo_search(body: RepoSearchBody):
                 if t:
                     snippets.append(t[:120])
         items.append({
-            "path": item["path"],
+            "path": item.get("path", ""),
             "sha": (item.get("sha") or "")[:7],
             "url": item.get("html_url", ""),
             "snippets": snippets[:3],
         })
-    return {"items": items, "total": r.json().get("total_count", 0)}
+    return {"items": items, "total": data.get("total_count", 0)}
 
 
 class RepoCommitsBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     branch: Optional[str] = Field(default="main", max_length=255)
     max_results: int = Field(default=10, ge=1, le=50)
 
@@ -1110,10 +1135,10 @@ async def repo_commits(body: RepoCommitsBody):
         return JSONResponse({"error": "Failed to fetch commits"}, status_code=400)
     return [
         {
-            "sha": c["sha"][:7],
-            "message": (c["commit"]["message"].split("\n")[0])[:80],
-            "author": c["commit"]["author"]["name"][:30],
-            "date": c["commit"]["author"]["date"][:10],
+            "sha": (c.get("sha") or "")[:7],
+            "message": ((c.get("commit") or {}).get("message", "").split("\n")[0])[:80],
+            "author": ((c.get("commit") or {}).get("author") or {}).get("name", "")[:30],
+            "date": ((c.get("commit") or {}).get("author") or {}).get("date", "")[:10],
             "url": c.get("html_url", ""),
         }
         for c in r.json()
@@ -1121,9 +1146,9 @@ async def repo_commits(body: RepoCommitsBody):
 
 
 class WorkflowRunsBody(BaseModel):
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     max_results: int = Field(default=10, ge=1, le=50)
 
 
@@ -1141,7 +1166,7 @@ async def repo_workflow_runs(body: WorkflowRunsBody):
     runs = r.json().get("workflow_runs", [])
     return [
         {
-            "id": run["id"],
+            "id": run.get("id"),
             "name": (run.get("name") or run.get("display_title") or "Workflow")[:60],
             "status": run.get("status", ""),        # queued / in_progress / completed
             "conclusion": run.get("conclusion") or "",  # success / failure / cancelled / ...
@@ -1166,9 +1191,9 @@ class ReleaseNotesBody(BaseModel):
     provider: str = Field(default="anthropic", max_length=50)
     anthropic_key: Optional[str] = Field(default="", max_length=500)
     groq_key: Optional[str] = Field(default="", max_length=500)
-    token: str = Field(max_length=500)
-    owner: str = Field(max_length=100)
-    repo: str = Field(max_length=100)
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
     since: Optional[str] = Field(default="", max_length=255)
     until: Optional[str] = Field(default="", max_length=255)
     max_commits: int = Field(default=50, ge=1, le=100)
@@ -1203,16 +1228,17 @@ async def generate_release_notes(body: ReleaseNotesBody):
             since_sha = obj.get("sha", since_sha)[:40]
         trimmed = []
         for c in all_commits:
-            if c["sha"].startswith(since_sha) or since_sha.startswith(c["sha"][:len(since_sha)]):
+            csha = (c.get("sha") or "")
+            if csha.startswith(since_sha) or since_sha.startswith(csha[:len(since_sha)]):
                 break
             trimmed.append(c)
         all_commits = trimmed
     if not all_commits:
         return JSONResponse({"error": "No commits found in range"}, status_code=400)
     commit_list = "\n".join(
-        f"- {c['sha'][:7]} {c['commit']['message'].split(chr(10))[0][:100]}"
+        f"- {(c.get('sha') or '')[:7]} {((c.get('commit') or {}).get('message', '').split(chr(10))[0])[:100]}"
         for c in all_commits
-        if "Merge" not in c["commit"]["message"][:10]
+        if "Merge" not in ((c.get("commit") or {}).get("message", ""))[:10]
     )
     user_prompt = (
         f"Repository: {body.owner}/{body.repo}\n"

@@ -41,9 +41,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
 .sidebar{width:270px;min-width:270px;background:var(--sidebar);border-right:1px solid var(--border2);display:flex;flex-direction:column;overflow:hidden;transition:width .2s,min-width .2s,border .2s}
 .sidebar.col{width:0;min-width:0;border:none}
 .s-head{height:52px;padding:0 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.s-logo{display:flex;align-items:center;gap:9px}
-.s-mark{width:26px;height:26px;background:var(--accent-dim);border:1px solid var(--accent-border);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px}
-.s-name{font-weight:600;font-size:14px;letter-spacing:-.01em}
+.s-logo{display:flex;align-items:center;gap:9px;min-width:0;overflow:hidden}
+.s-mark{width:26px;height:26px;background:var(--accent-dim);border:1px solid var(--accent-border);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.s-name{font-weight:600;font-size:14px;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .s-coll{background:none;border:none;color:var(--muted2);cursor:pointer;padding:4px 6px;border-radius:5px;font-size:16px;line-height:1;transition:color .15s}
 .s-body{flex:1;overflow-y:auto;padding:4px 0 16px}
 .s-sec{padding:6px 0;border-bottom:1px solid var(--border2)}
@@ -125,11 +125,6 @@ select.finput{cursor:pointer;font-family:inherit;font-size:12px}
 .toggle-label::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 3px #0003}
 .toggle-input:checked+.toggle-label{background:var(--accent2)}
 .toggle-input:checked+.toggle-label::after{transform:translateX(16px)}
-.skills-grid{display:flex;flex-wrap:wrap;gap:5px;padding:0 10px 6px}
-.skill-chip{display:flex;align-items:center;gap:5px;padding:5px 9px;background:var(--panel);border:1px solid var(--border2);border-radius:20px;cursor:pointer;font-size:11px;color:var(--muted);transition:all .15s;user-select:none}
-.skill-chip:hover{border-color:var(--border);color:var(--text)}
-.skill-chip input{display:none}
-.skill-chip.checked{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent2)}
 .side-textarea{background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px;font-family:'JetBrains Mono',monospace;outline:none;width:calc(100% - 20px);margin:0 10px;resize:vertical;min-height:60px;max-height:120px;transition:border-color .15s;line-height:1.5}
 .side-textarea:focus{border-color:var(--accent2)}
 .side-textarea::placeholder{color:var(--muted2)}
@@ -378,8 +373,8 @@ pre::-webkit-scrollbar{height:4px}
 .mob-overlay{display:none;position:fixed;inset:0;background:#0004;z-index:999;cursor:pointer}
 .mob-overlay.show{display:block}
 /* Sidebar tab nav */
-.s-tabs{display:flex;gap:2px}
-.s-tab{background:none;border:none;color:var(--muted2);cursor:pointer;border-radius:6px;width:30px;height:28px;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.s-tabs{display:flex;gap:2px;flex-shrink:0}
+.s-tab{background:none;border:none;color:var(--muted2);cursor:pointer;border-radius:6px;width:26px;height:26px;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 .s-tab:hover{background:var(--hover);color:var(--text)}
 .s-tab.on{background:var(--panel2);color:var(--text)}
 /* Sidebar panels */
@@ -395,10 +390,6 @@ pre::-webkit-scrollbar{height:4px}
 .skill-row-desc{font-size:10px;color:var(--muted2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Config/Tools section header */
 .cfg-hdr{font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;padding:10px 10px 6px;display:flex;align-items:center;justify-content:space-between}
-/* Tools action grid */
-.tools-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 10px 8px}
-.tools-btn{background:var(--panel);border:1px solid var(--border2);color:var(--muted);cursor:pointer;padding:8px 6px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s;text-align:center;line-height:1.5}
-.tools-btn:hover{background:var(--hover2);color:var(--text);border-color:var(--border)}
 /* Topbar model badge */
 .topbar-model{background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:all .15s;flex-shrink:0;line-height:1.4}
 .topbar-model:hover{border-color:var(--accent-border);color:var(--accent2)}
@@ -460,8 +451,9 @@ pre::-webkit-scrollbar{height:4px}
     <div class="s-logo"><div class="s-mark" aria-hidden="true">⚡</div><div class="s-name">DevForge</div></div>
     <div class="s-tabs">
       <button class="s-tab on" id="stab-files" onclick="setSideTab('files')" title="Files &amp; Repos">📁</button>
-      <button class="s-tab" id="stab-config" onclick="setSideTab('config')" title="AI Config &amp; Skills">⚙️</button>
-      <button class="s-tab" id="stab-tools" onclick="setSideTab('tools')" title="Tools &amp; Actions">🔧</button>
+      <button class="s-tab" id="stab-config" onclick="setSideTab('config')" title="AI Config">⚙️</button>
+      <button class="s-tab" id="stab-skills" onclick="setSideTab('skills')" title="Skills &amp; Presets">⚡</button>
+      <button class="s-tab" id="stab-tools" onclick="setSideTab('tools')" title="MCP &amp; Tools">🔌</button>
     </div>
     <button class="s-coll" onclick="collSidebar()" aria-label="Collapse sidebar">‹</button>
   </div>
@@ -596,7 +588,10 @@ pre::-webkit-scrollbar{height:4px}
         <div class="ma-stage-row" id="ma-test-row" style="display:none"><div class="ma-stage-lbl">🧪 Test</div><select class="finput" id="ma-test-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
       </div>
     </div>
-    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">Skills</div>
+  </div>
+  <!-- ── Panel: Skills ────────────────────────────────────────────────── -->
+  <div id="spanel-skills" class="s-panel hidden">
+    <div class="cfg-hdr">⚡ Skills</div>
     <div class="skill-list">
       <div class="skill-row" data-skill="react" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">⚛️ React</div><div class="skill-row-desc">Component patterns, hooks, JSX best practices</div></div></div>
       <div class="skill-row" data-skill="nextjs" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🚀 Next.js</div><div class="skill-row-desc">App router, SSR, API routes, Vercel deployment</div></div></div>
@@ -655,11 +650,11 @@ pre::-webkit-scrollbar{height:4px}
       <div id="agent-progress" style="display:none;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;color:var(--muted);max-height:200px;overflow-y:auto;word-break:break-word"></div>
     </div>
     <div class="cfg-hdr" style="border-top:1px solid var(--border2)">⚡ Quick Actions</div>
-    <div class="tools-grid">
-      <button class="tools-btn" onclick="openIssueModal()">📋<br>Create Issue</button>
-      <button class="tools-btn" onclick="openReleaseNotes()">🏷️<br>Release Notes</button>
-      <button class="tools-btn" onclick="openReadmeModal()">📝<br>Gen README</button>
-      <button class="tools-btn" onclick="openDepsModal()">🔍<br>Scan Deps</button>
+    <div class="skill-list">
+      <div class="skill-row" onclick="openIssueModal()"><div class="skill-row-info"><div class="skill-row-name">📋 Create Issue</div><div class="skill-row-desc">Open a GitHub issue from the current context</div></div></div>
+      <div class="skill-row" onclick="openReleaseNotes()"><div class="skill-row-info"><div class="skill-row-name">🏷️ Release Notes</div><div class="skill-row-desc">Generate changelog from recent commits</div></div></div>
+      <div class="skill-row" onclick="openReadmeModal()"><div class="skill-row-info"><div class="skill-row-name">📝 Gen README</div><div class="skill-row-desc">Auto-generate a repository README</div></div></div>
+      <div class="skill-row" onclick="openDepsModal()"><div class="skill-row-info"><div class="skill-row-name">🔍 Scan Deps</div><div class="skill-row-desc">Audit dependencies for vulnerabilities</div></div></div>
     </div>
   </div>
 </aside>
@@ -694,12 +689,13 @@ pre::-webkit-scrollbar{height:4px}
           <button id="readme-btn" onclick="openReadmeModal();closeMoreMenu()">📝 Gen README</button>
           <button id="deps-btn" onclick="openDepsModal();closeMoreMenu()">🔍 Scan Deps</button>
           <button id="search-chat-btn" onclick="toggleChatSearch();closeMoreMenu()">🔎 Search chat</button>
+          <button id="shortcuts-btn" onclick="openShortcutsHelp();closeMoreMenu()">⌨️ Keyboard shortcuts</button>
           <button id="clear-btn" onclick="clearChat();closeMoreMenu()">🗑️ Clear chat</button>
         </div>
       </div>
     </div>
   </div>
-  <div id="chat-search-bar" style="display:none;padding:4px 12px;border-bottom:1px solid var(--border2);background:var(--panel2);display:none;align-items:center;gap:8px">
+  <div id="chat-search-bar" style="display:none;padding:4px 12px;border-bottom:1px solid var(--border2);background:var(--panel2);align-items:center;gap:8px">
     <span style="font-size:12px;color:var(--muted)">Find:</span>
     <input id="chat-search-in" class="finput" placeholder="Search messages…" style="flex:1;padding:4px 8px;font-size:12px" oninput="runChatSearch(this.value)">
     <span id="chat-search-count" style="font-size:11px;color:var(--muted);white-space:nowrap"></span>
@@ -870,6 +866,36 @@ pre::-webkit-scrollbar{height:4px}
       <button class="modal-ok" id="deps-run-btn" onclick="runDepsAudit()">🔍 Audit</button>
       <button class="modal-cancel" onclick="$('deps-modal').style.display='none'">Close</button>
     </div>
+  </div>
+</div>
+
+<!-- Keyboard shortcuts help -->
+<div class="modal-overlay" id="shortcuts-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-head">⌨️ Keyboard Shortcuts</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px">
+      <div><div style="font-size:10px;font-weight:700;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Chat</div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Send message</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘↵</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Clear chat</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘L</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Search messages</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘F</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Focus input</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">/</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">History ↑↓</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">↑↓</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Mention file</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">@</kbd></div>
+        </div>
+      </div>
+      <div><div style="font-size:10px;font-weight:700;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Navigation</div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Command palette</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘K</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Quick file open</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘P</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">AI Config</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘,</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Switch model</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">⌘1/2/3</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Shortcuts help</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">?</kbd></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Dismiss / focus</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:1px 6px">Esc</kbd></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="modal-cancel" onclick="$('shortcuts-modal').style.display='none'">Close</button></div>
   </div>
 </div>
 
@@ -1066,11 +1092,14 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){const modals=['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'];const anyOpen=modals.some(id=>{const m=$(id);if(m&&m.style.display!=='none'){m.style.display='none';return true;}return false;});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}else if(!anyOpen&&!_atMenu&&!e.target?.matches('input,textarea')){$('ti')?.focus();}}
+  if(e.key==='Escape'){const modals=['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal','shortcuts-modal'];const anyOpen=modals.some(id=>{const m=$(id);if(m&&m.style.display!=='none'){m.style.display='none';return true;}return false;});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}else if(!anyOpen&&!_atMenu&&!e.target?.matches('input,textarea')){$('ti')?.focus();}}
   if((e.metaKey||e.ctrlKey)&&e.key==='k'&&!e.target?.matches('input,textarea')){e.preventDefault();openCmdPalette();}
   if((e.metaKey||e.ctrlKey)&&e.key==='p'&&!e.target?.matches('input,textarea')){e.preventDefault();openCmdPalette('@');}
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&S.prov==='anthropic'&&!e.target?.matches('input,textarea')){if(e.key==='1'){e.preventDefault();setAnthModel('claude-haiku-4-5-20251001');toast('⚡ Haiku');}else if(e.key==='2'){e.preventDefault();setAnthModel('claude-sonnet-4-6');toast('⚖️ Sonnet');}else if(e.key==='3'){e.preventDefault();setAnthModel('claude-opus-4-8');toast('🧠 Opus');}}
   if((e.metaKey||e.ctrlKey)&&e.key==='f'&&!e.target?.matches('input,textarea')){e.preventDefault();toggleChatSearch();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='l'&&!e.target?.matches('input,textarea')){e.preventDefault();clearChat();}
+  if((e.metaKey||e.ctrlKey)&&e.key===','&&!e.target?.matches('input,textarea')){e.preventDefault();setSideTab('config');expSidebar();}
+  if(e.key==='?'&&!e.metaKey&&!e.ctrlKey&&!e.altKey&&!e.target?.matches('input,textarea,select')){e.preventDefault();openShortcutsHelp();}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
   if(e.key==='/'&&!e.metaKey&&!e.ctrlKey&&!e.altKey&&!e.target?.matches('input,textarea,select')){e.preventDefault();$('ti')?.focus();}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key==='Backspace'){e.preventDefault();if($('ti'))$('ti').value='';}
@@ -1173,6 +1202,8 @@ function regenerate(){
 
 // ── Test stage toggle ─────────────────────────────────────────────────────────
 function onTestStageToggle(){const tr=$('ma-test-row');if(tr)tr.style.display=$('ma-test-stage').checked?'flex':'none';saveEnhance();}
+// ── Keyboard shortcuts help ───────────────────────────────────────────────────
+function openShortcutsHelp(){$('shortcuts-modal').style.display='flex';}
 
 // ── Batch commit all AI-generated files ──────────────────────────────────────
 function extractFileBlocks(msgBody){const blocks=[];msgBody.querySelectorAll('.cblock').forEach(block=>{const writeBtn=block.querySelector('.cwrite[data-filepath]');if(!writeBtn)return;const path=writeBtn.getAttribute('data-filepath');const code=block.querySelector('code');if(path&&code)blocks.push({path,content:code.textContent});});return blocks;}
@@ -1198,7 +1229,7 @@ function isMob(){return window.innerWidth<=768;}
 function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
 function expSidebar(){$('sidebar').classList.remove('col');if(!isMob())$('exp-btn').classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
 function setSideTab(tab){
-  ['files','config','tools'].forEach(t=>{
+  ['files','config','skills','tools'].forEach(t=>{
     const p=$('spanel-'+t);if(p)p.classList.toggle('hidden',t!==tab);
     const b=$('stab-'+t);if(b)b.classList.toggle('on',t===tab);
   });
@@ -1365,7 +1396,7 @@ function updTF(path){const el=document.getElementById(tfid(path));if(!el)return;
 function loadSnippets(){try{return JSON.parse(localStorage.getItem('df-snippets')||'[]');}catch(e){return [];}}
 function saveSnippets(arr){localStorage.setItem('df-snippets',JSON.stringify(arr));renderSnippets();}
 function saveSnippet(){const txt=($('ti')?.value||'').trim();if(!txt){toast('Type a prompt first',true);return;}const label=txt.slice(0,40)+(txt.length>40?'…':'');const arr=loadSnippets();arr.unshift({label,text:txt,ts:Date.now()});if(arr.length>30)arr.splice(30);saveSnippets(arr);toast('Snippet saved');}
-function renderSnippets(){const arr=loadSnippets();const list=$('snip-list');const badge=$('snip-count');if(!list||!badge)return;badge.style.display=arr.length?'inline':'none';badge.textContent=arr.length;if(!arr.length){list.style.display='none';return;}list.style.display='block';list.innerHTML=arr.map((s,i)=>`<div style="display:flex;align-items:center;gap:4px;padding:5px 8px;border-bottom:1px solid var(--border2);cursor:pointer;font-size:11px;transition:background .1s" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''" onclick="loadSnippet(${i})"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${esc(s.label)}</span><button onclick="event.stopPropagation();deleteSnippet(${i})" style="background:none;border:none;color:var(--muted2);cursor:pointer;padding:0 2px;font-size:12px" title="Delete">✕</button></div>`).join('');}
+function renderSnippets(){const arr=loadSnippets();const list=$('snip-list');if(!list)return;const badge=$('snip-count');if(badge){badge.style.display=arr.length?'inline':'none';badge.textContent=arr.length;}if(!arr.length){list.style.display='none';return;}list.style.display='block';list.innerHTML=arr.map((s,i)=>`<div style="display:flex;align-items:center;gap:4px;padding:5px 8px;border-bottom:1px solid var(--border2);cursor:pointer;font-size:11px;transition:background .1s" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''" onclick="loadSnippet(${i})"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${esc(s.label)}</span><button onclick="event.stopPropagation();deleteSnippet(${i})" style="background:none;border:none;color:var(--muted2);cursor:pointer;padding:0 2px;font-size:12px" title="Delete">✕</button></div>`).join('');}
 function loadSnippet(i){const arr=loadSnippets();if(!arr[i])return;const ti=$('ti');if(ti){ti.value=arr[i].text;ti.dispatchEvent(new Event('input'));ti.focus();}$('peek-modal').style.display='none';}
 function deleteSnippet(i){const arr=loadSnippets();arr.splice(i,1);saveSnippets(arr);}
 
@@ -1391,6 +1422,7 @@ function updCtx(){
     strip.appendChild(p);
   }
   if(n>1){const clr=document.createElement('button');clr.textContent='clear all';clr.style.cssText='background:none;border:none;color:var(--muted2);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;flex-shrink:0;font-family:inherit;opacity:.7;transition:opacity .1s';clr.onmouseover=()=>clr.style.opacity='1';clr.onmouseout=()=>clr.style.opacity='.7';clr.onclick=()=>{S.selFiles.clear();S.fileSizes.clear();S.localFiles.clear();document.querySelectorAll('.tfile.sel').forEach(el=>{el.classList.remove('sel');const cb=el.querySelector('input');if(cb)cb.checked=false;});updCtx();toast('Context cleared');};strip.appendChild(clr);}
+  if(n===0&&S.repo){const rp=document.createElement('div');rp.className='cpill local';rp.style.cssText='cursor:pointer;opacity:.65';rp.title='Repo tree is in AI context — click files in sidebar to add file contents';rp.innerHTML=`📁 ${esc(S.repo.owner+'/'+S.repo.repo)} <span style="opacity:.6;font-size:10px">· ${esc(S.repo.branch||'main')} · tree only</span>`;rp.onclick=()=>{setSideTab('files');expSidebar();};strip.appendChild(rp);}
   const bw=$('budget-wrap');
   if(bw){
     bw.style.display=n?'block':'none';
@@ -1655,7 +1687,7 @@ async function fetchModels(q=''){$('model-list').innerHTML='<div class="list-msg
 function selectModel(id,el){S.hfModel=id;document.querySelectorAll('#model-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');$('hf-sel-name').textContent=id;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';updBadge();saveEnhance();}
 function clearModel(){$('hf-selected').style.display='none';$('hf-browser').style.display='block';$('model-search').value='';fetchModels('');}
 function setAgent(el){document.querySelectorAll('.atab').forEach(t=>{t.classList.remove('on');t.setAttribute('aria-selected','false');});el.classList.add('on');el.setAttribute('aria-selected','true');S.agent=el.dataset.agent;}
-function updHint(){const h=$('hint');const n=S.selFiles.size+S.localFiles.size;if(!S.ghToken){h.textContent='Open sidebar · Connect GitHub to get started · ⌘K commands';return;}if(!S.repo&&!n){h.textContent='Select a repo (sidebar) or 📎 upload a file · ⌘K commands';return;}if(S.repo&&!n){h.textContent=`@ to mention a file · ⌘P quick open · ⌘K commands`;return;}const skill=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill).join('+');h.textContent=`${n} file${n!==1?'s':''} ready${skill?' · '+skill:''}  ·  ⌘↵ send  ·  ⌘K commands`;}
+function updHint(){const h=$('hint');const n=S.selFiles.size+S.localFiles.size;if(!S.ghToken){h.textContent='Open sidebar · Connect GitHub to get started · ⌘K commands';return;}if(!S.repo&&!n){h.textContent='Select a repo (sidebar) or 📎 upload a file · ⌘K commands';return;}if(S.repo&&!n){h.textContent=`📁 ${S.repo.owner}/${S.repo.repo} · click files in sidebar or @ to add them · ⌘K`;return;}const skill=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill).join('+');h.textContent=`${n} file${n!==1?'s':''} ready${skill?' · '+skill:''}  ·  ⌘↵ send  ·  ⌘K commands`;}
 function fill(btn){$('ti').value=btn.textContent.trim();$('ti').focus();ar($('ti'));}
 // ── @file mention autocomplete ────────────────────────────────────────────────
 let _atPos=-1,_atMenu=null,_atMatches=[],_atIdx=0;
@@ -1802,8 +1834,8 @@ function loadTools(){try{S.tools=JSON.parse(localStorage.getItem('df-tools')||'[
 function saveTools(){localStorage.setItem('df-tools',JSON.stringify(S.tools));}
 function renderToolList(){
   const el=$('tool-list');const badge=$('tool-count-badge');
-  if(!S.tools.length){el.style.display='none';badge.style.display='none';return;}
-  el.style.display='block';badge.textContent=S.tools.length;badge.style.display='inline';
+  if(!S.tools.length){if(el)el.style.display='none';if(badge)badge.style.display='none';return;}
+  if(el)el.style.display='block';if(badge){badge.textContent=S.tools.length;badge.style.display='inline';}
   el.innerHTML=S.tools.map((t,i)=>`<div class="tool-item"><span class="tool-method">${esc(t.method||'GET')}</span><span class="tool-name-lbl" title="${escA(t.description||'')}">${esc(t.name)}</span><button class="tool-del" onclick="editTool(${i})" title="Edit" style="color:var(--muted2);font-size:11px">✏️</button><button class="tool-del" onclick="deleteTool(${i})" title="Remove">✕</button></div>`).join('');
 }
 function openAddTool(){
@@ -1924,8 +1956,9 @@ const CMD_ACTIONS=[
   {icon:'📝',label:'Docs agent',fn:()=>{const t=document.querySelector('.atab[data-agent="docs"]');if(t)setAgent(t);},group:'Agent'},
   {icon:'🔀',label:'Refactor agent',fn:()=>{const t=document.querySelector('.atab[data-agent="refactor"]');if(t)setAgent(t);},group:'Agent'},
   {icon:'📁',label:'Browse files',sub:'Open file browser',fn:()=>{setSideTab('files');expSidebar();},group:'Navigation'},
-  {icon:'⚙️',label:'AI Config & Skills',sub:'Models, skills, rules',fn:()=>{setSideTab('config');expSidebar();},group:'Navigation'},
-  {icon:'🔧',label:'Tools panel',sub:'Snippets, custom tools',fn:()=>{setSideTab('tools');expSidebar();},group:'Navigation'},
+  {icon:'⚙️',label:'AI Config',sub:'Models, provider keys',fn:()=>{setSideTab('config');expSidebar();},group:'Navigation'},
+  {icon:'⚡',label:'Skills & Presets',sub:'Enable skills, load presets',fn:()=>{setSideTab('skills');expSidebar();},group:'Navigation'},
+  {icon:'🔌',label:'MCP & Tools',sub:'Custom tools, snippets',fn:()=>{setSideTab('tools');expSidebar();},group:'Navigation'},
   {icon:'➕',label:'New conversation tab',fn:()=>newTab(),group:'Chat'},
   {icon:'🗑️',label:'Clear current chat',fn:()=>clearChat(),group:'Chat'},
   {icon:'⬇️',label:'Export chat as Markdown',fn:()=>exportChat(),group:'Chat'},
