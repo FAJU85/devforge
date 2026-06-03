@@ -263,6 +263,9 @@ pre::-webkit-scrollbar{height:4px}
 .msg-act{background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;padding:2px 8px;border-radius:5px;font-size:11px;font-family:inherit;transition:all .15s;line-height:1.6}
 .msg-act:hover{color:var(--text);border-color:var(--border)}
 .msg-act.del:hover{color:var(--red);border-color:var(--red)}
+/* Context files indicator on user message */
+.msg-ctx{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.msg-ctx-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:var(--panel2);border:1px solid var(--border2);border-radius:20px;font-size:10px;color:var(--muted2);font-family:'JetBrains Mono',monospace;white-space:nowrap}
 /* Follow-up suggestion chips */
 .follow-chips{display:flex;gap:5px;flex-wrap:wrap;padding:6px 0 2px 31px}
 .follow-chip{background:none;border:1px solid var(--border2);color:var(--muted);cursor:pointer;padding:3px 10px;border-radius:20px;font-size:11px;font-family:inherit;transition:all .15s;line-height:1.6;white-space:nowrap}
@@ -1614,7 +1617,9 @@ async function send(){
   S.msgs.push({role:'user',content:text});
   const uw=document.createElement('div');uw.className='msg-wrap';
   const uwId='mw'+Date.now();uw.id=uwId;
-  uw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av user">U</div><span class="msg-role">You</span><span class="msg-time">${now()}</span><div class="msg-actions"><button class="msg-act" onclick="cpMsg(this)" title="Copy">copy</button><button class="msg-act del" onclick="delMsg('${uwId}',${S.msgs.length-1})" title="Delete">✕</button></div></div><div class="msg-body">${esc(text)}</div></div>`;
+  const ctxFiles=[...S.selFiles.keys(),...S.localFiles.keys()];
+  const ctxHtml=ctxFiles.length?`<div class="msg-ctx">${ctxFiles.map(p=>`<span class="msg-ctx-pill">${ficon(p)} ${esc(p.split('/').pop())}</span>`).join('')}</div>`:'';
+  uw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av user">U</div><span class="msg-role">You</span><span class="msg-time">${now()}</span><div class="msg-actions"><button class="msg-act" onclick="cpMsg(this)" title="Copy">copy</button><button class="msg-act del" onclick="delMsg('${uwId}',${S.msgs.length-1})" title="Delete">✕</button></div></div><div class="msg-body">${esc(text)}${ctxHtml}</div></div>`;
   $('msgs').appendChild(uw);scrollB();$('ti').value='';ar($('ti'));
   const tw=document.createElement('div');tw.className='msg-wrap';
   const multiAgent=$('multi-agent').checked;
