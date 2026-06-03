@@ -880,6 +880,18 @@ function scrollB(){const m=$('msgs');m.scrollTop=m.scrollHeight;}
 // ── Message actions ───────────────────────────────────────────────────────────
 function cpMsg(btn){const body=btn.closest('.msg-inner').querySelector('.msg-body');navigator.clipboard.writeText(body?body.textContent:'');btn.textContent='✓';setTimeout(()=>{btn.textContent='copy';},1500);}
 function delMsg(wrapId,idx){const el=document.getElementById(wrapId);if(el)el.remove();if(idx>=0&&idx<S.msgs.length)S.msgs.splice(idx,1);autoSaveChat();}
+function editMsg(wrapId,idx){
+  if(S.streaming)return;
+  const el=document.getElementById(wrapId);if(!el)return;
+  const body=el.querySelector('.msg-body');
+  const text=body?body.firstChild?.textContent||body.textContent:'';
+  // Remove this message and everything after it from DOM + S.msgs
+  const msgs=$('msgs');const all=Array.from(msgs.querySelectorAll('.msg-wrap'));const pos=all.indexOf(el);
+  if(pos>=0)all.slice(pos).forEach(e=>e.remove());
+  if(idx>=0)S.msgs.splice(idx);
+  const ti=$('ti');ti.value=text.trim();ar(ti);ti.focus();autoSaveChat();
+  if(!S.msgs.length)$('empty').style.display='flex';
+}
 
 // ── Clear + auto-save conversation ────────────────────────────────────────────
 function clearChat(){if(!S.msgs.length)return;if(!confirm('Clear this conversation?'))return;S.msgs=[];S.stats={tokens:0,messages:0};clearChatDOM();autoSaveChat();toast('Conversation cleared');renderTabBar();}
@@ -1619,7 +1631,7 @@ async function send(){
   const uwId='mw'+Date.now();uw.id=uwId;
   const ctxFiles=[...S.selFiles.keys(),...S.localFiles.keys()];
   const ctxHtml=ctxFiles.length?`<div class="msg-ctx">${ctxFiles.map(p=>`<span class="msg-ctx-pill">${ficon(p)} ${esc(p.split('/').pop())}</span>`).join('')}</div>`:'';
-  uw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av user">U</div><span class="msg-role">You</span><span class="msg-time">${now()}</span><div class="msg-actions"><button class="msg-act" onclick="cpMsg(this)" title="Copy">copy</button><button class="msg-act del" onclick="delMsg('${uwId}',${S.msgs.length-1})" title="Delete">✕</button></div></div><div class="msg-body">${esc(text)}${ctxHtml}</div></div>`;
+  uw.innerHTML=`<div class="msg-inner"><div class="msg-meta"><div class="msg-av user">U</div><span class="msg-role">You</span><span class="msg-time">${now()}</span><div class="msg-actions"><button class="msg-act" onclick="cpMsg(this)" title="Copy">copy</button><button class="msg-act" onclick="editMsg('${uwId}',${S.msgs.length-1})" title="Edit and resend">edit</button><button class="msg-act del" onclick="delMsg('${uwId}',${S.msgs.length-1})" title="Delete">✕</button></div></div><div class="msg-body">${esc(text)}${ctxHtml}</div></div>`;
   $('msgs').appendChild(uw);scrollB();$('ti').value='';ar($('ti'));
   const tw=document.createElement('div');tw.className='msg-wrap';
   const multiAgent=$('multi-agent').checked;
