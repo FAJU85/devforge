@@ -1396,7 +1396,7 @@ function updTF(path){const el=document.getElementById(tfid(path));if(!el)return;
 function loadSnippets(){try{return JSON.parse(localStorage.getItem('df-snippets')||'[]');}catch(e){return [];}}
 function saveSnippets(arr){localStorage.setItem('df-snippets',JSON.stringify(arr));renderSnippets();}
 function saveSnippet(){const txt=($('ti')?.value||'').trim();if(!txt){toast('Type a prompt first',true);return;}const label=txt.slice(0,40)+(txt.length>40?'…':'');const arr=loadSnippets();arr.unshift({label,text:txt,ts:Date.now()});if(arr.length>30)arr.splice(30);saveSnippets(arr);toast('Snippet saved');}
-function renderSnippets(){const arr=loadSnippets();const list=$('snip-list');const badge=$('snip-count');if(!list||!badge)return;badge.style.display=arr.length?'inline':'none';badge.textContent=arr.length;if(!arr.length){list.style.display='none';return;}list.style.display='block';list.innerHTML=arr.map((s,i)=>`<div style="display:flex;align-items:center;gap:4px;padding:5px 8px;border-bottom:1px solid var(--border2);cursor:pointer;font-size:11px;transition:background .1s" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''" onclick="loadSnippet(${i})"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${esc(s.label)}</span><button onclick="event.stopPropagation();deleteSnippet(${i})" style="background:none;border:none;color:var(--muted2);cursor:pointer;padding:0 2px;font-size:12px" title="Delete">✕</button></div>`).join('');}
+function renderSnippets(){const arr=loadSnippets();const list=$('snip-list');if(!list)return;const badge=$('snip-count');if(badge){badge.style.display=arr.length?'inline':'none';badge.textContent=arr.length;}if(!arr.length){list.style.display='none';return;}list.style.display='block';list.innerHTML=arr.map((s,i)=>`<div style="display:flex;align-items:center;gap:4px;padding:5px 8px;border-bottom:1px solid var(--border2);cursor:pointer;font-size:11px;transition:background .1s" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''" onclick="loadSnippet(${i})"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${esc(s.label)}</span><button onclick="event.stopPropagation();deleteSnippet(${i})" style="background:none;border:none;color:var(--muted2);cursor:pointer;padding:0 2px;font-size:12px" title="Delete">✕</button></div>`).join('');}
 function loadSnippet(i){const arr=loadSnippets();if(!arr[i])return;const ti=$('ti');if(ti){ti.value=arr[i].text;ti.dispatchEvent(new Event('input'));ti.focus();}$('peek-modal').style.display='none';}
 function deleteSnippet(i){const arr=loadSnippets();arr.splice(i,1);saveSnippets(arr);}
 
@@ -1834,8 +1834,8 @@ function loadTools(){try{S.tools=JSON.parse(localStorage.getItem('df-tools')||'[
 function saveTools(){localStorage.setItem('df-tools',JSON.stringify(S.tools));}
 function renderToolList(){
   const el=$('tool-list');const badge=$('tool-count-badge');
-  if(!S.tools.length){el.style.display='none';badge.style.display='none';return;}
-  el.style.display='block';badge.textContent=S.tools.length;badge.style.display='inline';
+  if(!S.tools.length){if(el)el.style.display='none';if(badge)badge.style.display='none';return;}
+  if(el)el.style.display='block';if(badge){badge.textContent=S.tools.length;badge.style.display='inline';}
   el.innerHTML=S.tools.map((t,i)=>`<div class="tool-item"><span class="tool-method">${esc(t.method||'GET')}</span><span class="tool-name-lbl" title="${escA(t.description||'')}">${esc(t.name)}</span><button class="tool-del" onclick="editTool(${i})" title="Edit" style="color:var(--muted2);font-size:11px">✏️</button><button class="tool-del" onclick="deleteTool(${i})" title="Remove">✕</button></div>`).join('');
 }
 function openAddTool(){
