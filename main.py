@@ -1626,11 +1626,18 @@ async def call_tool(body: ToolCallBody):
     method = body.method.upper()
     if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
         return JSONResponse({"error": f"Unsupported method: {method}"}, status_code=400)
+    if body.body_json is not None:
+        try:
+            _payload_size = len(json.dumps(body.body_json))
+        except Exception:
+            return JSONResponse({"error": "body_json is not JSON-serialisable"}, status_code=400)
+        if _payload_size > 65_536:
+            return JSONResponse({"error": "body_json exceeds 64 KB limit"}, status_code=413)
     # Sanitize headers: string values only, block hop-by-hop / sensitive headers
     _BLOCKED_HDRS = {"host", "transfer-encoding", "connection", "upgrade",
                      "proxy-authorization", "te", "trailers", "keep-alive"}
     try:
-        raw_hdrs = body.headers or {}
+        raw_hdrs = dict(list((body.headers or {}).items())[:50])
         hdrs = {
             str(k)[:200]: str(v)[:2000]
             for k, v in raw_hdrs.items()

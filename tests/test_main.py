@@ -1734,6 +1734,29 @@ class TestToolCallEndpoint:
             r = client.post("/api/tools/call", json={"url": "https://api.example.com/data", "method": "GET"})
         assert r.status_code == 200
 
+    def test_tool_call_rejects_oversized_body_json(self):
+        big = {"k" + str(i): "x" * 1000 for i in range(100)}  # ~100 KB
+        r = client.post("/api/tools/call", json={"url": "https://api.example.com/", "method": "POST", "body_json": big})
+        assert r.status_code == 413
+        assert "64 KB" in r.json()["error"]
+
+    def test_tool_call_accepts_small_body_json(self):
+        with patch("requests.request") as mock_req:
+            mock_req.return_value.status_code = 201
+            mock_req.return_value.text = "created"
+            r = client.post("/api/tools/call", json={"url": "https://api.example.com/", "method": "POST", "body_json": {"key": "value"}})
+        assert r.status_code == 200
+
+    def test_tool_call_truncates_excess_headers(self):
+        many_hdrs = {"H" + str(i): "v" for i in range(200)}
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.text = "ok"
+            r = client.post("/api/tools/call", json={"url": "https://api.example.com/", "method": "GET", "headers": many_hdrs})
+        assert r.status_code == 200
+        _passed = mock_get.call_args.kwargs.get("headers", mock_get.call_args[1].get("headers", {}))
+        assert len(_passed) <= 50
+
 
 class TestOpenAICompatBaseUrlValidation:
     def test_suggest_files_rejects_file_scheme_base_url(self):
