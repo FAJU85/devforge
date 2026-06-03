@@ -550,7 +550,10 @@ async def github_auth_start():
     if not GITHUB_CLIENT_ID: return JSONResponse({"error": "GITHUB_CLIENT_ID not set."}, status_code=500)
     r = requests.post("https://github.com/login/device/code", headers={"Accept": "application/json"},
         data={"client_id": GITHUB_CLIENT_ID, "scope": "repo read:user"}, timeout=10)
-    return JSONResponse(r.json(), status_code=200 if r.ok else 500)
+    try:
+        return JSONResponse(r.json(), status_code=200 if r.ok else 500)
+    except Exception:
+        return JSONResponse({"error": "GitHub returned an unexpected response"}, status_code=500)
 
 class DeviceCodeBody(BaseModel):
     device_code: str = Field(max_length=100)
@@ -562,7 +565,10 @@ async def github_auth_poll(body: DeviceCodeBody):
     r = requests.post("https://github.com/login/oauth/access_token", headers={"Accept": "application/json"},
         data={"client_id": GITHUB_CLIENT_ID, "client_secret": GITHUB_CLIENT_SECRET,
               "device_code": body.device_code, "grant_type": "urn:ietf:params:oauth:grant-type:device_code"}, timeout=10)
-    return JSONResponse(r.json(), status_code=200)
+    try:
+        return JSONResponse(r.json(), status_code=200)
+    except Exception:
+        return JSONResponse({"error": "GitHub returned an unexpected response"}, status_code=500)
 
 class TokenBody(BaseModel):
     token: str = Field(min_length=1, max_length=500)
@@ -571,7 +577,10 @@ class TokenBody(BaseModel):
 async def github_user(body: TokenBody):
     r = requests.get("https://api.github.com/user",
         headers={"Authorization": f"token {body.token}", "Accept": "application/vnd.github.v3+json"}, timeout=10)
-    return JSONResponse(r.json(), status_code=200 if r.ok else 400)
+    try:
+        return JSONResponse(r.json(), status_code=200 if r.ok else 400)
+    except Exception:
+        return JSONResponse({"error": "GitHub returned an unexpected response"}, status_code=400)
 
 @app.post("/api/github/repos")
 async def github_repos(body: TokenBody):
@@ -1117,10 +1126,10 @@ async def repo_commits(body: RepoCommitsBody):
         return JSONResponse({"error": "Failed to fetch commits"}, status_code=400)
     return [
         {
-            "sha": c["sha"][:7],
-            "message": (c["commit"]["message"].split("\n")[0])[:80],
-            "author": c["commit"]["author"]["name"][:30],
-            "date": c["commit"]["author"]["date"][:10],
+            "sha": (c.get("sha") or "")[:7],
+            "message": ((c.get("commit") or {}).get("message", "").split("\n")[0])[:80],
+            "author": ((c.get("commit") or {}).get("author") or {}).get("name", "")[:30],
+            "date": ((c.get("commit") or {}).get("author") or {}).get("date", "")[:10],
             "url": c.get("html_url", ""),
         }
         for c in r.json()
@@ -1210,16 +1219,17 @@ async def generate_release_notes(body: ReleaseNotesBody):
             since_sha = obj.get("sha", since_sha)[:40]
         trimmed = []
         for c in all_commits:
-            if c["sha"].startswith(since_sha) or since_sha.startswith(c["sha"][:len(since_sha)]):
+            csha = (c.get("sha") or "")
+            if csha.startswith(since_sha) or since_sha.startswith(csha[:len(since_sha)]):
                 break
             trimmed.append(c)
         all_commits = trimmed
     if not all_commits:
         return JSONResponse({"error": "No commits found in range"}, status_code=400)
     commit_list = "\n".join(
-        f"- {c['sha'][:7]} {c['commit']['message'].split(chr(10))[0][:100]}"
+        f"- {(c.get('sha') or '')[:7]} {((c.get('commit') or {}).get('message', '').split(chr(10))[0])[:100]}"
         for c in all_commits
-        if "Merge" not in c["commit"]["message"][:10]
+        if "Merge" not in ((c.get("commit") or {}).get("message", ""))[:10]
     )
     user_prompt = (
         f"Repository: {body.owner}/{body.repo}\n"
