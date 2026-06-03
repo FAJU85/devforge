@@ -978,6 +978,17 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
+  // Settings panel focus trap (Tab/Shift+Tab cycle within panel)
+  const _sp=$('settings-panel');
+  if(_sp&&_sp.style.display!=='none'&&e.key==='Tab'){
+    const foc=_settingsFocusables();
+    if(foc.length){
+      e.preventDefault();
+      const idx=foc.indexOf(document.activeElement);
+      foc[e.shiftKey?(idx<=0?foc.length-1:idx-1):(idx>=foc.length-1?0:idx+1)].focus();
+    }
+    return;
+  }
   if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}const sp=$('settings-panel');if(sp&&sp.style.display!=='none'){closeSettings();}}
   if((e.metaKey||e.ctrlKey)&&e.key==='k'&&!e.target?.matches('input,textarea')){e.preventDefault();const sp=$('settings-panel');if(sp&&sp.style.display!=='none')closeSettings();else openSettings();}
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&S.prov==='anthropic'&&!e.target?.matches('input,textarea')){if(e.key==='1'){e.preventDefault();setAnthModel('claude-haiku-4-5-20251001');toast('⚡ Haiku');}else if(e.key==='2'){e.preventDefault();setAnthModel('claude-sonnet-4-6');toast('⚖️ Sonnet');}else if(e.key==='3'){e.preventDefault();setAnthModel('claude-opus-4-8');toast('🧠 Opus');}}
@@ -1104,8 +1115,10 @@ document.addEventListener('click',e=>{if(!e.target.closest('#more-menu')&&!e.tar
 function isMob(){return window.innerWidth<=768;}
 function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
 function expSidebar(){$('sidebar').classList.remove('col');if(!isMob())$('exp-btn').classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
-function openSettings(){const panel=$('settings-panel');if(panel)panel.style.display='flex';}
-function closeSettings(){const panel=$('settings-panel');if(panel)panel.style.display='none';}
+let _settingsPrevFocus=null;
+function _settingsFocusables(){const panel=$('settings-panel');if(!panel)return[];return[...panel.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(el=>el.offsetParent!==null);}
+function openSettings(){const panel=$('settings-panel');if(!panel)return;_settingsPrevFocus=document.activeElement;panel.style.display='flex';const foc=_settingsFocusables();if(foc.length)foc[0].focus();}
+function closeSettings(){const panel=$('settings-panel');if(!panel)return;panel.style.display='none';if(_settingsPrevFocus&&typeof _settingsPrevFocus.focus==='function')_settingsPrevFocus.focus();}
 marked.setOptions({breaks:true,gfm:true});
 function explainCode(btn){const code=btn.closest('.cblock').querySelector('code');if(!code)return;const snippet=code.textContent.slice(0,800);const ti=$('ti');ti.value=`Explain what this code does, step by step:\n\`\`\`\n${snippet}\n\`\`\``;ti.focus();ti.dispatchEvent(new Event('input'));$('msgs').scrollTo(0,$('msgs').scrollHeight);}
 async function createGist(btn,lang){
