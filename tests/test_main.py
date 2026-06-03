@@ -2099,6 +2099,16 @@ class TestRepoBranchesEndpoint:
         assert r.status_code == 400
         assert "error" in r.json()
 
+    def test_owner_repo_encoded_in_github_url(self):
+        """Injected ? or / in owner/repo must be percent-encoded, not raw in URL."""
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = []
+            client.get("/api/repo/branches?token=tok&owner=evil%3Fq%3D1&repo=bad%2Frepo")
+        url_called = mock_get.call_args.args[0] if mock_get.call_args.args else mock_get.call_args[0][0]
+        assert "?q=1" not in url_called.split("branches")[0]
+        assert "/repos/evil%3Fq%3D1/bad%2Frepo/" in url_called or "/repos/evil%3Fq%3D1/" in url_called
+
     def test_repo_connect_with_branch_override(self):
         with patch("requests.get") as mock_get:
             repo_response = MagicMock()

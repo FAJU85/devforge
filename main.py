@@ -610,6 +610,10 @@ def gh_hdrs(token: str) -> dict:
     """
     return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
 
+def _gh_base(owner: str, repo: str) -> str:
+    """Build the GitHub API repos base URL with owner/repo safely encoded."""
+    return f"https://api.github.com/repos/{_urlquote(owner, safe='')}/{_urlquote(repo, safe='')}"
+
 class RepoBody(BaseModel):
     token: str = Field(max_length=500)
     url: str = Field(max_length=300)
@@ -620,7 +624,7 @@ class RepoBody(BaseModel):
 async def list_branches(token: str = Query(..., max_length=500), owner: str = Query(..., max_length=100), repo: str = Query(..., max_length=100)):
     """List all branches for a repository."""
     r = requests.get(
-        f"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100",
+        f"{_gh_base(owner, repo)}/branches?per_page=100",
         headers=gh_hdrs(token), timeout=15,
     )
     if not r.ok:
@@ -632,11 +636,11 @@ async def list_branches(token: str = Query(..., max_length=500), owner: str = Qu
 async def repo_connect(body: RepoBody):
     owner, repo = parse_gh_url(body.url)
     if not owner: return JSONResponse({"error": "Invalid repository"}, status_code=400)
-    r = requests.get(f"https://api.github.com/repos/{owner}/{repo}", headers=gh_hdrs(body.token), timeout=10)
+    r = requests.get(f"{_gh_base(owner, repo)}", headers=gh_hdrs(body.token), timeout=10)
     if not r.ok: return JSONResponse({"error": r.json().get("message", "Not found")}, status_code=400)
     default_branch = r.json()["default_branch"]
     branch = (body.branch or "").strip() or default_branch
-    t = requests.get(f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1",
+    t = requests.get(f"{_gh_base(owner, repo)}/git/trees/{branch}?recursive=1",
         headers=gh_hdrs(body.token), timeout=15)
     if not t.ok: return JSONResponse({"error": "Failed to fetch file tree"}, status_code=400)
     files = sorted([{"path": f["path"], "size": f.get("size", 0)} for f in t.json().get("tree", [])
@@ -651,7 +655,7 @@ class FileBody(BaseModel):
 
 @app.post("/api/repo/file")
 async def repo_file(body: FileBody):
-    r = requests.get(f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{body.path}",
+    r = requests.get(f"{_gh_base(body.owner, body.repo)}/contents/{body.path}",
         headers=gh_hdrs(body.token), timeout=10)
     if not r.ok: return JSONResponse({"error": f"Cannot fetch {body.path}"}, status_code=400)
     try:
@@ -674,7 +678,7 @@ async def repo_write(body: WriteFileBody):
     """Create or update a file in the repository via the GitHub Contents API."""
     sha = None
     existing = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{body.path}",
+        f"{_gh_base(body.owner, body.repo)}/contents/{body.path}",
         headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
     )
     if existing.ok:
@@ -692,7 +696,7 @@ async def repo_write(body: WriteFileBody):
         payload["sha"] = sha
 
     w = requests.put(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{body.path}",
+        f"{_gh_base(body.owner, body.repo)}/contents/{body.path}",
         headers=gh_hdrs(body.token), json=payload, timeout=15,
     )
     if not w.ok:
@@ -860,7 +864,7 @@ async def repo_write_batch(body: BatchWriteBody):
         sha = None
         try:
             existing = requests.get(
-                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{safe_p}",
+                f"{_gh_base(body.owner, body.repo)}/contents/{safe_p}",
                 headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
             )
             if existing.ok:
@@ -878,7 +882,7 @@ async def repo_write_batch(body: BatchWriteBody):
 
         try:
             w = requests.put(
-                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{safe_p}",
+                f"{_gh_base(body.owner, body.repo)}/contents/{safe_p}",
                 headers=gh_hdrs(body.token), json=payload, timeout=15,
             )
             if w.ok:
@@ -953,7 +957,7 @@ class IssueBody(BaseModel):
 async def create_issue(body: IssueBody):
     """Create a GitHub issue in the connected repository."""
     r = requests.post(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/issues",
+        f"{_gh_base(body.owner, body.repo)}/issues",
         headers=gh_hdrs(body.token),
         json={"title": body.title, "body": body.body, "labels": body.labels},
         timeout=15,
@@ -981,7 +985,7 @@ class PRBody(BaseModel):
 async def create_pr(body: PRBody):
     """Create a GitHub pull request from head branch into base branch."""
     r = requests.post(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls",
+        f"{_gh_base(body.owner, body.repo)}/pulls",
         headers=gh_hdrs(body.token),
         json={"title": body.title, "body": body.body, "head": body.head, "base": body.base},
         timeout=15,
@@ -1007,7 +1011,7 @@ async def get_pr_diff(body: PRDiffBody):
     """Fetch a pull request's metadata and unified diff."""
     # Get PR metadata
     pr_r = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls/{body.pr_number}",
+        f"{_gh_base(body.owner, body.repo)}/pulls/{body.pr_number}",
         headers=gh_hdrs(body.token),
         timeout=15,
     )
@@ -1016,7 +1020,7 @@ async def get_pr_diff(body: PRDiffBody):
     pr = pr_r.json()
     # Get diff (cap at 40KB)
     diff_r = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/pulls/{body.pr_number}",
+        f"{_gh_base(body.owner, body.repo)}/pulls/{body.pr_number}",
         headers={**gh_hdrs(body.token), "Accept": "application/vnd.github.diff"},
         timeout=20,
     )
@@ -1094,7 +1098,7 @@ class RepoCommitsBody(BaseModel):
 async def repo_commits(body: RepoCommitsBody):
     """Fetch recent commits for a branch."""
     r = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/commits",
+        f"{_gh_base(body.owner, body.repo)}/commits",
         headers=gh_hdrs(body.token),
         params={"sha": body.branch or "main", "per_page": min(body.max_results, 30)},
         timeout=15,
@@ -1124,7 +1128,7 @@ class WorkflowRunsBody(BaseModel):
 async def repo_workflow_runs(body: WorkflowRunsBody):
     """Fetch recent GitHub Actions workflow runs."""
     r = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/actions/runs",
+        f"{_gh_base(body.owner, body.repo)}/actions/runs",
         headers=gh_hdrs(body.token),
         params={"per_page": min(body.max_results, 20)},
         timeout=15,
@@ -1175,7 +1179,7 @@ async def generate_release_notes(body: ReleaseNotesBody):
     if body.until:
         params["sha"] = body.until
     r = requests.get(
-        f"https://api.github.com/repos/{body.owner}/{body.repo}/commits",
+        f"{_gh_base(body.owner, body.repo)}/commits",
         headers=gh_hdrs(body.token),
         params=params,
         timeout=15,
@@ -1188,7 +1192,7 @@ async def generate_release_notes(body: ReleaseNotesBody):
         since_sha = body.since
         # Also handle tags — resolve to SHA
         tag_r = requests.get(
-            f"https://api.github.com/repos/{body.owner}/{body.repo}/git/refs/tags/{since_sha}",
+            f"{_gh_base(body.owner, body.repo)}/git/refs/tags/{since_sha}",
             headers=gh_hdrs(body.token), timeout=10,
         )
         if tag_r.ok:
