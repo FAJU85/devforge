@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from typing import Callable, List, Optional
 import ast as _ast
 import json, os, requests, base64, re, asyncio, threading
+from urllib.parse import quote as _urlquote
 from concurrent.futures import ThreadPoolExecutor, as_completed as _futs_done
 
 from anthropic import Anthropic
@@ -841,11 +842,25 @@ class BatchWriteBody(BaseModel):
 async def repo_write_batch(body: BatchWriteBody):
     """Commit multiple files to the repository, reporting per-file results."""
 
+    def _safe_path(p: str) -> str:
+        """Sanitise a file path for GitHub API URL interpolation.
+
+        Drops traversal segments (./..) and percent-encodes everything else so
+        characters like ?/#/@ cannot inject query-string or fragment components.
+        """
+        clean = [
+            _urlquote(seg, safe="")
+            for seg in p.lstrip("/").split("/")
+            if seg not in (".", "..")
+        ]
+        return "/".join(clean) or "_"
+
     def write_file(item):
+        safe_p = _safe_path(item.path)
         sha = None
         try:
             existing = requests.get(
-                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{safe_p}",
                 headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
             )
             if existing.ok:
@@ -863,7 +878,7 @@ async def repo_write_batch(body: BatchWriteBody):
 
         try:
             w = requests.put(
-                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{item.path}",
+                f"https://api.github.com/repos/{body.owner}/{body.repo}/contents/{safe_p}",
                 headers=gh_hdrs(body.token), json=payload, timeout=15,
             )
             if w.ok:

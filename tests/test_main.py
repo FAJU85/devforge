@@ -1218,6 +1218,21 @@ class TestBatchWriteEndpoint:
         call_json = mock_put.call_args.kwargs.get("json") or mock_put.call_args[1].get("json")
         assert call_json["sha"] == "existing-sha"
 
+    def test_batch_write_encodes_path_traversal(self):
+        """Dot-dot segments and query chars must be percent-encoded in the GitHub URL."""
+        with patch("main.requests.get") as mock_get, patch("main.requests.put") as mock_put:
+            mock_get.return_value = MagicMock(ok=False)
+            mock_put.return_value = MagicMock(
+                ok=True, json=lambda: {"commit": {"html_url": ""}, "content": {}},
+            )
+            client.post("/api/repo/write/batch", json={
+                "token": "tok", "owner": "o", "repo": "r", "branch": "main",
+                "files": [{"path": "../etc/passwd?ref=evil", "content": "x", "message": "m"}],
+            })
+        url_called = mock_put.call_args.args[0] if mock_put.call_args.args else mock_put.call_args[0][0]
+        assert "?ref=evil" not in url_called
+        assert ".." not in url_called.split("/repos/o/r/contents/", 1)[-1]
+
 
 class TestSuggestFiles:
     def test_suggest_files_with_groq(self):
