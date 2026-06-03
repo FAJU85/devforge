@@ -559,7 +559,7 @@ async def github_auth_start():
         return JSONResponse({"error": "GitHub returned an unexpected response"}, status_code=500)
 
 class DeviceCodeBody(BaseModel):
-    device_code: str = Field(max_length=100)
+    device_code: str = Field(min_length=1, max_length=100)
 
 @app.post("/api/github/auth/poll")
 async def github_auth_poll(body: DeviceCodeBody):
@@ -759,7 +759,7 @@ class SuggestFilesBody(BaseModel):
     openai_compat_model: Optional[str] = Field(default="", max_length=200)
     hf_token: Optional[str] = Field(default="", max_length=500)
     hf_model: Optional[str] = Field(default="", max_length=200)
-    task: str = Field(max_length=2000)
+    task: str = Field(min_length=1, max_length=2000)
     files: List[str] = Field(max_length=500)
     max_suggestions: int = Field(default=6, ge=1, le=20)
 
@@ -845,7 +845,7 @@ async def suggest_files(body: SuggestFilesBody):
 
 
 class SummarizeFileBody(BaseModel):
-    content: str = Field(max_length=200_000)
+    content: str = Field(min_length=1, max_length=200_000)
     filename: str = Field(max_length=500)
     provider: str = Field(max_length=50)
     anthropic_key: Optional[str] = Field(default="", max_length=500)
