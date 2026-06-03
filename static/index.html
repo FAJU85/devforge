@@ -1027,11 +1027,12 @@ async function suggestFiles(){
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'].forEach(id=>{const m=$(id);if(m)m.style.display='none';});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}}
+  if(e.key==='Escape'){const modals=['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'];const anyOpen=modals.some(id=>{const m=$(id);if(m&&m.style.display!=='none'){m.style.display='none';return true;}return false;});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}else if(!anyOpen&&!_atMenu&&!e.target?.matches('input,textarea')){$('ti')?.focus();}}
   if((e.metaKey||e.ctrlKey)&&e.key==='k'&&!e.target?.matches('input,textarea')){e.preventDefault();setSideTab('config');expSidebar();}
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&S.prov==='anthropic'&&!e.target?.matches('input,textarea')){if(e.key==='1'){e.preventDefault();setAnthModel('claude-haiku-4-5-20251001');toast('⚡ Haiku');}else if(e.key==='2'){e.preventDefault();setAnthModel('claude-sonnet-4-6');toast('⚖️ Sonnet');}else if(e.key==='3'){e.preventDefault();setAnthModel('claude-opus-4-8');toast('🧠 Opus');}}
   if((e.metaKey||e.ctrlKey)&&e.key==='f'&&!e.target?.matches('input,textarea')){e.preventDefault();toggleChatSearch();}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
+  if(e.key==='/'&&!e.metaKey&&!e.ctrlKey&&!e.altKey&&!e.target?.matches('input,textarea,select')){e.preventDefault();$('ti')?.focus();}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key==='Backspace'){e.preventDefault();if($('ti'))$('ti').value='';}
   if(e.target?.id==='ti'&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey){
     if(e.key==='ArrowUp'&&!$('ti').value.includes('\n')){
