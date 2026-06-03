@@ -1330,6 +1330,19 @@ function updCtx(){
   }
   if(totalTok>80000&&n>0){if(!S._budgetWarned){S._budgetWarned=true;toast('⚠️ Context approaching 100K token limit — consider summarizing large files',true);}}
   else{S._budgetWarned=false;}
+  // Update empty state subtitle when files are added/removed
+  const emSub=document.querySelector('#empty .empty-sub');
+  if(emSub){
+    if(n===0){
+      emSub.textContent=S.repo?'Select files from the tree · type @ to mention a file · or describe a task below':'Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task';
+    } else {
+      const names=[];
+      for(const[p]of S.selFiles)names.push(p.split('/').pop());
+      for(const[nm]of S.localFiles)names.push(nm);
+      const preview=names.slice(0,2).join(', ')+(names.length>2?` +${names.length-2} more`:'');
+      emSub.textContent=`${n} file${n!==1?'s':''} in context: ${preview} — describe what to change, fix, or explain`;
+    }
+  }
   updHint();
 }
 // ── Code search + commit history ──────────────────────────────────────────────
