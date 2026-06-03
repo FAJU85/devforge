@@ -1122,8 +1122,11 @@ function regenerate(){
   if(S.msgs.length>0&&S.msgs[S.msgs.length-1].role==='assistant')S.msgs.pop();
   if(S.msgs.length>0&&S.msgs[S.msgs.length-1].role==='user')S.msgs.pop();
   // Remove last AI message bubble from DOM
-  const msgs=$('msgs');const wraps=msgs.querySelectorAll('.msg-wrap');
-  if(wraps.length>0){const last=wraps[wraps.length-1];const av=last.querySelector('.msg-av');if(av&&av.classList.contains('agent'))last.remove();}
+  const msgs=$('msgs');const wraps=Array.from(msgs.querySelectorAll('.msg-wrap'));
+  // Remove last AI bubble then last user bubble from DOM
+  for(let i=wraps.length-1;i>=0;i--){const av=wraps[i].querySelector('.msg-av');if(av&&av.classList.contains('agent')){wraps[i].remove();break;}}
+  const wraps2=Array.from(msgs.querySelectorAll('.msg-wrap'));
+  for(let i=wraps2.length-1;i>=0;i--){const av=wraps2[i].querySelector('.msg-av');if(av&&av.classList.contains('user')){wraps2[i].remove();break;}}
   // Re-send using the textarea content temporarily set to lastUser
   const ti=$('ti');const saved=ti.value;ti.value=lastUser;send();ti.value=saved;
 }
