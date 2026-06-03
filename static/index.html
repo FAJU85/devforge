@@ -428,6 +428,28 @@ pre::-webkit-scrollbar{height:4px}
   .modal-overlay{padding:0;align-items:flex-end}
   .modal{border-radius:16px 16px 0 0!important;max-width:100%!important;max-height:92vh;overflow-y:auto}
 }
+/* ── Command palette ───────────────────────────────────────────────────────── */
+.cmd-overlay{position:fixed;inset:0;background:#0007;z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding-top:15vh}
+.cmd-box{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:100%;max-width:540px;box-shadow:0 24px 64px #0009;overflow:hidden;margin:0 16px;animation:fadein .15s ease}
+.cmd-in-wrap{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border2)}
+.cmd-icon{font-size:16px;flex-shrink:0;color:var(--muted2)}
+.cmd-in{flex:1;background:none;border:none;color:var(--text);font-size:15px;outline:none;font-family:inherit}
+.cmd-in::placeholder{color:var(--muted2)}
+.cmd-esc-badge{font-size:11px;color:var(--muted2);padding:2px 7px;border:1px solid var(--border2);border-radius:5px;flex-shrink:0;font-family:'JetBrains Mono',monospace;cursor:pointer}
+.cmd-list{max-height:340px;overflow-y:auto;padding:6px 0}
+.cmd-section{padding:6px 16px 2px;font-size:10px;font-weight:700;color:var(--muted2);letter-spacing:.1em;text-transform:uppercase}
+.cmd-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background .08s;border-left:2px solid transparent}
+.cmd-item.hi,.cmd-item:hover{background:var(--hover);border-left-color:var(--accent2)}
+.cmd-item-icon{font-size:14px;width:20px;text-align:center;flex-shrink:0}
+.cmd-item-label{flex:1;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmd-item-sub{font-size:11px;color:var(--muted2);white-space:nowrap;margin-left:6px}
+.cmd-item-kbd{font-size:10px;color:var(--muted2);background:var(--input-bg);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-family:'JetBrains Mono',monospace;flex-shrink:0;white-space:nowrap}
+.cmd-empty{padding:24px;text-align:center;font-size:13px;color:var(--muted2)}
+.cmd-hint{padding:8px 16px;font-size:11px;color:var(--muted2);border-top:1px solid var(--border2);display:flex;gap:14px}
+/* Sidebar resize handle */
+.resize-handle{width:3px;background:transparent;cursor:col-resize;flex-shrink:0;transition:background .15s;position:relative;z-index:10}
+.resize-handle:hover,.resize-handle.dragging{background:var(--accent-border)}
+@media(max-width:768px){.resize-handle{display:none}}
 </style>
 </head>
 <body>
@@ -641,6 +663,7 @@ pre::-webkit-scrollbar{height:4px}
     </div>
   </div>
 </aside>
+<div class="resize-handle" id="resize-handle"></div>
 <main class="workspace" aria-label="Chat workspace">
   <div class="topbar">
     <button class="exp-btn" id="exp-btn" onclick="expSidebar()" aria-label="Expand sidebar">›</button>
@@ -850,6 +873,19 @@ pre::-webkit-scrollbar{height:4px}
   </div>
 </div>
 
+<!-- Command Palette -->
+<div class="cmd-overlay" id="cmd-overlay" style="display:none" onclick="if(event.target===this)closeCmdPalette()">
+  <div class="cmd-box" onclick="event.stopPropagation()">
+    <div class="cmd-in-wrap">
+      <span class="cmd-icon">⌘</span>
+      <input class="cmd-in" id="cmd-in" placeholder="Type a command or @ to search files…" oninput="filterCmdPalette(this.value)" onkeydown="hkCmd(event)" autocomplete="off" autocorrect="off" spellcheck="false">
+      <kbd class="cmd-esc-badge" onclick="closeCmdPalette()">esc</kbd>
+    </div>
+    <div class="cmd-list" id="cmd-list"></div>
+    <div class="cmd-hint"><span>↑↓ navigate</span><span>↵ execute</span><span>@ search files</span><span>esc close</span></div>
+  </div>
+</div>
+
 <script>
 const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),fileSizes:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',anthropicModel:'claude-sonnet-4-6',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[],promptHistory:[],histIdx:-1,_draftText:'',_budgetWarned:false,tabs:[],activeTabId:null};
 const $=id=>document.getElementById(id);
@@ -1030,7 +1066,8 @@ async function suggestFiles(){
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){const modals=['issue-modal','pr-modal','tool-modal','peek-modal','relnotes-modal','readme-modal','deps-modal'];const anyOpen=modals.some(id=>{const m=$(id);if(m&&m.style.display!=='none'){m.style.display='none';return true;}return false;});const csb=$('chat-search-bar');if(csb&&csb.style.display==='flex'){toggleChatSearch();}else if(!anyOpen&&!_atMenu&&!e.target?.matches('input,textarea')){$('ti')?.focus();}}
-  if((e.metaKey||e.ctrlKey)&&e.key==='k'&&!e.target?.matches('input,textarea')){e.preventDefault();setSideTab('config');expSidebar();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='k'&&!e.target?.matches('input,textarea')){e.preventDefault();openCmdPalette();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='p'&&!e.target?.matches('input,textarea')){e.preventDefault();openCmdPalette('@');}
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&S.prov==='anthropic'&&!e.target?.matches('input,textarea')){if(e.key==='1'){e.preventDefault();setAnthModel('claude-haiku-4-5-20251001');toast('⚡ Haiku');}else if(e.key==='2'){e.preventDefault();setAnthModel('claude-sonnet-4-6');toast('⚖️ Sonnet');}else if(e.key==='3'){e.preventDefault();setAnthModel('claude-opus-4-8');toast('🧠 Opus');}}
   if((e.metaKey||e.ctrlKey)&&e.key==='f'&&!e.target?.matches('input,textarea')){e.preventDefault();toggleChatSearch();}
   if((e.metaKey||e.ctrlKey)&&e.key=='/'){e.preventDefault();$('ti')?.focus();}
@@ -1617,7 +1654,7 @@ async function fetchModels(q=''){$('model-list').innerHTML='<div class="list-msg
 function selectModel(id,el){S.hfModel=id;document.querySelectorAll('#model-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');$('hf-sel-name').textContent=id;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';updBadge();saveEnhance();}
 function clearModel(){$('hf-selected').style.display='none';$('hf-browser').style.display='block';$('model-search').value='';fetchModels('');}
 function setAgent(el){document.querySelectorAll('.atab').forEach(t=>{t.classList.remove('on');t.setAttribute('aria-selected','false');});el.classList.add('on');el.setAttribute('aria-selected','true');S.agent=el.dataset.agent;}
-function updHint(){const h=$('hint');const n=S.selFiles.size+S.localFiles.size;if(!S.ghToken){h.textContent='Open sidebar · Connect GitHub to get started';return;}if(!S.repo&&!n){h.textContent='Select a repo (sidebar) or 📎 upload a file';return;}if(S.repo&&!n){h.textContent=`@ to mention a file · click files to add context · ⌘K config`;return;}const skill=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill).join('+');h.textContent=`${n} file${n!==1?'s':''} ready${skill?' · '+skill:''}  ·  ⌘↵ send  ·  ⌘1/2/3 model`;}
+function updHint(){const h=$('hint');const n=S.selFiles.size+S.localFiles.size;if(!S.ghToken){h.textContent='Open sidebar · Connect GitHub to get started · ⌘K commands';return;}if(!S.repo&&!n){h.textContent='Select a repo (sidebar) or 📎 upload a file · ⌘K commands';return;}if(S.repo&&!n){h.textContent=`@ to mention a file · ⌘P quick open · ⌘K commands`;return;}const skill=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill).join('+');h.textContent=`${n} file${n!==1?'s':''} ready${skill?' · '+skill:''}  ·  ⌘↵ send  ·  ⌘K commands`;}
 function fill(btn){$('ti').value=btn.textContent.trim();$('ti').focus();ar($('ti'));}
 // ── @file mention autocomplete ────────────────────────────────────────────────
 let _atPos=-1,_atMenu=null,_atMatches=[],_atIdx=0;
@@ -1873,7 +1910,99 @@ function quickScanRepo(files){
   $('rs-info').innerHTML=`${fw}<span style="color:var(--muted2);font-size:10px">${files.length} files · ~${sizeStr}</span>`;
 }
 
-(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();if(!restoreSession())expSidebar();if(isMob())collSidebar();})();
+// ── Command Palette ────────────────────────────────────────────────────────────
+const CMD_ACTIONS=[
+  {icon:'⚡',label:'Switch to Haiku',sub:'Fastest & cheapest',kbd:'⌘1',fn:()=>{setAnthModel('claude-haiku-4-5-20251001');toast('⚡ Haiku');},group:'Model'},
+  {icon:'⚖️',label:'Switch to Sonnet',sub:'Best for most tasks',kbd:'⌘2',fn:()=>{setAnthModel('claude-sonnet-4-6');toast('⚖️ Sonnet');},group:'Model'},
+  {icon:'🧠',label:'Switch to Opus',sub:'Most intelligent',kbd:'⌘3',fn:()=>{setAnthModel('claude-opus-4-8');toast('🧠 Opus');},group:'Model'},
+  {icon:'⚙️',label:'Code agent',fn:()=>{const t=document.querySelector('.atab[data-agent="code"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'🔍',label:'Review agent',fn:()=>{const t=document.querySelector('.atab[data-agent="review"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'🏗️',label:'Architect agent',fn:()=>{const t=document.querySelector('.atab[data-agent="architect"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'🐛',label:'Debug agent',fn:()=>{const t=document.querySelector('.atab[data-agent="debug"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'🧪',label:'Test generation agent',fn:()=>{const t=document.querySelector('.atab[data-agent="testgen"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'📝',label:'Docs agent',fn:()=>{const t=document.querySelector('.atab[data-agent="docs"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'🔀',label:'Refactor agent',fn:()=>{const t=document.querySelector('.atab[data-agent="refactor"]');if(t)setAgent(t);},group:'Agent'},
+  {icon:'📁',label:'Browse files',sub:'Open file browser',fn:()=>{setSideTab('files');expSidebar();},group:'Navigation'},
+  {icon:'⚙️',label:'AI Config & Skills',sub:'Models, skills, rules',fn:()=>{setSideTab('config');expSidebar();},group:'Navigation'},
+  {icon:'🔧',label:'Tools panel',sub:'Snippets, custom tools',fn:()=>{setSideTab('tools');expSidebar();},group:'Navigation'},
+  {icon:'➕',label:'New conversation tab',fn:()=>newTab(),group:'Chat'},
+  {icon:'🗑️',label:'Clear current chat',fn:()=>clearChat(),group:'Chat'},
+  {icon:'⬇️',label:'Export chat as Markdown',fn:()=>exportChat(),group:'Chat'},
+  {icon:'🔎',label:'Search in chat',kbd:'⌘F',fn:()=>toggleChatSearch(),group:'Chat'},
+  {icon:'🔄',label:'Regenerate last response',fn:()=>regenerate(),group:'Chat'},
+  {icon:'☀️',label:'Light theme',fn:()=>setTheme('light'),group:'Settings'},
+  {icon:'🌙',label:'Dark theme',fn:()=>setTheme('dark'),group:'Settings'},
+  {icon:'📋',label:'Create GitHub Issue',fn:()=>openIssueModal(),group:'GitHub'},
+  {icon:'🏷️',label:'Generate Release Notes',fn:()=>openReleaseNotes(),group:'GitHub'},
+  {icon:'📝',label:'Generate README',fn:()=>openReadmeModal(),group:'GitHub'},
+  {icon:'🔍',label:'Scan Dependencies',fn:()=>openDepsModal(),group:'GitHub'},
+];
+let _cmdIdx=0,_cmdFiltered=[];
+function openCmdPalette(prefix){
+  const overlay=$('cmd-overlay');if(!overlay)return;
+  overlay.style.display='flex';
+  const inp=$('cmd-in');inp.value=prefix||'';
+  requestAnimationFrame(()=>inp.focus());
+  filterCmdPalette(inp.value);
+}
+function closeCmdPalette(){const overlay=$('cmd-overlay');if(overlay)overlay.style.display='none';}
+function filterCmdPalette(q){
+  const low=(q||'').toLowerCase().trim();
+  if(low.startsWith('@')&&S.repo?.files?.length){
+    const fq=low.slice(1);
+    _cmdFiltered=S.repo.files.filter(f=>f.path.toLowerCase().includes(fq)).slice(0,12).map(f=>({
+      icon:ficon(f.path),label:f.path.split('/').pop(),sub:f.path,
+      fn:()=>{closeCmdPalette();if(!S.selFiles.has(f.path)){if(S.selFiles.size+S.localFiles.size>=8){toast('Max 8 files',true);return;}togF(f.path);}else{toast('Already in context');}},
+      group:'Files'
+    }));
+  } else {
+    _cmdFiltered=CMD_ACTIONS.filter(a=>!low||(a.label+' '+(a.sub||'')+' '+(a.group||'')).toLowerCase().includes(low));
+  }
+  _cmdIdx=0;renderCmdList();
+}
+function renderCmdList(){
+  const list=$('cmd-list');if(!list)return;
+  if(!_cmdFiltered.length){list.innerHTML='<div class="cmd-empty">No matching commands</div>';return;}
+  const groups={};
+  _cmdFiltered.forEach((a,i)=>{const g=a.group||'Other';if(!groups[g])groups[g]=[];groups[g].push({...a,_i:i});});
+  let html='';
+  for(const [g,items] of Object.entries(groups)){
+    html+=`<div class="cmd-section">${esc(g)}</div>`;
+    items.forEach(a=>{html+=`<div class="cmd-item${a._i===_cmdIdx?' hi':''}" data-idx="${a._i}" onclick="execCmd(${a._i})"><span class="cmd-item-icon">${a.icon}</span><span class="cmd-item-label">${esc(a.label)}</span>${a.sub?`<span class="cmd-item-sub">${esc(a.sub)}</span>`:''}${a.kbd?`<kbd class="cmd-item-kbd">${esc(a.kbd)}</kbd>`:''}</div>`;});
+  }
+  list.innerHTML=html;
+  const hi=list.querySelector('.cmd-item.hi');if(hi)hi.scrollIntoView({block:'nearest'});
+}
+function execCmd(i){const a=_cmdFiltered[i];if(!a)return;closeCmdPalette();a.fn();}
+function hkCmd(e){
+  if(e.key==='ArrowDown'){e.preventDefault();_cmdIdx=Math.min(_cmdIdx+1,_cmdFiltered.length-1);renderCmdList();}
+  else if(e.key==='ArrowUp'){e.preventDefault();_cmdIdx=Math.max(_cmdIdx-1,0);renderCmdList();}
+  else if(e.key==='Enter'){e.preventDefault();execCmd(_cmdIdx);}
+  else if(e.key==='Escape'){e.stopPropagation();closeCmdPalette();}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('cmd-overlay')?.style.display==='flex'){closeCmdPalette();e.stopPropagation();}},{capture:true});
+// ── Sidebar resize ─────────────────────────────────────────────────────────────
+function initResizeHandle(){
+  const rh=$('resize-handle');const sb=$('sidebar');if(!rh||!sb)return;
+  let dragging=false,startX=0,startW=0;
+  rh.addEventListener('mousedown',e=>{
+    if(isMob())return;
+    dragging=true;startX=e.clientX;startW=sb.offsetWidth;
+    rh.classList.add('dragging');document.body.style.cursor='col-resize';document.body.style.userSelect='none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    const w=Math.max(200,Math.min(480,startW+(e.clientX-startX)));
+    sb.style.width=w+'px';sb.style.minWidth=w+'px';
+  });
+  document.addEventListener('mouseup',()=>{
+    if(!dragging)return;
+    dragging=false;rh.classList.remove('dragging');document.body.style.cursor='';document.body.style.userSelect='';
+  });
+  rh.addEventListener('dblclick',()=>{sb.style.width='270px';sb.style.minWidth='270px';toast('Sidebar reset to default');});
+}
+(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();if(!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();})();
 </script>
 </body>
 </html>
