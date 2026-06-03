@@ -645,7 +645,7 @@ async def repo_connect(body: RepoBody):
     if not r.ok: return JSONResponse({"error": r.json().get("message", "Not found")}, status_code=400)
     default_branch = r.json()["default_branch"]
     branch = (body.branch or "").strip() or default_branch
-    t = requests.get(f"{_gh_base(owner, repo)}/git/trees/{branch}?recursive=1",
+    t = requests.get(f"{_gh_base(owner, repo)}/git/trees/{_urlquote(branch, safe='')}?recursive=1",
         headers=gh_hdrs(body.token), timeout=15)
     if not t.ok: return JSONResponse({"error": "Failed to fetch file tree"}, status_code=400)
     files = sorted([{"path": f["path"], "size": f.get("size", 0)} for f in t.json().get("tree", [])
