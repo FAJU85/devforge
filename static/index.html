@@ -10,6 +10,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/zod@3.23.8/lib/index.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://browser.sentry-cdn.com/8.54.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
 <script>
 (async()=>{
@@ -1120,6 +1123,15 @@ document.addEventListener('keydown',e=>{
 const ENDPOINT_PRESETS={vercel:{url:'https://ai-gateway.vercel.sh/v1',model:'openai/gpt-4o',key:''},openrouter:{url:'https://openrouter.ai/api/v1',model:'anthropic/claude-3.5-sonnet',key:''},ollama:{url:'http://localhost:11434/v1',model:'llama3',key:''},lmstudio:{url:'http://localhost:1234/v1',model:'local-model',key:''}};
 function fillEndpoint(key){const ep=ENDPOINT_PRESETS[key];if(!ep)return;$('oci-url').value=ep.url;$('oci-model').value=ep.model;if(ep.key)$('oci-key').value=ep.key;saveEnhance();updBadge();toast('Filled: '+key);}
 
+// ── Zod schemas ──────────────────────────────────────────────────────────────
+const _z = (typeof Zod !== 'undefined') ? (Zod.z || Zod) : null;
+const ToolSchema = _z ? _z.object({
+  name: _z.string().min(1,'Name is required').max(64,'Name too long').regex(/^[\w-]+$/,'Only letters, numbers, hyphens and underscores'),
+  description: _z.string().min(1,'Description is required').max(500,'Description too long'),
+  url: _z.string().url('Must be a valid URL (include https://)'),
+  method: _z.enum(['GET','POST','PUT','DELETE','PATCH']),
+}) : null;
+
 // ── Instruction Presets ──────────────────────────────────────────────────────
 const BUILTIN_PRESETS={react_ts:{instructions:'You are an expert React + TypeScript developer. Write modern functional components with hooks. Use TypeScript strictly (no any). Prefer named exports. Use Tailwind CSS for styling. Follow React best practices.',rules:'Never use class components. Always use const arrow functions. Export types separately. Use React.FC sparingly.',skills:['react','zod','tests','errors']},python:{instructions:'You are an expert Python backend developer. Write clean, idiomatic Python 3.11+. Use type hints everywhere. Prefer FastAPI for APIs, SQLAlchemy for ORM, Pydantic for validation.',rules:'No bare except. Use specific exception types. Add type annotations to all functions.',skills:['tests','errors','security']},go:{instructions:'You are an expert Go developer. Write idiomatic Go. Use explicit error returns, never panic for business logic. Use interfaces for abstraction.',rules:'Always handle errors. No global state. Use context.Context for cancellation. Prefer stdlib.',skills:['go','errors','tests']},security:{instructions:'You are a security expert. Identify vulnerabilities, insecure patterns, and attack surfaces. Reference OWASP Top 10. Provide remediation code with severity labels.',rules:'Flag all hardcoded credentials, injection risks, missing auth checks. Be specific about severity.',skills:['security','errors']},docs:{instructions:'You are a technical writer. Write clear, comprehensive documentation. Include usage examples, parameter descriptions, return values, and edge cases.',rules:'Always include a quick-start example. Use consistent formatting. Explain the why, not just the what.',skills:['docs']},nextjs:{instructions:'You are an expert Next.js + Vercel developer. Use App Router with React Server Components. Deploy to Vercel. Use Tailwind CSS, TypeScript, and modern tooling.',rules:"Prefer Server Components. Add 'use client' only when needed. Use route handlers for APIs. Follow Vercel deployment best practices.",skills:['react','nextjs','zod','perf']},fastapi:{instructions:'You are an expert FastAPI developer. Build async Python APIs with FastAPI, SQLAlchemy 2.0 async, Pydantic v2, and Alembic for migrations.',rules:'Use async/await everywhere. Use Depends() for dependency injection. Write Pydantic models for all request/response bodies. Include proper HTTP status codes.',skills:['tests','errors','security','sql']}};
 function loadPreset(key){if(!key)return;let p;if(key.startsWith('__')){p=BUILTIN_PRESETS[key.slice(2)];}else{try{const s=JSON.parse(localStorage.getItem('df-presets')||'{}');p=s[key];}catch(e){}}if(!p)return;if(p.instructions!==undefined)$('instr-input').value=p.instructions;if(p.rules!==undefined)$('rules-input').value=p.rules;if(p.skills)document.querySelectorAll('.skill-row[data-skill]').forEach(el=>{el.classList.toggle('on',p.skills.includes(el.dataset.skill));});saveEnhance();toast('Loaded: '+key.replace('__','').replace(/_/g,' '));setTimeout(()=>{$('preset-sel').value='';},0);}
@@ -1855,7 +1867,9 @@ function saveTool(){
   const name=($('tm-name').value||'').trim().replace(/\s+/g,'_');
   const desc=($('tm-desc').value||'').trim();
   const url=($('tm-url').value||'').trim();
-  if(!name||!desc||!url){toast('Name, description and URL are required',true);return;}
+  const method=$('tm-method').value;
+  if(ToolSchema){const zr=ToolSchema.safeParse({name,description:desc,url,method});if(!zr.success){toast(zr.error.errors[0].message,true);return;}}
+  else if(!name||!desc||!url){toast('Name, description and URL are required',true);return;}
   let schema=null;const rawSchema=($('tm-schema').value||'').trim();
   if(rawSchema){try{schema=JSON.parse(rawSchema);}catch(e){toast('Input schema is not valid JSON',true);return;}}
   let headers={};const rawHeaders=($('tm-headers').value||'').trim();
@@ -1928,6 +1942,27 @@ async function runAgentPipeline(){
 }
 
 // ── Repo quick-scan ───────────────────────────────────────────────────────────
+// React component — renders inside #rs-card when React is available
+let _rsRoot = null;
+function RepoStatsCard({sorted, frameworks, fileCount, sizeStr}) {
+  const h = React.createElement;
+  return h('div', null,
+    h('div', {className:'rs-langs'},
+      sorted.map(([ext,cnt]) => {
+        const col = LANG_COLORS[ext] || 'var(--border)';
+        return h('span', {key:ext, className:'rs-lang',
+          style:{background:col+'22',color:col,border:`1px solid ${col}44`}},
+          `.${ext} ${cnt}`);
+      })
+    ),
+    h('div', {className:'rs-info'},
+      frameworks.map(f => h('span', {key:f, className:'rs-badge'}, f)),
+      h('span', {style:{color:'var(--muted2)',fontSize:'10px'}},
+        `${fileCount} files · ~${sizeStr}`)
+    )
+  );
+}
+
 const LANG_COLORS={js:'#f7df1e',ts:'#3178c6',jsx:'#61dafb',tsx:'#61dafb',py:'#3776ab',go:'#00add8',rs:'#ce422b',rb:'#cc342d',java:'#b07219',cs:'#239120',cpp:'#f34b7d',c:'#555',md:'#083fa1',json:'#292929',css:'#563d7c',html:'#e44b23',sh:'#89e051',sql:'#e38c00',yaml:'#cb171e',toml:'#9c4221'};
 const FRAMEWORK_HINTS={'package.json':'Node.js / JS','go.mod':'Go Module','requirements.txt':'Python','Cargo.toml':'Rust','pom.xml':'Java/Maven','build.gradle':'Java/Gradle','Dockerfile':'Docker','docker-compose.yml':'Docker Compose','next.config.js':'Next.js','next.config.ts':'Next.js','vite.config.ts':'Vite','pyproject.toml':'Python (PEP 517)','setup.py':'Python','Makefile':'Make','fastapi':'FastAPI'};
 function quickScanRepo(files){
@@ -1935,12 +1970,18 @@ function quickScanRepo(files){
   files.forEach(f=>{const e=f.path.split('.').pop()?.toLowerCase()||'other';exts[e]=(exts[e]||0)+1;totalSize+=(f.size||0);});
   const sorted=Object.entries(exts).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const frameworks=[];Object.keys(FRAMEWORK_HINTS).forEach(k=>{if(rootFiles.has(k)||Array.from(rootFiles).some(f=>f.includes(k)))frameworks.push(FRAMEWORK_HINTS[k]);});
-  const langsHtml=sorted.map(([ext,cnt])=>{const col=LANG_COLORS[ext]||'var(--border)';return`<span class="rs-lang" style="background:${col}22;color:${col};border:1px solid ${col}44">.${esc(ext)} ${Number(cnt)}</span>`;}).join('');
-  const fw=frameworks.slice(0,3).map(f=>`<span class="rs-badge">${f}</span>`).join('');
   const sizeStr=totalSize>1e6?(totalSize/1e6).toFixed(1)+'MB':totalSize>1e3?(totalSize/1e3).toFixed(0)+'KB':totalSize+'B';
   const rs=$('rs-card');if(!rs)return;rs.style.display='block';
-  $('rs-langs').innerHTML=langsHtml;
-  $('rs-info').innerHTML=`${fw}<span style="color:var(--muted2);font-size:10px">${files.length} files · ~${sizeStr}</span>`;
+  if(typeof React!=='undefined'&&typeof ReactDOM!=='undefined'){
+    if(!_rsRoot)_rsRoot=ReactDOM.createRoot(rs);
+    _rsRoot.render(React.createElement(RepoStatsCard,{sorted,frameworks:frameworks.slice(0,3),fileCount:files.length,sizeStr}));
+  } else {
+    const langsHtml=sorted.map(([ext,cnt])=>{const col=LANG_COLORS[ext]||'var(--border)';return`<span class="rs-lang" style="background:${col}22;color:${col};border:1px solid ${col}44">.${esc(ext)} ${Number(cnt)}</span>`;}).join('');
+    const fw=frameworks.slice(0,3).map(f=>`<span class="rs-badge">${f}</span>`).join('');
+    const rl=$('rs-langs');const ri=$('rs-info');
+    if(rl)rl.innerHTML=langsHtml;
+    if(ri)ri.innerHTML=`${fw}<span style="color:var(--muted2);font-size:10px">${files.length} files · ~${sizeStr}</span>`;
+  }
 }
 
 // ── Command Palette ────────────────────────────────────────────────────────────

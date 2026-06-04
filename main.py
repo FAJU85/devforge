@@ -2013,3 +2013,30 @@ async def tools_dispatch(body: GoToolsBody):
             return resp.json()
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+class SidecarGrepBody(BaseModel):
+    pattern: str = Field(..., min_length=1, max_length=500)
+    root: str = Field(default=".", max_length=500)
+    max_results: int = Field(default=50, ge=1, le=200)
+
+
+@app.post("/api/sidecar/grep")
+async def sidecar_grep(body: SidecarGrepBody):
+    """Proxy regex code-search to the Go data-plane /grep endpoint."""
+    go_url = os.environ.get("GO_DATA_PLANE_URL", "http://localhost:8080")
+    if not re.match(r"^https?://", go_url):
+        return JSONResponse(
+            {"error": "GO_DATA_PLANE_URL not configured", "matches": [], "total": 0},
+            status_code=503,
+        )
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient(timeout=10.0) as http:
+            resp = await http.post(f"{go_url}/grep", json=body.model_dump())
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as exc:
+        return JSONResponse(
+            {"error": str(exc), "matches": [], "total": 0}, status_code=502
+        )
