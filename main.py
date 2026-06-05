@@ -53,6 +53,19 @@ try:
 except ImportError:
     _ROLLBAR_TOKEN = ""
 
+# Optional: PostHog product analytics (server-side event capture)
+try:
+    import posthog as _posthog_sdk
+    _POSTHOG_KEY = os.environ.get("POSTHOG_API_KEY", "")
+    if _POSTHOG_KEY:
+        _posthog_sdk.project_api_key = _POSTHOG_KEY
+        _posthog_sdk.host = "https://us.i.posthog.com"
+        _posthog_sdk.disabled = False
+    else:
+        _posthog_sdk = None
+except ImportError:
+    _posthog_sdk = None
+
 # Optional: control-plane (LangGraph + Pinecone + Go data-plane integration)
 try:
     from control_plane.graph import build_graph as _build_langgraph
@@ -576,6 +589,7 @@ async def get_config():
         "environment": os.environ.get("ENVIRONMENT", "production"),
         "rollbar_token": _ROLLBAR_TOKEN,
         "rollbar_env": os.environ.get("ROLLBAR_ENVIRONMENT", "production"),
+        "posthog_key": os.environ.get("POSTHOG_API_KEY", ""),
     })
 
 @app.get("/api/hf/models")

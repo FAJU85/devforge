@@ -631,6 +631,9 @@ urllib3==2.7.0 \
 rollbar==1.3.0 \
     --hash=sha256:d800c4265a4d5aae547cb3f29e48414b6d4fedaa7f679cd0fd64dac16a1eded3
     # via -r requirements.txt (error monitoring)
+posthog==7.17.0 \
+    --hash=sha256:b2735701effba2f8f4ccf58b0b49fbaaf7d4d0544fb6d6b7547cd7ccde5d4f43
+    # via -r requirements.txt (product analytics)
 uvicorn==0.48.0 \
     --hash=sha256:48097851328b87ec36117d3d575234519eb58c2b22d79666e9bbc6c49a761dad \
     --hash=sha256:a5504207195d08c2511bf9125ede5ac4a4b71725d519e758d01dcf0bc2d31c37
