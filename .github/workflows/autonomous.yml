@@ -3,12 +3,14 @@ name: Autonomous CI/CD
 on:
   pull_request:
     branches:
-      - "auto/**"
+      - main
 
 jobs:
   test-and-merge:
     name: Test & Auto-merge
     runs-on: ubuntu-latest
+    # Only run for PRs whose source branch starts with auto/
+    if: startsWith(github.head_ref, 'auto/')
     permissions:
       contents: write
       pull-requests: write

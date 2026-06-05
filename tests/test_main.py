@@ -4609,3 +4609,51 @@ class TestEvolutionRunRealMetrics:
         })
         assert r.status_code == 200
         assert r.json()["results"][0]["action"] == "rollout"
+
+
+# ── HF Build Status ───────────────────────────────────────────────────────────
+
+class TestHfBuildStatus:
+    """Tests for GET /api/hf-build/status."""
+
+    def test_returns_running_stage(self):
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.json.return_value = {"stage": "RUNNING", "errorMessage": None}
+        with patch("main.requests.get", return_value=mock_resp) as mock_get:
+            r = client.get("/api/hf-build/status")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["stage"] == "RUNNING"
+        assert data["error_message"] == ""
+        mock_get.assert_called_once()
+        assert "vooom/devforge/runtime" in mock_get.call_args[0][0]
+
+    def test_returns_error_stage_with_message(self):
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.json.return_value = {
+            "stage": "ERROR",
+            "errorMessage": "Could not find a version that satisfies the requirement backoff",
+        }
+        with patch("main.requests.get", return_value=mock_resp):
+            r = client.get("/api/hf-build/status")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["stage"] == "ERROR"
+        assert "backoff" in data["error_message"]
+
+    def test_hf_api_failure_returns_502(self):
+        mock_resp = MagicMock()
+        mock_resp.ok = False
+        mock_resp.status_code = 503
+        with patch("main.requests.get", return_value=mock_resp):
+            r = client.get("/api/hf-build/status")
+        assert r.status_code == 502
+        assert r.json()["stage"] == "UNKNOWN"
+
+    def test_network_exception_returns_502(self):
+        with patch("main.requests.get", side_effect=Exception("timeout")):
+            r = client.get("/api/hf-build/status")
+        assert r.status_code == 502
+        assert r.json()["stage"] == "UNKNOWN"

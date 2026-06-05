@@ -2498,3 +2498,27 @@ async def flag_check(name: str, user_id: str = Query(default="", max_length=200)
         "rollout_pct": flag_data.get("rollout_pct", 0),
         "status": flag_data.get("status", "dark"),
     }
+
+
+# ── HF Spaces build status ────────────────────────────────────────────────────
+
+@app.get("/api/hf-build/status")
+async def hf_build_status():
+    """Proxy the HF Spaces runtime stage so the dashboard can show a live build badge."""
+    try:
+        r = requests.get(
+            "https://huggingface.co/api/spaces/vooom/devforge/runtime",
+            timeout=10,
+        )
+        if not r.ok:
+            return JSONResponse(
+                {"stage": "UNKNOWN", "error": f"HF API {r.status_code}"},
+                status_code=502,
+            )
+        data = r.json()
+        return {
+            "stage": data.get("stage", "UNKNOWN"),
+            "error_message": data.get("errorMessage") or "",
+        }
+    except Exception as exc:
+        return JSONResponse({"stage": "UNKNOWN", "error": str(exc)}, status_code=502)
