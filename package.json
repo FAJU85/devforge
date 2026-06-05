@@ -1,0 +1,21 @@
+{
+  "name": "devforge",
+  "version": "1.0.0",
+  "description": "--- title: DevForge emoji: ⚡ colorFrom: green colorTo: blue sdk: docker pinned: false license: mit ---",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:46329/git/FAJU85/devforge"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.1"
+  }
+}
