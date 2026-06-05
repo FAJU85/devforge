@@ -57,6 +57,7 @@ except ImportError:
 try:
     import posthog as _posthog_sdk
     _POSTHOG_KEY = os.environ.get("POSTHOG_API_KEY", "")
+    _POSTHOG_PROJECT_ID = os.environ.get("POSTHOG_PROJECT_ID", "")
     if _POSTHOG_KEY:
         _posthog_sdk.project_api_key = _POSTHOG_KEY
         _posthog_sdk.host = "https://us.i.posthog.com"
@@ -65,6 +66,8 @@ try:
         _posthog_sdk = None
 except ImportError:
     _posthog_sdk = None
+    _POSTHOG_KEY = ""
+    _POSTHOG_PROJECT_ID = ""
 
 # Optional: control-plane (LangGraph + Pinecone + Go data-plane integration)
 try:
@@ -114,6 +117,72 @@ async def _security_headers(request, call_next):
     response.headers.setdefault("X-XSS-Protection", "0")
     response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
     return response
+
+
+@app.middleware("http")
+async def _flag_routing_middleware(request, call_next):
+    """Assign flag cohort buckets per request and capture latency metrics to PostHog.
+
+    Sets request.state.flag_buckets = {flag_name: "canary" | "control"}.
+    Adds X-Flag-Buckets response header for observability.
+    Captures `request_completed` events to PostHog for real canary metrics.
+    """
+    import time as _time
+
+    start = _time.monotonic()
+
+    # Stable user identifier: forwarded IP → direct IP → empty string
+    user_id = (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or (request.client.host if request.client else "")
+    )
+
+    # Assign buckets — _flags_mod is defined later in the file but resolved at
+    # call time (well after module import completes).
+    try:
+        active_flags = [
+            f for f in _flags_mod.get_all()  # noqa: F821 — resolved at call time
+            if f.get("enabled") and f.get("status") in ("canary", "live")
+        ]
+        flag_buckets: dict[str, str] = {}
+        for flag in active_flags:
+            is_canary = _flags_mod.is_flag_enabled(flag["name"], user_id)  # noqa: F821
+            flag_buckets[flag["name"]] = "canary" if is_canary else "control"
+    except Exception:
+        flag_buckets = {}
+
+    request.state.flag_buckets = flag_buckets
+    request.state.user_id = user_id
+
+    response = await call_next(request)
+
+    latency_ms = (_time.monotonic() - start) * 1000.0
+
+    # Capture PostHog metrics events — only for API paths, best-effort only
+    if flag_buckets and _posthog_sdk and request.url.path.startswith("/api/"):
+        for flag_name, bucket in flag_buckets.items():
+            try:
+                _posthog_sdk.capture(
+                    distinct_id=user_id or "anonymous",
+                    event="request_completed",
+                    properties={
+                        "flag": flag_name,
+                        "bucket": bucket,
+                        "latency_ms": round(latency_ms, 2),
+                        "status_code": response.status_code,
+                        "path": request.url.path,
+                        "$process_person_profile": False,
+                    },
+                )
+            except Exception:
+                pass
+
+    if flag_buckets:
+        bucket_header = ",".join(f"{k}:{v}" for k, v in flag_buckets.items())
+        response.headers["X-Flag-Buckets"] = bucket_header
+
+    return response
+
 
 GITHUB_CLIENT_ID     = os.environ.get("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "")
@@ -590,6 +659,7 @@ async def get_config():
         "rollbar_token": _ROLLBAR_TOKEN,
         "rollbar_env": os.environ.get("ROLLBAR_ENVIRONMENT", "production"),
         "posthog_key": os.environ.get("POSTHOG_API_KEY", ""),
+        "posthog_project_id": os.environ.get("POSTHOG_PROJECT_ID", ""),
     })
 
 @app.get("/api/hf/models")
@@ -2317,24 +2387,71 @@ class EvolutionRunBody(BaseModel):
     github_token: str = Field(default="", max_length=500)
     github_owner: str = Field(default="", max_length=100)
     github_repo: str = Field(default="", max_length=100)
+    use_real_metrics: bool = Field(
+        default=False,
+        description=(
+            "When True, fetch real canary metrics from PostHog/Rollbar APIs "
+            "and override the supplied metrics values. Falls back to the "
+            "supplied metrics when real data is unavailable."
+        ),
+    )
+    metrics_hours: int = Field(default=1, ge=1, le=24, description="Hours of history to query for real metrics")
 
 
 @app.post("/api/evolution/run")
 async def evolution_run(body: EvolutionRunBody):
     """Run one evolution cycle iteration for all canary flags (or a specific flag)."""
+    from autonomous import metrics as _metrics_mod
+
     token = body.github_token or os.environ.get("GITHUB_TOKEN", "")
     owner = body.github_owner or os.environ.get("GITHUB_OWNER", "")
     repo = body.github_repo or os.environ.get("GITHUB_REPO", "")
     metrics = body.metrics.model_dump()
+
+    def _maybe_real_metrics(flag_name: str) -> dict:
+        """Fetch real metrics from PostHog/Rollbar if requested, else return body metrics."""
+        if not body.use_real_metrics:
+            return metrics
+        real = _metrics_mod.fetch_metrics_for_flag(
+            flag_name,
+            hours=body.metrics_hours,
+        )
+        if real.get("source") == "posthog":
+            # Full segmented metrics — use them directly
+            return {
+                "error_rate_canary": real["error_rate_canary"],
+                "error_rate_baseline": real["error_rate_baseline"],
+                "latency_canary_ms": max(0.001, real["latency_canary_ms"]),
+                "latency_baseline_ms": max(0.001, real["latency_baseline_ms"]),
+                "sample_size": real["sample_size"],
+            }
+        # Partial or unavailable — fall back to supplied values
+        return metrics
+
     if body.flag_name:
+        effective_metrics = await asyncio.to_thread(_maybe_real_metrics, body.flag_name)
         result = await _evolution_mod.run_cycle(
-            body.flag_name, metrics,
+            body.flag_name, effective_metrics,
             github_token=token, github_owner=owner, github_repo=repo,
         )
         return {"results": [result]}
-    results = await _evolution_mod.run_all_canary_flags(
-        metrics, github_token=token, github_owner=owner, github_repo=repo,
-    )
+
+    # Fan out over all active canary/dark flags
+    flags = [f for f in _flags_mod.get_all() if f.get("status") in ("canary", "dark") and f.get("enabled", True)]
+    if body.use_real_metrics:
+        tasks = [
+            _evolution_mod.run_cycle(
+                f["name"],
+                await asyncio.to_thread(_maybe_real_metrics, f["name"]),
+                github_token=token, github_owner=owner, github_repo=repo,
+            )
+            for f in flags
+        ]
+        results = list(await asyncio.gather(*tasks)) if tasks else []
+    else:
+        results = await _evolution_mod.run_all_canary_flags(
+            metrics, github_token=token, github_owner=owner, github_repo=repo,
+        )
     return {"results": results}
 
 
@@ -2342,3 +2459,42 @@ async def evolution_run(body: EvolutionRunBody):
 async def evolution_history(flag: Optional[str] = Query(default=None, max_length=100), limit: int = Query(default=50, ge=1, le=200)):
     """Return recent evolution cycle decisions from the audit log."""
     return {"history": _audit_mod.get_history(flag_name=flag, limit=limit)}
+
+
+# ── Autonomous CI/CD: Live metrics ───────────────────────────────────────────
+
+@app.get("/api/metrics/live")
+async def metrics_live(
+    flag: str = Query(..., min_length=1, max_length=100),
+    hours: int = Query(default=1, ge=1, le=24),
+):
+    """Fetch real canary vs baseline metrics for a flag from PostHog and Rollbar.
+
+    Returns a source indicator: 'posthog', 'rollbar_partial', or 'unavailable'.
+    """
+    from autonomous import metrics as _metrics_mod
+
+    result = await asyncio.to_thread(
+        _metrics_mod.fetch_metrics_for_flag,
+        flag,
+        hours=hours,
+    )
+    return result
+
+
+# ── Autonomous CI/CD: Flag check ─────────────────────────────────────────────
+
+@app.get("/api/flags/{name}/check")
+async def flag_check(name: str, user_id: str = Query(default="", max_length=200)):
+    """Check if a feature flag is enabled for a specific user_id (hash-based routing)."""
+    enabled = _flags_mod.is_flag_enabled(name, user_id)
+    flag_data = next((f for f in _flags_mod.get_all() if f["name"] == name), None)
+    if flag_data is None:
+        return JSONResponse({"error": f"Flag '{name}' not found"}, status_code=404)
+    return {
+        "flag": name,
+        "enabled": enabled,
+        "bucket": "canary" if enabled else "control",
+        "rollout_pct": flag_data.get("rollout_pct", 0),
+        "status": flag_data.get("status", "dark"),
+    }
