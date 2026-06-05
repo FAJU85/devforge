@@ -9,6 +9,13 @@ import json, os, requests, base64, re, asyncio, threading
 from urllib.parse import quote as _urlquote
 from concurrent.futures import ThreadPoolExecutor, as_completed as _futs_done
 
+# Load .env file when running locally (no-op if file doesn't exist)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from anthropic import Anthropic
 from huggingface_hub import InferenceClient
 
