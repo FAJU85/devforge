@@ -726,6 +726,20 @@ pre::-webkit-scrollbar{height:4px}
       <div id="canary-result" style="display:none;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;margin-bottom:6px"></div>
       <button onclick="runCanaryAnalysis()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit">&#9654; Analyze Active Canary</button>
     </div>
+    <!-- Live Metrics section -->
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">📊 Live Metrics</div>
+    <div style="padding:0 10px 8px">
+      <div id="live-metrics-panel" style="display:none;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;margin-bottom:6px"></div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input class="finput" id="lm-flag" placeholder="flag name" style="flex:1;font-size:11px;padding:5px 8px">
+        <select class="finput" id="lm-hours" style="font-size:11px;padding:5px 6px;width:64px">
+          <option value="1">1h</option>
+          <option value="6">6h</option>
+          <option value="24">24h</option>
+        </select>
+      </div>
+      <button onclick="fetchLiveMetrics()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s">⬇ Fetch Live Metrics</button>
+    </div>
     <!-- Evolution History section -->
     <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🔄 Evolution History</div>
     <div style="padding:0 10px 8px">
@@ -2207,15 +2221,24 @@ function loadFlags(){
     const flags=d.flags||[];
     if(!flags.length){el.style.display='none';return;}
     el.style.display='block';
-    el.innerHTML=flags.map(f=>`<div style="display:flex;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border2);font-size:11px;gap:6px">
-      <label style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
-        <input type="checkbox" ${f.enabled?'checked':''} onchange="toggleFlag('${escA(f.name)}',this.checked)" style="accent-color:var(--accent2)">
-        <span style="font-weight:600">${esc(f.name)}</span>
-        <span style="color:var(--muted)">${escA(String(f.rollout_pct))}%</span>
-      </label>
-      <span style="color:var(--muted2);font-size:10px;padding:1px 5px;border-radius:4px;background:var(--panel3)">${esc(f.status)}</span>
-      <button onclick="deleteFlag('${escA(f.name)}')" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px;padding:0 2px" title="Delete">&#x2715;</button>
-    </div>`).join('');
+    el.innerHTML=flags.map(f=>{
+      const pct=Math.max(0,Math.min(100,Number(f.rollout_pct)||0));
+      const statusColor={dark:'var(--muted2)',canary:'var(--yellow,#f5c542)',live:'var(--green,#4caf50)',rollback:'var(--red)'}[f.status]||'var(--muted2)';
+      // Traffic routing bar: filled portion = canary cohort
+      const routeBar=f.status==='canary'||f.status==='live'?`<div style="height:3px;background:var(--border2);border-radius:2px;margin:2px 0;overflow:hidden"><div style="height:100%;width:${escA(String(pct))}%;background:var(--accent2);border-radius:2px;transition:width .3s"></div></div>`:'';
+      return`<div style="display:flex;flex-direction:column;padding:6px 10px;border-bottom:1px solid var(--border2);font-size:11px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" ${f.enabled?'checked':''} onchange="toggleFlag('${escA(f.name)}',this.checked)" style="accent-color:var(--accent2)">
+            <span style="font-weight:600">${esc(f.name)}</span>
+            <span style="color:var(--muted)">${escA(String(pct))}%</span>
+          </label>
+          <span style="font-size:10px;padding:1px 5px;border-radius:4px;background:var(--panel3);color:${statusColor}">${esc(f.status)}</span>
+          <button onclick="deleteFlag('${escA(f.name)}')" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px;padding:0 2px" title="Delete">&#x2715;</button>
+        </div>
+        ${routeBar}
+      </div>`;
+    }).join('');
   }).catch(e=>console.error('Failed to load flags:',e));
 }
 function openAddFlag(){
@@ -2290,16 +2313,101 @@ function submitCanaryAnalysis(){
       if(d.error){toast(d.error,true);return;}
       el.style.display='block';
       el.textContent='';
-      const actionColor=d.action==='rollback'?'var(--red)':d.action==='rollout'?'var(--accent2)':'var(--yellow)';
+      // Action header
+      const actionColor=d.action==='rollback'?'var(--red)':d.action==='rollout'?'var(--accent2)':'var(--yellow,#f5c542)';
       const bold=document.createElement('b');bold.style.color=actionColor;bold.textContent=(d.action||'').toUpperCase();
       el.appendChild(bold);
       el.appendChild(document.createTextNode(' — '+(d.reason||'')));
       el.appendChild(document.createElement('br'));
+      // Next rollout
       const sub=document.createElement('span');sub.style.color='var(--muted)';
       sub.textContent='Next rollout: '+(d.next_rollout_pct!=null?d.next_rollout_pct+'%':'unchanged');
       el.appendChild(sub);
+      // Statistical significance section
+      const st=d.stats;
+      if(st){
+        el.appendChild(document.createElement('br'));
+        const statDiv=document.createElement('div');
+        statDiv.style.cssText='margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);font-size:10px;color:var(--muted)';
+        const sigColor=st.z_test?.significant?'var(--red)':'var(--green,#4caf50)';
+        const reqN=st.required_sample_size||0;
+        const sampleOk=st.has_sufficient_sample;
+        statDiv.innerHTML=
+          `<div style="margin-bottom:3px;color:${sigColor};font-weight:600">`+
+          esc(st.z_test?.confidence||'')+'</div>'+
+          `<div>z=${escA(String(st.z_test?.z_score??''))} p=${escA(String(st.z_test?.p_value??''))}`+
+          ` | Latency ${escA(String(st.latency_pct_change??0))}%</div>`+
+          `<div style="color:${sampleOk?'var(--muted)':'var(--yellow,#f5c542)'}">Sample: `+
+          `${escA(String(ss))} / need ${escA(String(reqN))} `+(sampleOk?'✓':'⚠')+'</div>'+
+          (st.summary?`<div style="margin-top:3px;opacity:.7">${esc(st.summary)}</div>`:'');
+        el.appendChild(statDiv);
+      }
       loadFlags();
     }).catch(e=>toast('Error: '+e.message,true));
+}
+// ── Live Metrics ──────────────────────────────────────────────────────────────
+function fetchLiveMetrics(){
+  const flag=($('lm-flag').value||'').trim();
+  if(!flag){toast('Flag name required',true);return;}
+  const hours=parseInt(($('lm-hours')&&$('lm-hours').value)||'1');
+  const panel=$('live-metrics-panel');if(!panel)return;
+  panel.style.display='block';
+  panel.textContent='Fetching…';
+  fetch('/api/metrics/live?flag='+encodeURIComponent(flag)+'&hours='+hours)
+    .then(r=>r.json()).then(d=>{
+      panel.textContent='';
+      const src=d.source||'unavailable';
+      const srcColor={posthog:'var(--accent2)',rollbar_partial:'var(--yellow,#f5c542)',unavailable:'var(--muted2)'}[src]||'var(--muted2)';
+      const hdr=document.createElement('div');
+      hdr.style.cssText='display:flex;justify-content:space-between;margin-bottom:6px';
+      const srcBadge=document.createElement('span');srcBadge.style.cssText=`font-size:10px;padding:1px 5px;border-radius:4px;background:var(--panel3);color:${srcColor}`;
+      srcBadge.textContent=esc(src);
+      const flagBadge=document.createElement('span');flagBadge.style.cssText='font-weight:600;font-size:11px';
+      flagBadge.textContent=esc(flag);
+      hdr.appendChild(flagBadge);hdr.appendChild(srcBadge);
+      panel.appendChild(hdr);
+      if(src==='unavailable'||src==='rollbar_partial'){
+        const note=document.createElement('div');note.style.cssText='color:var(--muted);font-size:10px;line-height:1.4';
+        note.textContent=d.note||'No data available';
+        if(d.total_errors!=null){
+          note.textContent+=' | Total errors ('+hours+'h): '+d.total_errors;
+        }
+        panel.appendChild(note);
+        return;
+      }
+      // Full PostHog metrics
+      const rows=[
+        ['Canary error rate',escA(String(d.error_rate_canary??0))+'%'],
+        ['Baseline error rate',escA(String(d.error_rate_baseline??0))+'%'],
+        ['Canary p95 latency',escA(String(d.latency_canary_ms??0))+' ms'],
+        ['Baseline p95 latency',escA(String(d.latency_baseline_ms??0))+' ms'],
+        ['Canary sample size',escA(String(d.sample_size??0))+' req'],
+        ['Window',escA(String(hours))+'h'],
+      ];
+      const table=document.createElement('table');table.style.cssText='width:100%;border-collapse:collapse;font-size:10px';
+      rows.forEach(([k,v])=>{
+        const tr=document.createElement('tr');
+        const td1=document.createElement('td');td1.style.cssText='color:var(--muted);padding:2px 0';td1.textContent=k;
+        const td2=document.createElement('td');td2.style.cssText='text-align:right;font-weight:600';td2.innerHTML=v;
+        tr.appendChild(td1);tr.appendChild(td2);table.appendChild(tr);
+      });
+      panel.appendChild(table);
+      // Show bucket breakdown if available
+      if(d.buckets&&Object.keys(d.buckets).length){
+        const bkDiv=document.createElement('div');bkDiv.style.cssText='margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);font-size:10px;color:var(--muted)';
+        bkDiv.textContent='Bucket breakdown:';
+        Object.entries(d.buckets).forEach(([bk,bv])=>{
+          const row=document.createElement('div');row.style.cssText='display:flex;justify-content:space-between;margin-top:2px';
+          const lbl=document.createElement('span');lbl.textContent=esc(bk);
+          const val=document.createElement('span');val.style.color='var(--text)';
+          val.textContent=escA(String(bv.requests||0))+' req, '+escA(String(Number(bv.error_rate_pct||0).toFixed(2)))+'% err';
+          row.appendChild(lbl);row.appendChild(val);bkDiv.appendChild(row);
+        });
+        panel.appendChild(bkDiv);
+      }
+    }).catch(e=>{
+      const panel=$('live-metrics-panel');if(panel){panel.style.display='block';panel.textContent='Error: '+e.message;}
+    });
 }
 (function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();})();
 </script>

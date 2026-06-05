@@ -4344,3 +4344,268 @@ class TestEvolutionHistory:
         r = client.get("/api/evolution/history?limit=5")
         assert r.status_code == 200
         assert len(r.json()["history"]) <= 5
+
+
+# ── Stats module tests ────────────────────────────────────────────────────────
+
+class TestStats:
+    """Tests for autonomous/stats.py statistical functions."""
+
+    def test_z_test_significant_difference(self):
+        from autonomous.stats import two_proportion_z_test
+        # 5% vs 0.5% error rate with 1000 samples each — very significant
+        result = two_proportion_z_test(0.05, 1000, 0.005, 1000)
+        assert result["significant"] is True
+        assert result["p_value"] < 0.01
+        assert result["z_score"] > 0
+
+    def test_z_test_no_difference(self):
+        from autonomous.stats import two_proportion_z_test
+        # Same rate — not significant
+        result = two_proportion_z_test(0.01, 100, 0.01, 100)
+        assert result["significant"] is False
+        assert result["p_value"] == 1.0
+
+    def test_z_test_insufficient_data(self):
+        from autonomous.stats import two_proportion_z_test
+        result = two_proportion_z_test(0.1, 0, 0.05, 0)
+        assert result["significant"] is False
+        assert result["confidence"] == "insufficient_data"
+
+    def test_wilson_ci_bounds(self):
+        from autonomous.stats import wilson_ci
+        lo, hi = wilson_ci(0.1, 100)
+        assert 0.0 <= lo <= hi <= 100.0
+        assert lo < 10.0 < hi  # 10% rate is within the interval
+
+    def test_wilson_ci_empty_sample(self):
+        from autonomous.stats import wilson_ci
+        lo, hi = wilson_ci(0.5, 0)
+        assert lo == 0.0 and hi == 100.0
+
+    def test_min_sample_size_reasonable(self):
+        from autonomous.stats import min_sample_size
+        n = min_sample_size(0.01, mde=0.01)
+        assert n >= 50
+        assert n < 10_000
+
+    def test_analyze_significance_returns_all_keys(self):
+        from autonomous.stats import analyze_significance
+        result = analyze_significance(0.5, 0.3, 120.0, 100.0, 200)
+        assert "z_test" in result
+        assert "canary_error_ci_95" in result
+        assert "baseline_error_ci_95" in result
+        assert "latency_pct_change" in result
+        assert "required_sample_size" in result
+        assert "has_sufficient_sample" in result
+        assert "summary" in result
+
+    def test_analyze_significance_latency_pct(self):
+        from autonomous.stats import analyze_significance
+        result = analyze_significance(0.1, 0.1, 150.0, 100.0, 100)
+        assert abs(result["latency_pct_change"] - 50.0) < 0.01
+
+
+# ── is_flag_enabled tests ────────────────────────────────────────────────────
+
+class TestIsFlagEnabled:
+    """Tests for autonomous/flags.is_flag_enabled hash-based routing."""
+
+    def setup_method(self):
+        import autonomous.flags as fm
+        with fm._FLAGS_LOCK:
+            fm._FLAGS.clear()
+        fm.save_flags()
+
+    def test_dark_flag_always_disabled(self):
+        from autonomous import flags as fm
+        fm.create("dark-flag", "test", rollout_pct=50)
+        # status defaults to "dark"
+        assert fm.is_flag_enabled("dark-flag", "user1") is False
+
+    def test_live_flag_always_enabled(self):
+        from autonomous import flags as fm
+        fm.create("live-flag", "test", rollout_pct=100)
+        fm.update("live-flag", status="live")
+        assert fm.is_flag_enabled("live-flag", "user1") is True
+
+    def test_canary_flag_deterministic(self):
+        from autonomous import flags as fm
+        fm.create("canary-flag", "test", rollout_pct=50)
+        fm.update("canary-flag", status="canary")
+        # Same user always gets same bucket
+        r1 = fm.is_flag_enabled("canary-flag", "alice")
+        r2 = fm.is_flag_enabled("canary-flag", "alice")
+        assert r1 == r2
+
+    def test_canary_0pct_always_disabled(self):
+        from autonomous import flags as fm
+        fm.create("zero-flag", "test", rollout_pct=0)
+        fm.update("zero-flag", status="canary")
+        assert fm.is_flag_enabled("zero-flag", "user1") is False
+
+    def test_canary_100pct_always_enabled(self):
+        from autonomous import flags as fm
+        fm.create("full-flag", "test", rollout_pct=100)
+        fm.update("full-flag", status="canary")
+        assert fm.is_flag_enabled("full-flag", "user1") is True
+
+    def test_nonexistent_flag_disabled(self):
+        from autonomous import flags as fm
+        assert fm.is_flag_enabled("nonexistent", "user1") is False
+
+    def test_disabled_flag_returns_false(self):
+        from autonomous import flags as fm
+        fm.create("dis-flag", "test", rollout_pct=100)
+        fm.update("dis-flag", status="canary", enabled=False)
+        assert fm.is_flag_enabled("dis-flag", "user1") is False
+
+
+# ── Canary stats integration tests ────────────────────────────────────────────
+
+class TestCanaryStats:
+    """Tests that canary.analyze now returns stats dict."""
+
+    def test_analyze_returns_stats_key(self):
+        from autonomous.canary import analyze
+        result = analyze(
+            flag_name="test",
+            error_rate_canary=0.1,
+            error_rate_baseline=0.3,
+            latency_canary_ms=95.0,
+            latency_baseline_ms=100.0,
+            sample_size=100,
+        )
+        assert "stats" in result
+        assert "z_test" in result["stats"]
+
+    def test_analyze_rollback_still_includes_stats(self):
+        from autonomous.canary import analyze
+        result = analyze(
+            flag_name="test",
+            error_rate_canary=10.0,
+            error_rate_baseline=0.1,
+            latency_canary_ms=95.0,
+            latency_baseline_ms=100.0,
+            sample_size=200,
+        )
+        assert result["action"] == "rollback"
+        assert "stats" in result
+
+
+# ── Flag check endpoint tests ─────────────────────────────────────────────────
+
+class TestFlagCheck:
+    """Tests for GET /api/flags/{name}/check endpoint."""
+
+    def setup_method(self):
+        import autonomous.flags as fm
+        with fm._FLAGS_LOCK:
+            fm._FLAGS.clear()
+        fm.save_flags()
+
+    def test_check_nonexistent_returns_404(self):
+        r = client.get("/api/flags/nonexistent/check")
+        assert r.status_code == 404
+
+    def test_check_live_flag_returns_enabled(self):
+        client.post("/api/flags", json={"name": "live-chk", "description": "", "rollout_pct": 100})
+        client.patch("/api/flags/live-chk", json={"status": "live"})
+        r = client.get("/api/flags/live-chk/check?user_id=alice")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["enabled"] is True
+        assert data["bucket"] == "canary"
+
+    def test_check_dark_flag_returns_disabled(self):
+        client.post("/api/flags", json={"name": "dark-chk", "description": "", "rollout_pct": 50})
+        r = client.get("/api/flags/dark-chk/check?user_id=alice")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["enabled"] is False
+        assert data["bucket"] == "control"
+
+    def test_check_returns_expected_fields(self):
+        client.post("/api/flags", json={"name": "chk-fields", "description": "", "rollout_pct": 50})
+        client.patch("/api/flags/chk-fields", json={"status": "canary"})
+        r = client.get("/api/flags/chk-fields/check?user_id=bob")
+        assert r.status_code == 200
+        data = r.json()
+        assert "flag" in data
+        assert "enabled" in data
+        assert "bucket" in data
+        assert "rollout_pct" in data
+        assert "status" in data
+
+
+# ── Metrics live endpoint tests ───────────────────────────────────────────────
+
+class TestMetricsLive:
+    """Tests for GET /api/metrics/live endpoint."""
+
+    def test_missing_flag_returns_422(self):
+        r = client.get("/api/metrics/live")
+        assert r.status_code == 422
+
+    def test_unavailable_returns_source(self):
+        # No PostHog/Rollbar configured in test env
+        r = client.get("/api/metrics/live?flag=my-flag")
+        assert r.status_code == 200
+        data = r.json()
+        assert "source" in data
+        assert data["source"] in ("posthog", "rollbar_partial", "unavailable")
+
+    def test_invalid_hours_returns_422(self):
+        r = client.get("/api/metrics/live?flag=x&hours=0")
+        assert r.status_code == 422
+
+    def test_hours_too_large_returns_422(self):
+        r = client.get("/api/metrics/live?flag=x&hours=25")
+        assert r.status_code == 422
+
+
+# ── Evolution run with use_real_metrics ──────────────────────────────────────
+
+class TestEvolutionRunRealMetrics:
+    """Tests for use_real_metrics flag in /api/evolution/run."""
+
+    def setup_method(self):
+        import autonomous.flags as fm
+        with fm._FLAGS_LOCK:
+            fm._FLAGS.clear()
+        fm.save_flags()
+
+    def _good_metrics(self):
+        return {
+            "error_rate_canary": 0.1,
+            "error_rate_baseline": 0.2,
+            "latency_canary_ms": 95.0,
+            "latency_baseline_ms": 100.0,
+            "sample_size": 100,
+        }
+
+    def test_use_real_metrics_true_falls_back_when_unavailable(self):
+        """When no PostHog/Rollbar configured, should fall back to supplied metrics."""
+        client.post("/api/flags", json={"name": "real-evo", "description": "", "rollout_pct": 1})
+        client.patch("/api/flags/real-evo", json={"status": "canary"})
+        r = client.post("/api/evolution/run", json={
+            "metrics": self._good_metrics(),
+            "flag_name": "real-evo",
+            "use_real_metrics": True,
+        })
+        assert r.status_code == 200
+        results = r.json()["results"]
+        assert len(results) == 1
+        # Should have completed without error (fell back to supplied metrics)
+        assert results[0]["action"] in ("rollout", "hold", "rollback")
+
+    def test_use_real_metrics_false_uses_supplied(self):
+        client.post("/api/flags", json={"name": "supplied-evo", "description": "", "rollout_pct": 1})
+        client.patch("/api/flags/supplied-evo", json={"status": "canary"})
+        r = client.post("/api/evolution/run", json={
+            "metrics": self._good_metrics(),
+            "flag_name": "supplied-evo",
+            "use_real_metrics": False,
+        })
+        assert r.status_code == 200
+        assert r.json()["results"][0]["action"] == "rollout"

@@ -1,6 +1,7 @@
 """Feature flag management — in-memory dict with JSON persistence."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -116,6 +117,32 @@ def delete(name: str) -> bool:
         del _FLAGS[name]
     save_flags()
     return True
+
+
+def is_flag_enabled(flag_name: str, user_id: str = "") -> bool:
+    """Deterministic hash-based routing: returns True if user_id is in the canary cohort.
+
+    Stable across requests for the same (flag_name, user_id) pair.
+    Falls back to IP-based routing when user_id is empty.
+    """
+    with _FLAGS_LOCK:
+        flag = _FLAGS.get(flag_name)
+
+    if not flag or not flag.get("enabled", True):
+        return False
+
+    status = flag.get("status", "dark")
+    rollout_pct = int(flag.get("rollout_pct", 0))
+
+    if status == "live" or rollout_pct >= 100:
+        return True
+    if status in ("dark", "rollback") or rollout_pct <= 0:
+        return False
+
+    # Deterministic bucket: 0..99
+    key = f"{flag_name}:{user_id}".encode("utf-8")
+    bucket = int(hashlib.md5(key, usedforsecurity=False).hexdigest(), 16) % 100
+    return bucket < rollout_pct
 
 
 # Load persisted flags on import

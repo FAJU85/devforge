@@ -1,6 +1,8 @@
 """Canary health analysis — decides rollout / hold / rollback based on metrics."""
 from __future__ import annotations
 
+from .stats import analyze_significance
+
 
 def analyze(
     flag_name: str,
@@ -27,14 +29,30 @@ def analyze(
     latency_delta = latency_canary_ms - latency_baseline_ms
     latency_pct_increase = latency_delta / latency_baseline_ms * 100
 
-    if error_delta > 2.0 or latency_pct_increase > 50.0:
+    stats = analyze_significance(
+        error_rate_canary=error_rate_canary,
+        error_rate_baseline=error_rate_baseline,
+        latency_canary_ms=latency_canary_ms,
+        latency_baseline_ms=latency_baseline_ms,
+        sample_size=sample_size,
+    )
+
+    # Rollback: hard thresholds OR statistically significant regression
+    error_regressed = (
+        error_delta > 2.0
+        or (stats["z_test"]["significant"] and error_delta > 0.5)
+    )
+    latency_regressed = latency_pct_increase > 50.0
+
+    if error_regressed or latency_regressed:
         return {
             "action": "rollback",
             "reason": (
-                f"Error rate increase {error_delta:.2f}% > 2% "
-                f"or latency increase {latency_pct_increase:.1f}% > 50%"
+                f"Error rate increase {error_delta:.2f}% "
+                f"or latency increase {latency_pct_increase:.1f}% exceeds threshold"
             ),
             "next_rollout_pct": 0,
+            "stats": stats,
         }
 
     if error_delta < 0.5 and latency_pct_increase < 10.0 and sample_size >= 50:
@@ -46,6 +64,7 @@ def analyze(
                 f"sample_size {sample_size} >= 50"
             ),
             "next_rollout_pct": _next_pct(current_rollout_pct),
+            "stats": stats,
         }
 
     return {
@@ -56,6 +75,7 @@ def analyze(
             f"sample_size={sample_size}"
         ),
         "next_rollout_pct": None,
+        "stats": stats,
     }
 
 
