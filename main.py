@@ -29,6 +29,23 @@ try:
 except ImportError:
     pass
 
+# Optional: Rollbar error monitoring (backend exceptions + frontend JS errors)
+try:
+    import rollbar
+    _ROLLBAR_TOKEN = os.environ.get("ROLLBAR_ACCESS_TOKEN", "")
+    _ROLLBAR_ENV = os.environ.get("ROLLBAR_ENVIRONMENT", "production")
+    if _ROLLBAR_TOKEN:
+        rollbar.init(
+            _ROLLBAR_TOKEN,
+            _ROLLBAR_ENV,
+            handler="thread",
+            allow_logging_basic_config=False,
+        )
+    else:
+        _ROLLBAR_TOKEN = ""
+except ImportError:
+    _ROLLBAR_TOKEN = ""
+
 # Optional: control-plane (LangGraph + Pinecone + Go data-plane integration)
 try:
     from control_plane.graph import build_graph as _build_langgraph
@@ -46,6 +63,27 @@ except Exception:
 app = FastAPI(title="DevForge")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.middleware("http")
+async def _rollbar_middleware(request, call_next):
+    """Report unhandled exceptions to Rollbar with request context."""
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        if _ROLLBAR_TOKEN:
+            try:
+                import rollbar
+                rollbar.report_exc_info(
+                    extra_data={
+                        "path": str(request.url.path),
+                        "method": request.method,
+                    }
+                )
+            except Exception:
+                pass
+        raise
+
 
 @app.middleware("http")
 async def _security_headers(request, call_next):
@@ -529,6 +567,8 @@ async def get_config():
     return JSONResponse({
         "sentry_dsn": os.environ.get("SENTRY_DSN_PUBLIC", ""),
         "environment": os.environ.get("ENVIRONMENT", "production"),
+        "rollbar_token": _ROLLBAR_TOKEN,
+        "rollbar_env": os.environ.get("ROLLBAR_ENVIRONMENT", "production"),
     })
 
 @app.get("/api/hf/models")
@@ -2013,3 +2053,30 @@ async def tools_dispatch(body: GoToolsBody):
             return resp.json()
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+class SidecarGrepBody(BaseModel):
+    pattern: str = Field(..., min_length=1, max_length=500)
+    root: str = Field(default=".", max_length=500)
+    max_results: int = Field(default=50, ge=1, le=200)
+
+
+@app.post("/api/sidecar/grep")
+async def sidecar_grep(body: SidecarGrepBody):
+    """Proxy regex code-search to the Go data-plane /grep endpoint."""
+    go_url = os.environ.get("GO_DATA_PLANE_URL", "http://localhost:8080")
+    if not re.match(r"^https?://", go_url):
+        return JSONResponse(
+            {"error": "GO_DATA_PLANE_URL not configured", "matches": [], "total": 0},
+            status_code=503,
+        )
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient(timeout=10.0) as http:
+            resp = await http.post(f"{go_url}/grep", json=body.model_dump())
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as exc:
+        return JSONResponse(
+            {"error": str(exc), "matches": [], "total": 0}, status_code=502
+        )
