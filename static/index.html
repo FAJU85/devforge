@@ -740,6 +740,16 @@ pre::-webkit-scrollbar{height:4px}
       </div>
       <button onclick="fetchLiveMetrics()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s">⬇ Fetch Live Metrics</button>
     </div>
+    <!-- HF Build Status section -->
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🚀 HF Build Status</div>
+    <div style="padding:0 10px 8px">
+      <div id="hf-build-badge" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:var(--panel2);border:1px solid var(--border2);font-size:11px;margin-bottom:6px">
+        <span id="hf-build-dot" style="width:8px;height:8px;border-radius:50%;background:var(--muted2);flex-shrink:0"></span>
+        <span id="hf-build-label" style="color:var(--muted)">—</span>
+      </div>
+      <div id="hf-build-error" style="display:none;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;padding:7px 10px;font-size:10px;color:var(--red);word-break:break-word;margin-bottom:6px"></div>
+      <button onclick="fetchHfBuildStatus()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s">↺ Refresh Status</button>
+    </div>
     <!-- Evolution History section -->
     <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🔄 Evolution History</div>
     <div style="padding:0 10px 8px">
@@ -2409,7 +2419,23 @@ function fetchLiveMetrics(){
       const panel=$('live-metrics-panel');if(panel){panel.style.display='block';panel.textContent='Error: '+e.message;}
     });
 }
-(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();})();
+// ── HF Build Status ───────────────────────────────────────────────────────────
+function fetchHfBuildStatus(){
+  const dot=$('hf-build-dot'),lbl=$('hf-build-label'),errDiv=$('hf-build-error');
+  if(!dot||!lbl)return;
+  lbl.textContent='Checking…';dot.style.background='var(--muted2)';
+  fetch('/api/hf-build/status').then(r=>r.json()).then(d=>{
+    const stage=d.stage||'UNKNOWN';
+    const colors={RUNNING:'var(--accent2)',BUILDING:'var(--blue)',ERROR:'var(--red)',CONFIG_ERROR:'var(--red)',RUNTIME_ERROR:'var(--red)',UNKNOWN:'var(--muted2)'};
+    dot.style.background=colors[stage]||'var(--muted2)';
+    lbl.textContent=stage;
+    if(errDiv){
+      if(d.error_message){errDiv.style.display='block';errDiv.textContent=d.error_message;}
+      else{errDiv.style.display='none';}
+    }
+  }).catch(e=>{if(lbl)lbl.textContent='Error';if(dot)dot.style.background='var(--red)';});
+}
+(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();fetchHfBuildStatus();})();
 </script>
 </body>
 </html>

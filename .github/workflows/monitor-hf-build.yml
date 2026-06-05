@@ -1,0 +1,287 @@
+name: HF Spaces Build Monitor
+
+on:
+  workflow_run:
+    workflows: ["Sync to Hugging Face Space"]
+    types: [completed]
+
+jobs:
+  monitor:
+    name: Monitor & Auto-Fix HF Build
+    runs-on: ubuntu-latest
+    # Prevent feedback loop: skip if the sync was triggered by our own auto-fix
+    if: "!contains(github.event.workflow_run.head_commit.message, '[hf-auto-fix]')"
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Poll HF Spaces build status
+        id: poll
+        run: |
+          python3 - <<'PYEOF'
+          import urllib.request, json, time, os, sys
+
+          url = "https://huggingface.co/api/spaces/vooom/devforge/runtime"
+          stage = "UNKNOWN"
+          error_msg = ""
+
+          for attempt in range(1, 31):   # up to 10 minutes (30 × 20 s)
+              try:
+                  with urllib.request.urlopen(url, timeout=15) as resp:
+                      data = json.loads(resp.read())
+                  stage = data.get("stage", "UNKNOWN")
+                  error_msg = (data.get("errorMessage") or "").strip()
+              except Exception as exc:
+                  print(f"Attempt {attempt}: poll error: {exc}")
+                  time.sleep(20)
+                  continue
+
+              print(f"Attempt {attempt}/{30}: stage={stage}")
+
+              if stage == "RUNNING":
+                  break
+              elif stage in ("ERROR", "CONFIG_ERROR", "RUNTIME_ERROR"):
+                  break
+              # BUILDING or other transient states — keep waiting
+              time.sleep(20)
+
+          env_file = os.environ["GITHUB_OUTPUT"]
+          with open(env_file, "a") as fh:
+              fh.write(f"stage={stage}\n")
+              # Sanitize for GitHub output (single-line only)
+              safe_err = error_msg.replace("\n", " ").replace("\r", "")[:500]
+              fh.write(f"error_message={safe_err}\n")
+
+          print(f"Final: stage={stage}")
+          if error_msg:
+              print(f"Error: {error_msg[:300]}")
+          PYEOF
+
+      - name: Skip — build healthy
+        if: steps.poll.outputs.stage == 'RUNNING'
+        run: echo "✅ HF Space is RUNNING — no fix needed."
+
+      - name: Diagnose and apply fix
+        if: steps.poll.outputs.stage != 'RUNNING'
+        id: diagnose
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ERROR_MESSAGE: ${{ steps.poll.outputs.error_message }}
+          HF_STAGE: ${{ steps.poll.outputs.stage }}
+        run: |
+          pip install anthropic --quiet
+          python3 - <<'PYEOF'
+          import os, json, sys
+
+          api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+          env_out = os.environ["GITHUB_OUTPUT"]
+
+          def _write(key, value):
+              with open(env_out, "a") as fh:
+                  fh.write(f"{key}={value}\n")
+
+          if not api_key:
+              print("ANTHROPIC_API_KEY not set — cannot diagnose")
+              _write("fix_available", "false")
+              _write("diagnosis", "ANTHROPIC_API_KEY not configured")
+              sys.exit(0)
+
+          from anthropic import Anthropic
+
+          error_msg = os.environ.get("ERROR_MESSAGE", "Unknown error")
+          stage = os.environ.get("HF_STAGE", "ERROR")
+
+          # Read context files for Claude
+          try:
+              with open("requirements.txt") as f:
+                  req_content = f.read()
+              req_tail = req_content[-5000:]
+          except Exception as exc:
+              req_tail = f"(error reading requirements.txt: {exc})"
+
+          try:
+              with open("Dockerfile") as f:
+                  dockerfile = f.read()[:3000]
+          except Exception:
+              dockerfile = "(no Dockerfile found)"
+
+          client = Anthropic(api_key=api_key)
+
+          prompt = f"""The Hugging Face Space 'vooom/devforge' has a build failure.
+
+Stage: {stage}
+Error message:
+{error_msg}
+
+requirements.txt (last 5000 chars):
+{req_tail}
+
+Dockerfile:
+{dockerfile}
+
+Diagnose the build failure and provide a targeted fix. Common HF Spaces causes:
+- Missing hash for a transitive dependency when using --require-hashes in pip
+- Incorrect Python version pin
+- Missing system dependency
+
+Respond ONLY with a JSON object — no markdown fences, no extra text:
+{{
+  "diagnosis": "brief one-line root cause",
+  "fix_file": "relative path to file to edit (e.g. requirements.txt)",
+  "search_text": "exact text to find verbatim in the file",
+  "replace_text": "exact replacement text",
+  "confidence": "high|medium|low"
+}}
+
+Rules:
+- search_text must exist verbatim in the file
+- If confidence is low or you cannot produce a reliable search/replace, set search_text and replace_text to empty strings
+- Do NOT wrap response in markdown code blocks"""
+
+          try:
+              msg = client.messages.create(
+                  model="claude-sonnet-4-6",
+                  max_tokens=1024,
+                  messages=[{"role": "user", "content": prompt}],
+              )
+              raw = msg.content[0].text.strip()
+              # Strip accidental markdown fences
+              if raw.startswith("```"):
+                  lines = raw.splitlines()
+                  raw = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+              fix = json.loads(raw)
+          except Exception as exc:
+              print(f"Claude error: {exc}")
+              _write("fix_available", "false")
+              _write("diagnosis", f"Claude API error: {str(exc)[:200]}")
+              sys.exit(0)
+
+          diagnosis   = (fix.get("diagnosis") or "").strip()
+          fix_file    = (fix.get("fix_file") or "").strip()
+          search_text = fix.get("search_text") or ""
+          replace_text= fix.get("replace_text") or ""
+          confidence  = (fix.get("confidence") or "low").lower()
+
+          print(f"Diagnosis : {diagnosis}")
+          print(f"Confidence: {confidence}")
+          print(f"Fix file  : {fix_file}")
+
+          if confidence == "low" or not search_text or not fix_file:
+              _write("fix_available", "false")
+              _write("diagnosis", (diagnosis or "No confident fix found")[:300])
+              sys.exit(0)
+
+          # Apply the fix
+          try:
+              with open(fix_file) as f:
+                  current = f.read()
+              if search_text not in current:
+                  print(f"search_text not found verbatim in {fix_file}")
+                  _write("fix_available", "false")
+                  _write("diagnosis", f"search_text not found in {fix_file}")
+                  sys.exit(0)
+              updated = current.replace(search_text, replace_text, 1)
+              with open(fix_file, "w") as f:
+                  f.write(updated)
+              print(f"✅ Applied fix to {fix_file}")
+          except Exception as exc:
+              print(f"Error applying fix: {exc}")
+              _write("fix_available", "false")
+              _write("diagnosis", f"Fix application error: {str(exc)[:200]}")
+              sys.exit(0)
+
+          _write("fix_available", "true")
+          _write("fix_file", fix_file)
+          safe_diag = diagnosis.replace("\n", " ")[:300]
+          _write("diagnosis", safe_diag)
+          PYEOF
+
+      - name: Install deps and run tests
+        if: steps.diagnose.outputs.fix_available == 'true'
+        id: run_tests
+        env:
+          GITHUB_CLIENT_ID: ""
+          GITHUB_CLIENT_SECRET: ""
+          HF_TOKEN: ""
+          SENTRY_DSN: ""
+        run: |
+          pip install -r requirements.txt \
+            sentry-sdk[fastapi]==2.27.0 pytest==8.3.5 pytest-asyncio==0.25.3 \
+            httpx==0.28.1 rollbar==1.3.0 posthog==7.17.0 pytest-cov==6.0.0 --quiet
+          pytest tests/ -q --tb=short 2>&1 | tee /tmp/test-output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Push fix directly to main
+        if: steps.diagnose.outputs.fix_available == 'true' && steps.run_tests.outputs.exit_code == '0'
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add "${{ steps.diagnose.outputs.fix_file }}"
+          git commit -m "fix: auto-fix HF Spaces build [hf-auto-fix]
+
+          Stage: ${{ steps.poll.outputs.stage }}
+          Error: ${{ steps.poll.outputs.error_message }}
+          Diagnosis: ${{ steps.diagnose.outputs.diagnosis }}"
+          git push origin main
+
+      - name: Create review PR when tests fail
+        if: steps.diagnose.outputs.fix_available == 'true' && steps.run_tests.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="auto/hf-build-fix-$(date +%Y%m%d-%H%M%S)"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git checkout -b "$BRANCH"
+          git add "${{ steps.diagnose.outputs.fix_file }}"
+          git commit -m "fix: HF Spaces build auto-fix (tests failed) [hf-auto-fix]"
+          git push origin "$BRANCH"
+          SUMMARY=$(tail -40 /tmp/test-output.txt)
+          gh pr create \
+            --title "fix: HF Spaces build failure — needs manual review" \
+            --body "## Automated HF Spaces Build Fix
+
+**Stage:** ${{ steps.poll.outputs.stage }}
+**Error:** ${{ steps.poll.outputs.error_message }}
+**Diagnosis:** ${{ steps.diagnose.outputs.diagnosis }}
+
+⚠️ Claude generated a fix but tests failed after applying it. Manual review required.
+
+\`\`\`
+${SUMMARY}
+\`\`\`
+
+_Auto-generated by HF Spaces Build Monitor_" \
+            --base main \
+            --head "$BRANCH"
+
+      - name: Open issue when no fix is possible
+        if: steps.poll.outputs.stage != 'RUNNING' && steps.diagnose.outputs.fix_available != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "HF Spaces build failure: ${{ steps.poll.outputs.stage }}" \
+            --body "## Automated Build Failure Report
+
+**Stage:** ${{ steps.poll.outputs.stage }}
+**Error:** ${{ steps.poll.outputs.error_message }}
+**Diagnosis attempt:** ${{ steps.diagnose.outputs.diagnosis }}
+
+The autonomous build monitor detected this failure but could not generate a confident fix.
+Manual intervention required.
+
+_Auto-generated by HF Spaces Build Monitor_" \
+            --label "bug" || true
