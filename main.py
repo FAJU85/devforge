@@ -2087,3 +2087,195 @@ async def sidecar_grep(body: SidecarGrepBody):
         return JSONResponse(
             {"error": str(exc), "matches": [], "total": 0}, status_code=502
         )
+
+
+# ── Autonomous CI/CD: Branch creation ────────────────────────────────────────
+
+class BranchCreateBody(BaseModel):
+    token: str = Field(..., min_length=1, max_length=500)
+    owner: str = Field(..., min_length=1, max_length=100)
+    repo: str = Field(..., min_length=1, max_length=100)
+    new_branch: str = Field(..., min_length=1, max_length=255)
+    from_branch: str = Field(default="main", min_length=1, max_length=255)
+
+
+@app.post("/api/repo/branch/create")
+async def branch_create(body: BranchCreateBody):
+    """Create a new GitHub branch from an existing branch's HEAD SHA."""
+    # Get the SHA of from_branch
+    ref_url = f"{_gh_base(body.owner, body.repo)}/git/ref/heads/{_urlquote(body.from_branch, safe='')}"
+    r = requests.get(ref_url, headers=gh_hdrs(body.token), timeout=10)
+    if not r.ok:
+        return JSONResponse({"error": f"Could not resolve branch '{body.from_branch}'"}, status_code=400)
+    sha = r.json()["object"]["sha"]
+
+    # Create the new branch ref
+    payload = {"ref": f"refs/heads/{body.new_branch}", "sha": sha}
+    r2 = requests.post(
+        f"{_gh_base(body.owner, body.repo)}/git/refs",
+        headers=gh_hdrs(body.token), json=payload, timeout=15,
+    )
+    if not r2.ok:
+        try:
+            msg = r2.json().get("message", "Failed to create branch")
+        except Exception:
+            msg = "Failed to create branch"
+        return JSONResponse({"error": msg}, status_code=400)
+    return {"branch": body.new_branch, "sha": sha}
+
+
+# ── Autonomous CI/CD: Feature flags ──────────────────────────────────────────
+
+from autonomous import flags as _flags_mod
+
+
+class FlagCreateBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = Field(default="", max_length=500)
+    rollout_pct: int = Field(default=0, ge=0, le=100)
+
+
+class FlagUpdateBody(BaseModel):
+    description: Optional[str] = Field(default=None, max_length=500)
+    enabled: Optional[bool] = Field(default=None)
+    rollout_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    status: Optional[str] = Field(default=None)
+
+
+@app.get("/api/flags")
+async def flags_list():
+    """List all feature flags."""
+    return {"flags": _flags_mod.get_all()}
+
+
+@app.post("/api/flags")
+async def flags_create(body: FlagCreateBody):
+    """Create a new feature flag."""
+    try:
+        flag = _flags_mod.create(body.name, body.description, body.rollout_pct)
+        return flag
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+
+@app.patch("/api/flags/{name}")
+async def flags_update(name: str, body: FlagUpdateBody):
+    """Update fields on a feature flag."""
+    kwargs = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not kwargs:
+        return JSONResponse({"error": "No fields to update"}, status_code=400)
+    try:
+        flag = _flags_mod.update(name, **kwargs)
+        return flag
+    except KeyError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=404)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+
+@app.delete("/api/flags/{name}")
+async def flags_delete(name: str):
+    """Delete a feature flag by name."""
+    deleted = _flags_mod.delete(name)
+    if not deleted:
+        return JSONResponse({"error": f"Flag '{name}' not found"}, status_code=404)
+    return {"deleted": True, "name": name}
+
+
+# ── Autonomous CI/CD: Canary analysis ────────────────────────────────────────
+
+from autonomous import canary as _canary_mod
+
+
+class CanaryAnalyzeBody(BaseModel):
+    flag_name: str = Field(..., min_length=1, max_length=100)
+    error_rate_canary: float = Field(..., ge=0.0)
+    error_rate_baseline: float = Field(..., ge=0.0)
+    latency_canary_ms: float = Field(..., ge=0.0)
+    latency_baseline_ms: float = Field(..., ge=0.0)
+    sample_size: int = Field(..., ge=0)
+
+
+@app.post("/api/canary/analyze")
+async def canary_analyze(body: CanaryAnalyzeBody):
+    """Run canary health analysis and auto-update the flag's rollout_pct."""
+    result = _canary_mod.analyze(
+        flag_name=body.flag_name,
+        error_rate_canary=body.error_rate_canary,
+        error_rate_baseline=body.error_rate_baseline,
+        latency_canary_ms=body.latency_canary_ms,
+        latency_baseline_ms=body.latency_baseline_ms,
+        sample_size=body.sample_size,
+    )
+    # Auto-update the flag rollout_pct if the flag exists
+    if result["action"] in ("rollout", "rollback"):
+        new_pct = result["next_rollout_pct"]
+        if new_pct is not None:
+            try:
+                _flags_mod.update(body.flag_name, rollout_pct=new_pct)
+            except KeyError:
+                pass  # Flag not found — analysis result still returned
+    return {**result, "flag_name": body.flag_name}
+
+
+# ── Autonomous CI/CD: Rollbar webhook ────────────────────────────────────────
+
+from fastapi import Request as _FastAPIRequest
+
+
+@app.post("/api/webhooks/rollbar")
+async def rollbar_webhook(request: _FastAPIRequest):
+    """Receive a Rollbar error event and trigger autonomous fix."""
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    from autonomous.fixer import fix_from_rollbar_payload
+    result = await fix_from_rollbar_payload(payload)
+    return result
+
+
+# ── Autonomous CI/CD: Manual fix trigger ─────────────────────────────────────
+
+class ManualFixBody(BaseModel):
+    owner: str = Field(..., min_length=1, max_length=100)
+    repo: str = Field(..., min_length=1, max_length=100)
+    token: str = Field(..., min_length=1, max_length=500)
+    filename: str = Field(..., min_length=1, max_length=500)
+    error_title: str = Field(..., min_length=1, max_length=500)
+    trace_json: str = Field(default="", max_length=10000)
+
+
+@app.post("/api/autonomous/fix")
+async def autonomous_fix(body: ManualFixBody):
+    """Manually trigger an autonomous fix for a known error."""
+    payload = {
+        "data": {
+            "item": {
+                "title": body.error_title,
+                "id": "manual",
+                "last_occurrence": {
+                    "body": {
+                        "trace": {
+                            "frames": [{"filename": body.filename, "lineno": 0}]
+                        }
+                    }
+                },
+            }
+        }
+    }
+    import os as _os
+    _saved = {}
+    for k, v in [("GITHUB_TOKEN", body.token), ("GITHUB_OWNER", body.owner), ("GITHUB_REPO", body.repo)]:
+        _saved[k] = _os.environ.get(k)
+        _os.environ[k] = v
+    try:
+        from autonomous.fixer import fix_from_rollbar_payload
+        result = await fix_from_rollbar_payload(payload)
+    finally:
+        for k, orig in _saved.items():
+            if orig is None:
+                _os.environ.pop(k, None)
+            else:
+                _os.environ[k] = orig
+    return result

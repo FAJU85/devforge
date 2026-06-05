@@ -4151,3 +4151,134 @@ class TestSecurityHeaders:
     def test_json_endpoint_has_security_headers(self):
         r = client.get("/api/tools/list")
         self._check(r)
+
+
+# ---------------------------------------------------------------------------
+# Autonomous CI/CD: Feature Flags
+# ---------------------------------------------------------------------------
+
+class TestFeatureFlags:
+    """Tests for /api/flags endpoints."""
+
+    def setup_method(self):
+        """Clear in-memory flags before each test."""
+        import autonomous.flags as fm
+        fm._FLAGS.clear()
+
+    def test_create_flag(self):
+        r = client.post("/api/flags", json={"name": "test-flag", "description": "A test flag", "rollout_pct": 10})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["name"] == "test-flag"
+        assert data["description"] == "A test flag"
+        assert data["rollout_pct"] == 10
+        assert "enabled" in data
+        assert "status" in data
+
+    def test_list_flags(self):
+        client.post("/api/flags", json={"name": "list-flag", "description": "Listed"})
+        r = client.get("/api/flags")
+        assert r.status_code == 200
+        assert "flags" in r.json()
+        names = [f["name"] for f in r.json()["flags"]]
+        assert "list-flag" in names
+
+    def test_update_flag(self):
+        client.post("/api/flags", json={"name": "upd-flag", "description": "Before"})
+        r = client.patch("/api/flags/upd-flag", json={"rollout_pct": 50})
+        assert r.status_code == 200
+        assert r.json()["rollout_pct"] == 50
+
+    def test_delete_flag(self):
+        client.post("/api/flags", json={"name": "del-flag", "description": "To delete"})
+        r = client.delete("/api/flags/del-flag")
+        assert r.status_code == 200
+        assert r.json()["deleted"] is True
+        r2 = client.get("/api/flags")
+        names = [f["name"] for f in r2.json()["flags"]]
+        assert "del-flag" not in names
+
+
+# ---------------------------------------------------------------------------
+# Autonomous CI/CD: Canary Analysis
+# ---------------------------------------------------------------------------
+
+class TestCanaryAnalyze:
+    """Tests for /api/canary/analyze endpoint."""
+
+    def setup_method(self):
+        import autonomous.flags as fm
+        fm._FLAGS.clear()
+
+    def test_rollback_on_high_error_rate(self):
+        r = client.post("/api/canary/analyze", json={
+            "flag_name": "canary-flag",
+            "error_rate_canary": 5.0,
+            "error_rate_baseline": 1.0,
+            "latency_canary_ms": 100.0,
+            "latency_baseline_ms": 100.0,
+            "sample_size": 100,
+        })
+        assert r.status_code == 200
+        assert r.json()["action"] == "rollback"
+
+    def test_rollout_on_good_metrics(self):
+        r = client.post("/api/canary/analyze", json={
+            "flag_name": "canary-flag",
+            "error_rate_canary": 0.1,
+            "error_rate_baseline": 0.2,
+            "latency_canary_ms": 95.0,
+            "latency_baseline_ms": 100.0,
+            "sample_size": 100,
+        })
+        assert r.status_code == 200
+        assert r.json()["action"] == "rollout"
+
+    def test_hold_on_insufficient_data(self):
+        r = client.post("/api/canary/analyze", json={
+            "flag_name": "canary-flag",
+            "error_rate_canary": 0.1,
+            "error_rate_baseline": 0.2,
+            "latency_canary_ms": 95.0,
+            "latency_baseline_ms": 100.0,
+            "sample_size": 10,
+        })
+        assert r.status_code == 200
+        assert r.json()["action"] == "hold"
+
+
+# ---------------------------------------------------------------------------
+# Autonomous CI/CD: Branch creation
+# ---------------------------------------------------------------------------
+
+class TestBranchCreate:
+    """Tests for /api/repo/branch/create endpoint."""
+
+    def test_requires_valid_token(self):
+        # Missing required fields → 422
+        r = client.post("/api/repo/branch/create", json={"new_branch": "test-branch"})
+        assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Autonomous CI/CD: Rollbar webhook
+# ---------------------------------------------------------------------------
+
+class TestRollbarWebhook:
+    """Tests for /api/webhooks/rollbar endpoint."""
+
+    def test_missing_github_env_returns_skipped(self):
+        """Without GITHUB_TOKEN set, the fixer should return status=skipped."""
+        import os
+        saved = {}
+        for k in ("GITHUB_TOKEN", "GITHUB_OWNER", "GITHUB_REPO", "ANTHROPIC_API_KEY"):
+            saved[k] = os.environ.get(k)
+            os.environ.pop(k, None)
+        try:
+            r = client.post("/api/webhooks/rollbar", json={})
+            assert r.status_code == 200
+            assert r.json()["status"] == "skipped"
+        finally:
+            for k, v in saved.items():
+                if v is not None:
+                    os.environ[k] = v
