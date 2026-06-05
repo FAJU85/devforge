@@ -4278,3 +4278,69 @@ class TestRollbarWebhook:
         r = client.post("/api/webhooks/rollbar", json={})
         assert r.status_code == 200
         assert r.json()["status"] == "skipped"
+
+
+# ---------------------------------------------------------------------------
+# Autonomous CI/CD: Evolution cycle
+# ---------------------------------------------------------------------------
+
+class TestEvolutionRun:
+    """Tests for /api/evolution/run endpoint."""
+
+    def setup_method(self):
+        import autonomous.flags as fm
+        with fm._FLAGS_LOCK:
+            fm._FLAGS.clear()
+        fm.save_flags()
+
+    def _good_metrics(self, **overrides):
+        base = {
+            "error_rate_canary": 0.1,
+            "error_rate_baseline": 0.2,
+            "latency_canary_ms": 95.0,
+            "latency_baseline_ms": 100.0,
+            "sample_size": 100,
+        }
+        return {**base, **overrides}
+
+    def test_run_with_no_canary_flags_returns_empty(self):
+        r = client.post("/api/evolution/run", json={"metrics": self._good_metrics()})
+        assert r.status_code == 200
+        assert r.json()["results"] == []
+
+    def test_rollout_advances_pct(self):
+        client.post("/api/flags", json={"name": "evo-flag", "description": "test", "rollout_pct": 1})
+        client.patch("/api/flags/evo-flag", json={"status": "canary"})
+        r = client.post("/api/evolution/run", json={"metrics": self._good_metrics(), "flag_name": "evo-flag"})
+        assert r.status_code == 200
+        result = r.json()["results"][0]
+        assert result["action"] == "rollout"
+        assert result["rollout_pct"] > 1
+
+    def test_rollback_on_bad_metrics(self):
+        client.post("/api/flags", json={"name": "bad-flag", "description": "test", "rollout_pct": 5})
+        client.patch("/api/flags/bad-flag", json={"status": "canary"})
+        r = client.post("/api/evolution/run", json={"metrics": self._good_metrics(error_rate_canary=10.0, error_rate_baseline=0.1), "flag_name": "bad-flag"})
+        assert r.status_code == 200
+        result = r.json()["results"][0]
+        assert result["action"] == "rollback"
+        assert result["rollout_pct"] == 0
+
+    def test_invalid_metrics_returns_400(self):
+        r = client.post("/api/evolution/run", json={"metrics": {"error_rate_canary": 0.1}})
+        assert r.status_code == 422
+
+
+class TestEvolutionHistory:
+    """Tests for /api/evolution/history endpoint."""
+
+    def test_returns_list(self):
+        r = client.get("/api/evolution/history")
+        assert r.status_code == 200
+        assert "history" in r.json()
+        assert isinstance(r.json()["history"], list)
+
+    def test_limit_respected(self):
+        r = client.get("/api/evolution/history?limit=5")
+        assert r.status_code == 200
+        assert len(r.json()["history"]) <= 5

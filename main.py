@@ -2295,3 +2295,50 @@ async def autonomous_fix(body: ManualFixBody):
         github_owner=body.owner,
         github_repo=body.repo,
     )
+
+
+# ── Autonomous CI/CD: Evolution cycle ────────────────────────────────────────
+
+from autonomous import audit as _audit_mod
+from autonomous import evolution as _evolution_mod
+
+
+class EvolutionMetrics(BaseModel):
+    error_rate_canary: float = Field(..., ge=0.0, description="Canary error rate %")
+    error_rate_baseline: float = Field(..., ge=0.0, description="Baseline error rate %")
+    latency_canary_ms: float = Field(..., gt=0.0, description="Canary p95 latency ms")
+    latency_baseline_ms: float = Field(..., gt=0.0, description="Baseline p95 latency ms")
+    sample_size: int = Field(..., ge=0, description="Number of canary requests observed")
+
+
+class EvolutionRunBody(BaseModel):
+    metrics: EvolutionMetrics
+    flag_name: Optional[str] = Field(default=None, max_length=100)
+    github_token: str = Field(default="", max_length=500)
+    github_owner: str = Field(default="", max_length=100)
+    github_repo: str = Field(default="", max_length=100)
+
+
+@app.post("/api/evolution/run")
+async def evolution_run(body: EvolutionRunBody):
+    """Run one evolution cycle iteration for all canary flags (or a specific flag)."""
+    token = body.github_token or os.environ.get("GITHUB_TOKEN", "")
+    owner = body.github_owner or os.environ.get("GITHUB_OWNER", "")
+    repo = body.github_repo or os.environ.get("GITHUB_REPO", "")
+    metrics = body.metrics.model_dump()
+    if body.flag_name:
+        result = await _evolution_mod.run_cycle(
+            body.flag_name, metrics,
+            github_token=token, github_owner=owner, github_repo=repo,
+        )
+        return {"results": [result]}
+    results = await _evolution_mod.run_all_canary_flags(
+        metrics, github_token=token, github_owner=owner, github_repo=repo,
+    )
+    return {"results": results}
+
+
+@app.get("/api/evolution/history")
+async def evolution_history(flag: Optional[str] = Query(default=None, max_length=100), limit: int = Query(default=50, ge=1, le=200)):
+    """Return recent evolution cycle decisions from the audit log."""
+    return {"history": _audit_mod.get_history(flag_name=flag, limit=limit)}

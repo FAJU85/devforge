@@ -726,6 +726,12 @@ pre::-webkit-scrollbar{height:4px}
       <div id="canary-result" style="display:none;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;margin-bottom:6px"></div>
       <button onclick="runCanaryAnalysis()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit">&#9654; Analyze Active Canary</button>
     </div>
+    <!-- Evolution History section -->
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🔄 Evolution History</div>
+    <div style="padding:0 10px 8px">
+      <div id="evo-history" style="background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow-x:hidden;overflow-y:auto;display:none;margin-bottom:6px;max-height:220px;font-size:10px"></div>
+      <button onclick="loadEvoHistory()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s">↺ Refresh History</button>
+    </div>
   </div>
 </aside>
 <div class="resize-handle" id="resize-handle"></div>
@@ -2238,6 +2244,28 @@ function deleteFlag(name){
 function toggleFlag(name,enabled){
   fetch('/api/flags/'+encodeURIComponent(name),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})})
     .then(r=>r.json()).then(d=>{if(d.error)toast(d.error,true);else loadFlags();}).catch(e=>toast('Error: '+e.message,true));
+}
+// ── Evolution History ─────────────────────────────────────────────────────────
+function loadEvoHistory(){
+  const el=$('evo-history');if(!el)return;
+  fetch('/api/evolution/history?limit=30').then(r=>r.json()).then(d=>{
+    const items=d.history||[];
+    if(!items.length){el.style.display='none';return;}
+    el.style.display='block';
+    const actionColor={rollout:'var(--accent2)',rollback:'var(--red)',promote_live:'var(--green)',hold:'var(--muted)',error:'var(--red)',skip:'var(--muted)'};
+    el.innerHTML=items.map(e=>{
+      const ts=new Date(e.timestamp).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      const color=actionColor[e.action]||'var(--muted)';
+      return`<div style="padding:6px 10px;border-bottom:1px solid var(--border2);display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">${esc(e.flag||'')}</span>
+          <span style="color:${color};font-weight:600;font-size:10px">${esc(e.action||'')}</span>
+        </div>
+        <div style="color:var(--muted);font-size:10px">${esc(e.reason||'')}</div>
+        <div style="color:var(--muted2);font-size:9px">${esc(ts)} · ${escA(String(e.from_pct??0))}% → ${escA(String(e.to_pct??0))}%</div>
+      </div>`;
+    }).join('');
+  }).catch(e=>console.error('Failed to load evolution history:',e));
 }
 // ── Canary Analysis ───────────────────────────────────────────────────────────
 function runCanaryAnalysis(){

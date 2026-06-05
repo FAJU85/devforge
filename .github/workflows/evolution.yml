@@ -1,0 +1,68 @@
+name: Autonomous Evolution Cycle
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch:
+    inputs:
+      flag_name:
+        description: "Flag name (leave empty for all canary flags)"
+        required: false
+        default: ""
+      error_rate_canary:
+        description: "Canary error rate %"
+        required: false
+        default: "0.1"
+      error_rate_baseline:
+        description: "Baseline error rate %"
+        required: false
+        default: "0.2"
+      latency_canary_ms:
+        description: "Canary latency ms"
+        required: false
+        default: "95"
+      latency_baseline_ms:
+        description: "Baseline latency ms"
+        required: false
+        default: "100"
+      sample_size:
+        description: "Sample size"
+        required: false
+        default: "100"
+
+jobs:
+  evolve:
+    name: Run Evolution Cycle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger evolution on HF Spaces
+        env:
+          APP_URL: ${{ secrets.HF_SPACES_URL || 'https://vooom-devforge.hf.space' }}
+          FLAG_NAME: ${{ github.event.inputs.flag_name || '' }}
+          EC: ${{ github.event.inputs.error_rate_canary || '0.1' }}
+          EB: ${{ github.event.inputs.error_rate_baseline || '0.2' }}
+          LC: ${{ github.event.inputs.latency_canary_ms || '95' }}
+          LB: ${{ github.event.inputs.latency_baseline_ms || '100' }}
+          SS: ${{ github.event.inputs.sample_size || '100' }}
+        run: |
+          BODY=$(jq -n \
+            --arg fn "$FLAG_NAME" \
+            --argjson ec "$EC" --argjson eb "$EB" \
+            --argjson lc "$LC" --argjson lb "$LB" \
+            --argjson ss "$SS" \
+            '{
+              metrics: {
+                error_rate_canary: $ec,
+                error_rate_baseline: $eb,
+                latency_canary_ms: $lc,
+                latency_baseline_ms: $lb,
+                sample_size: $ss
+              },
+              flag_name: (if $fn == "" then null else $fn end)
+            }')
+          RESPONSE=$(curl -s -X POST "$APP_URL/api/evolution/run" \
+            -H "Content-Type: application/json" \
+            -d "$BODY" \
+            --max-time 30)
+          echo "Evolution response: $RESPONSE"
+          echo "$RESPONSE" | jq '.results[]? | "\(.flag): \(.action) → \(.rollout_pct // "—")% — \(.reason)"' -r || true
