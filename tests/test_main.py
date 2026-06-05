@@ -4134,7 +4134,8 @@ class TestSecurityHeaders:
 
     def _check(self, r):
         assert r.headers.get("x-content-type-options") == "nosniff"
-        assert r.headers.get("x-frame-options") == "DENY"
+        # X-Frame-Options intentionally absent — app runs inside HF Spaces iframe
+        assert "x-frame-options" not in r.headers
         assert r.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
         assert r.headers.get("x-xss-protection") == "0"
         assert r.headers.get("permissions-policy") == "geolocation=(), microphone=(), camera=()"

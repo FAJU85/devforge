@@ -96,7 +96,7 @@ async def _rollbar_middleware(request, call_next):
 async def _security_headers(request, call_next):
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    response.headers.setdefault("X-Frame-Options", "DENY")
+    # X-Frame-Options omitted — app runs inside HF Spaces iframe
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("X-XSS-Protection", "0")
     response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
