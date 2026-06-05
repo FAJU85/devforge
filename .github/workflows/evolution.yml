@@ -37,7 +37,7 @@ jobs:
     steps:
       - name: Trigger evolution on HF Spaces
         env:
-          APP_URL: ${{ secrets.HF_SPACES_URL || 'https://vooom-devforge.hf.space' }}
+          APP_URL: ${{ secrets.SPACE_URL || 'https://vooom-devforge.hf.space' }}
           FLAG_NAME: ${{ github.event.inputs.flag_name || '' }}
           EC: ${{ github.event.inputs.error_rate_canary || '0.1' }}
           EB: ${{ github.event.inputs.error_rate_baseline || '0.2' }}
