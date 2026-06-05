@@ -7,4 +7,6 @@ dist/
 build/
 .env
 .env.*
+feature_flags.json
+evolution_audit.json
 

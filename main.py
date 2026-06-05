@@ -2121,7 +2121,11 @@ async def branch_create(body: BranchCreateBody):
     r = requests.get(ref_url, headers=gh_hdrs(body.token), timeout=10)
     if not r.ok:
         return JSONResponse({"error": f"Could not resolve branch '{body.from_branch}'"}, status_code=400)
-    sha = r.json()["object"]["sha"]
+    try:
+        data = r.json()
+        sha = data["object"]["sha"]
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "Unexpected GitHub response resolving branch SHA"}, status_code=502)
 
     # Create the new branch ref
     payload = {"ref": f"refs/heads/{body.new_branch}", "sha": sha}
@@ -2213,14 +2217,20 @@ class CanaryAnalyzeBody(BaseModel):
 @app.post("/api/canary/analyze")
 async def canary_analyze(body: CanaryAnalyzeBody):
     """Run canary health analysis and auto-update the flag's rollout_pct."""
-    result = _canary_mod.analyze(
-        flag_name=body.flag_name,
-        error_rate_canary=body.error_rate_canary,
-        error_rate_baseline=body.error_rate_baseline,
-        latency_canary_ms=body.latency_canary_ms,
-        latency_baseline_ms=body.latency_baseline_ms,
-        sample_size=body.sample_size,
-    )
+    flag_data = next((f for f in _flags_mod.get_all() if f["name"] == body.flag_name), {})
+    current_rollout_pct = int(flag_data.get("rollout_pct", 0))
+    try:
+        result = _canary_mod.analyze(
+            flag_name=body.flag_name,
+            error_rate_canary=body.error_rate_canary,
+            error_rate_baseline=body.error_rate_baseline,
+            latency_canary_ms=body.latency_canary_ms,
+            latency_baseline_ms=body.latency_baseline_ms,
+            sample_size=body.sample_size,
+            current_rollout_pct=current_rollout_pct,
+        )
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
     # Auto-update the flag rollout_pct if the flag exists
     if result["action"] in ("rollout", "rollback"):
         new_pct = result["next_rollout_pct"]
@@ -2278,18 +2288,57 @@ async def autonomous_fix(body: ManualFixBody):
             }
         }
     }
-    import os as _os
-    _saved = {}
-    for k, v in [("GITHUB_TOKEN", body.token), ("GITHUB_OWNER", body.owner), ("GITHUB_REPO", body.repo)]:
-        _saved[k] = _os.environ.get(k)
-        _os.environ[k] = v
-    try:
-        from autonomous.fixer import fix_from_rollbar_payload
-        result = await fix_from_rollbar_payload(payload)
-    finally:
-        for k, orig in _saved.items():
-            if orig is None:
-                _os.environ.pop(k, None)
-            else:
-                _os.environ[k] = orig
-    return result
+    from autonomous.fixer import fix_from_rollbar_payload
+    return await fix_from_rollbar_payload(
+        payload,
+        github_token=body.token,
+        github_owner=body.owner,
+        github_repo=body.repo,
+    )
+
+
+# ── Autonomous CI/CD: Evolution cycle ────────────────────────────────────────
+
+from autonomous import audit as _audit_mod
+from autonomous import evolution as _evolution_mod
+
+
+class EvolutionMetrics(BaseModel):
+    error_rate_canary: float = Field(..., ge=0.0, description="Canary error rate %")
+    error_rate_baseline: float = Field(..., ge=0.0, description="Baseline error rate %")
+    latency_canary_ms: float = Field(..., gt=0.0, description="Canary p95 latency ms")
+    latency_baseline_ms: float = Field(..., gt=0.0, description="Baseline p95 latency ms")
+    sample_size: int = Field(..., ge=0, description="Number of canary requests observed")
+
+
+class EvolutionRunBody(BaseModel):
+    metrics: EvolutionMetrics
+    flag_name: Optional[str] = Field(default=None, max_length=100)
+    github_token: str = Field(default="", max_length=500)
+    github_owner: str = Field(default="", max_length=100)
+    github_repo: str = Field(default="", max_length=100)
+
+
+@app.post("/api/evolution/run")
+async def evolution_run(body: EvolutionRunBody):
+    """Run one evolution cycle iteration for all canary flags (or a specific flag)."""
+    token = body.github_token or os.environ.get("GITHUB_TOKEN", "")
+    owner = body.github_owner or os.environ.get("GITHUB_OWNER", "")
+    repo = body.github_repo or os.environ.get("GITHUB_REPO", "")
+    metrics = body.metrics.model_dump()
+    if body.flag_name:
+        result = await _evolution_mod.run_cycle(
+            body.flag_name, metrics,
+            github_token=token, github_owner=owner, github_repo=repo,
+        )
+        return {"results": [result]}
+    results = await _evolution_mod.run_all_canary_flags(
+        metrics, github_token=token, github_owner=owner, github_repo=repo,
+    )
+    return {"results": results}
+
+
+@app.get("/api/evolution/history")
+async def evolution_history(flag: Optional[str] = Query(default=None, max_length=100), limit: int = Query(default=50, ge=1, le=200)):
+    """Return recent evolution cycle decisions from the audit log."""
+    return {"history": _audit_mod.get_history(flag_name=flag, limit=limit)}
