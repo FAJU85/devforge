@@ -717,7 +717,7 @@ pre::-webkit-scrollbar{height:4px}
     <!-- Feature Flags section -->
     <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🚩 Feature Flags</div>
     <div style="padding:0 10px 8px">
-      <div id="flag-list" style="background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;display:none;margin-bottom:6px;max-height:200px;overflow-y:auto"></div>
+      <div id="flag-list" style="background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow-x:hidden;overflow-y:auto;display:none;margin-bottom:6px;max-height:200px"></div>
       <button onclick="openAddFlag()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s">+ New Flag</button>
     </div>
     <!-- Canary Status section -->
@@ -883,7 +883,34 @@ pre::-webkit-scrollbar{height:4px}
     </div>
     <div class="modal-foot">
       <button class="modal-cancel" onclick="$('flag-modal').style.display='none'">Cancel</button>
-      <button class="modal-ok" onclick="saveFlag()">Save Flag</button>
+      <button class="modal-ok" id="fm-save-btn" onclick="saveFlag()">Save Flag</button>
+    </div>
+  </div>
+</div>
+
+<!-- Canary analysis modal -->
+<div class="modal-overlay" id="canary-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-head">🐤 Canary Analysis</div>
+    <div class="modal-row">
+      <div class="flabel">Flag Name</div>
+      <input class="finput" id="cm-flag" placeholder="e.g. dark-mode-v2" style="margin-top:3px">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="flex:1"><div class="flabel">Canary Error %</div><input class="finput" id="cm-ec" type="number" step="0.01" min="0" placeholder="0.5" style="margin-top:3px"></div>
+      <div style="flex:1"><div class="flabel">Baseline Error %</div><input class="finput" id="cm-eb" type="number" step="0.01" min="0" placeholder="0.3" style="margin-top:3px"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="flex:1"><div class="flabel">Canary Latency ms</div><input class="finput" id="cm-lc" type="number" step="1" min="0" placeholder="120" style="margin-top:3px"></div>
+      <div style="flex:1"><div class="flabel">Baseline Latency ms</div><input class="finput" id="cm-lb" type="number" step="1" min="1" placeholder="100" style="margin-top:3px"></div>
+    </div>
+    <div class="modal-row">
+      <div class="flabel">Sample Size</div>
+      <input class="finput" id="cm-ss" type="number" step="1" min="0" placeholder="100" style="margin-top:3px">
+    </div>
+    <div class="modal-foot">
+      <button class="modal-cancel" onclick="$('canary-modal').style.display='none'">Cancel</button>
+      <button class="modal-ok" onclick="submitCanaryAnalysis()">Analyze</button>
     </div>
   </div>
 </div>
@@ -2176,14 +2203,14 @@ function loadFlags(){
     el.style.display='block';
     el.innerHTML=flags.map(f=>`<div style="display:flex;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border2);font-size:11px;gap:6px">
       <label style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
-        <input type="checkbox" ${f.enabled?'checked':''} onchange="toggleFlag('${f.name}',this.checked)" style="accent-color:var(--accent2)">
-        <span style="font-weight:600">${f.name}</span>
-        <span style="color:var(--muted)">${f.rollout_pct}%</span>
+        <input type="checkbox" ${f.enabled?'checked':''} onchange="toggleFlag('${escA(f.name)}',this.checked)" style="accent-color:var(--accent2)">
+        <span style="font-weight:600">${esc(f.name)}</span>
+        <span style="color:var(--muted)">${escA(String(f.rollout_pct))}%</span>
       </label>
-      <span style="color:var(--muted2);font-size:10px;padding:1px 5px;border-radius:4px;background:var(--panel3)">${f.status}</span>
-      <button onclick="deleteFlag('${f.name}')" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px;padding:0 2px" title="Delete">&#x2715;</button>
+      <span style="color:var(--muted2);font-size:10px;padding:1px 5px;border-radius:4px;background:var(--panel3)">${esc(f.status)}</span>
+      <button onclick="deleteFlag('${escA(f.name)}')" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px;padding:0 2px" title="Delete">&#x2715;</button>
     </div>`).join('');
-  }).catch(()=>{});
+  }).catch(e=>console.error('Failed to load flags:',e));
 }
 function openAddFlag(){
   const m=$('flag-modal');if(!m)return;
@@ -2193,11 +2220,14 @@ function openAddFlag(){
 function saveFlag(){
   const name=($('fm-name').value||'').trim();
   if(!name){toast('Flag name required',true);return;}
+  const btn=$('fm-save-btn');if(btn&&btn.disabled)return;
+  if(btn){btn.disabled=true;btn.textContent='Saving…';}
   fetch('/api/flags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,description:$('fm-desc').value||'',rollout_pct:parseInt($('fm-pct').value||'0')})})
     .then(r=>r.json()).then(d=>{
       if(d.error){toast(d.error,true);return;}
       $('flag-modal').style.display='none';loadFlags();toast('Flag created');
-    }).catch(e=>toast('Error: '+e.message,true));
+    }).catch(e=>toast('Error: '+e.message,true))
+    .finally(()=>{if(btn){btn.disabled=false;btn.textContent='Save Flag';}});
 }
 function deleteFlag(name){
   if(!confirm('Delete flag "'+name+'"?'))return;
@@ -2211,18 +2241,35 @@ function toggleFlag(name,enabled){
 }
 // ── Canary Analysis ───────────────────────────────────────────────────────────
 function runCanaryAnalysis(){
-  const flagName=prompt('Flag name:');if(!flagName)return;
-  const ec=parseFloat(prompt('Canary error rate % (e.g. 0.5):')||'0');
-  const eb=parseFloat(prompt('Baseline error rate % (e.g. 0.3):')||'0');
-  const lc=parseFloat(prompt('Canary latency ms (e.g. 120):')||'0');
-  const lb=parseFloat(prompt('Baseline latency ms (e.g. 100):')||'0');
-  const ss=parseInt(prompt('Sample size (e.g. 100):')||'0');
+  const m=$('canary-modal');if(!m)return;
+  $('cm-flag').value='';$('cm-ec').value='';$('cm-eb').value='';
+  $('cm-lc').value='';$('cm-lb').value='';$('cm-ss').value='';
+  m.style.display='flex';requestAnimationFrame(()=>$('cm-flag').focus());
+}
+function submitCanaryAnalysis(){
+  const flagName=($('cm-flag').value||'').trim();
+  const lb=parseFloat($('cm-lb').value||'0');
+  if(!flagName){toast('Flag name required',true);return;}
+  if(lb<=0){toast('Baseline latency must be > 0',true);return;}
+  const ec=parseFloat($('cm-ec').value||'0');
+  const eb=parseFloat($('cm-eb').value||'0');
+  const lc=parseFloat($('cm-lc').value||'0');
+  const ss=parseInt($('cm-ss').value||'0');
+  $('canary-modal').style.display='none';
   fetch('/api/canary/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({flag_name:flagName,error_rate_canary:ec,error_rate_baseline:eb,latency_canary_ms:lc,latency_baseline_ms:lb,sample_size:ss})})
     .then(r=>r.json()).then(d=>{
       const el=$('canary-result');if(!el)return;
+      if(d.error){toast(d.error,true);return;}
       el.style.display='block';
-      const color=d.action==='rollback'?'var(--red)':d.action==='rollout'?'var(--green)':'var(--yellow)';
-      el.innerHTML=`<b style="color:${color}">${(d.action||'').toUpperCase()}</b> &mdash; ${d.reason||''}<br><span style="color:var(--muted)">Next rollout: ${d.next_rollout_pct!=null?d.next_rollout_pct+'%':'unchanged'}</span>`;
+      el.textContent='';
+      const actionColor=d.action==='rollback'?'var(--red)':d.action==='rollout'?'var(--accent2)':'var(--yellow)';
+      const bold=document.createElement('b');bold.style.color=actionColor;bold.textContent=(d.action||'').toUpperCase();
+      el.appendChild(bold);
+      el.appendChild(document.createTextNode(' — '+(d.reason||'')));
+      el.appendChild(document.createElement('br'));
+      const sub=document.createElement('span');sub.style.color='var(--muted)';
+      sub.textContent='Next rollout: '+(d.next_rollout_pct!=null?d.next_rollout_pct+'%':'unchanged');
+      el.appendChild(sub);
       loadFlags();
     }).catch(e=>toast('Error: '+e.message,true));
 }

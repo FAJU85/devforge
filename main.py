@@ -2121,7 +2121,11 @@ async def branch_create(body: BranchCreateBody):
     r = requests.get(ref_url, headers=gh_hdrs(body.token), timeout=10)
     if not r.ok:
         return JSONResponse({"error": f"Could not resolve branch '{body.from_branch}'"}, status_code=400)
-    sha = r.json()["object"]["sha"]
+    try:
+        data = r.json()
+        sha = data["object"]["sha"]
+    except (KeyError, ValueError):
+        return JSONResponse({"error": "Unexpected GitHub response resolving branch SHA"}, status_code=502)
 
     # Create the new branch ref
     payload = {"ref": f"refs/heads/{body.new_branch}", "sha": sha}
@@ -2213,14 +2217,20 @@ class CanaryAnalyzeBody(BaseModel):
 @app.post("/api/canary/analyze")
 async def canary_analyze(body: CanaryAnalyzeBody):
     """Run canary health analysis and auto-update the flag's rollout_pct."""
-    result = _canary_mod.analyze(
-        flag_name=body.flag_name,
-        error_rate_canary=body.error_rate_canary,
-        error_rate_baseline=body.error_rate_baseline,
-        latency_canary_ms=body.latency_canary_ms,
-        latency_baseline_ms=body.latency_baseline_ms,
-        sample_size=body.sample_size,
-    )
+    flag_data = next((f for f in _flags_mod.get_all() if f["name"] == body.flag_name), {})
+    current_rollout_pct = int(flag_data.get("rollout_pct", 0))
+    try:
+        result = _canary_mod.analyze(
+            flag_name=body.flag_name,
+            error_rate_canary=body.error_rate_canary,
+            error_rate_baseline=body.error_rate_baseline,
+            latency_canary_ms=body.latency_canary_ms,
+            latency_baseline_ms=body.latency_baseline_ms,
+            sample_size=body.sample_size,
+            current_rollout_pct=current_rollout_pct,
+        )
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
     # Auto-update the flag rollout_pct if the flag exists
     if result["action"] in ("rollout", "rollback"):
         new_pct = result["next_rollout_pct"]
@@ -2278,18 +2288,10 @@ async def autonomous_fix(body: ManualFixBody):
             }
         }
     }
-    import os as _os
-    _saved = {}
-    for k, v in [("GITHUB_TOKEN", body.token), ("GITHUB_OWNER", body.owner), ("GITHUB_REPO", body.repo)]:
-        _saved[k] = _os.environ.get(k)
-        _os.environ[k] = v
-    try:
-        from autonomous.fixer import fix_from_rollbar_payload
-        result = await fix_from_rollbar_payload(payload)
-    finally:
-        for k, orig in _saved.items():
-            if orig is None:
-                _os.environ.pop(k, None)
-            else:
-                _os.environ[k] = orig
-    return result
+    from autonomous.fixer import fix_from_rollbar_payload
+    return await fix_from_rollbar_payload(
+        payload,
+        github_token=body.token,
+        github_owner=body.owner,
+        github_repo=body.repo,
+    )

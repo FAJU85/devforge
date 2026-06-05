@@ -4161,9 +4161,11 @@ class TestFeatureFlags:
     """Tests for /api/flags endpoints."""
 
     def setup_method(self):
-        """Clear in-memory flags before each test."""
+        """Clear in-memory flags and reset persistent storage before each test."""
         import autonomous.flags as fm
-        fm._FLAGS.clear()
+        with fm._FLAGS_LOCK:
+            fm._FLAGS.clear()
+        fm.save_flags()
 
     def test_create_flag(self):
         r = client.post("/api/flags", json={"name": "test-flag", "description": "A test flag", "rollout_pct": 10})
@@ -4208,7 +4210,9 @@ class TestCanaryAnalyze:
 
     def setup_method(self):
         import autonomous.flags as fm
-        fm._FLAGS.clear()
+        with fm._FLAGS_LOCK:
+            fm._FLAGS.clear()
+        fm.save_flags()
 
     def test_rollback_on_high_error_rate(self):
         r = client.post("/api/canary/analyze", json={
@@ -4267,18 +4271,10 @@ class TestBranchCreate:
 class TestRollbarWebhook:
     """Tests for /api/webhooks/rollbar endpoint."""
 
-    def test_missing_github_env_returns_skipped(self):
+    def test_missing_github_env_returns_skipped(self, monkeypatch):
         """Without GITHUB_TOKEN set, the fixer should return status=skipped."""
-        import os
-        saved = {}
         for k in ("GITHUB_TOKEN", "GITHUB_OWNER", "GITHUB_REPO", "ANTHROPIC_API_KEY"):
-            saved[k] = os.environ.get(k)
-            os.environ.pop(k, None)
-        try:
-            r = client.post("/api/webhooks/rollbar", json={})
-            assert r.status_code == 200
-            assert r.json()["status"] == "skipped"
-        finally:
-            for k, v in saved.items():
-                if v is not None:
-                    os.environ[k] = v
+            monkeypatch.delenv(k, raising=False)
+        r = client.post("/api/webhooks/rollbar", json={})
+        assert r.status_code == 200
+        assert r.json()["status"] == "skipped"
