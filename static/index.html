@@ -16,6 +16,9 @@
 <script src="https://browser.sentry-cdn.com/8.54.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.rollbar.com/rollbarjs/refs/tags/v3.0.0-rc.1/rollbar.min.js"></script>
 <script>
+!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.people.toString()+" (stub)"},o="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys onSessionId setPersonProperties".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+</script>
+<script>
 (async()=>{
   try{
     const cfg=await fetch('/api/config').then(r=>r.json());
@@ -29,6 +32,15 @@
           if(event.request?.url)event.request.url=event.request.url.replace(/sk-[a-zA-Z0-9-]+/g,'sk-[REDACTED]');
           return event;
         }
+      });
+    }
+    if(cfg.posthog_key){
+      posthog.init(cfg.posthog_key,{
+        api_host:'https://us.i.posthog.com',
+        person_profiles:'identified_only',
+        autocapture:true,
+        capture_pageview:true,
+        session_recording:{maskAllInputs:false,maskInputOptions:{password:true},blockSelector:'[data-rollbar-scrub],[type="password"]'},
       });
     }
     if(cfg.rollbar_token){
@@ -702,6 +714,18 @@ pre::-webkit-scrollbar{height:4px}
       <div class="skill-row" onclick="openReadmeModal()"><div class="skill-row-info"><div class="skill-row-name">📝 Gen README</div><div class="skill-row-desc">Auto-generate a repository README</div></div></div>
       <div class="skill-row" onclick="openDepsModal()"><div class="skill-row-info"><div class="skill-row-name">🔍 Scan Deps</div><div class="skill-row-desc">Audit dependencies for vulnerabilities</div></div></div>
     </div>
+    <!-- Feature Flags section -->
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🚩 Feature Flags</div>
+    <div style="padding:0 10px 8px">
+      <div id="flag-list" style="background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow:hidden;display:none;margin-bottom:6px;max-height:200px;overflow-y:auto"></div>
+      <button onclick="openAddFlag()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s">+ New Flag</button>
+    </div>
+    <!-- Canary Status section -->
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🐤 Canary Analysis</div>
+    <div style="padding:0 10px 8px">
+      <div id="canary-result" style="display:none;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;margin-bottom:6px"></div>
+      <button onclick="runCanaryAnalysis()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit">&#9654; Analyze Active Canary</button>
+    </div>
   </div>
 </aside>
 <div class="resize-handle" id="resize-handle"></div>
@@ -837,6 +861,29 @@ pre::-webkit-scrollbar{height:4px}
     <div class="modal-foot">
       <button class="modal-cancel" onclick="closeToolModal()">Cancel</button>
       <button class="modal-ok" onclick="saveTool()">Save Tool</button>
+    </div>
+  </div>
+</div>
+
+<!-- Flag modal -->
+<div class="modal-overlay" id="flag-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-head">🚩 New Feature Flag</div>
+    <div class="modal-row">
+      <div class="flabel">Name <span style="color:var(--muted);font-weight:400">(identifier, no spaces)</span></div>
+      <input class="finput" id="fm-name" placeholder="e.g. dark-mode-v2" style="margin-top:3px">
+    </div>
+    <div class="modal-row">
+      <div class="flabel">Description</div>
+      <input class="finput" id="fm-desc" placeholder="e.g. New dark mode rollout" style="margin-top:3px">
+    </div>
+    <div class="modal-row">
+      <div class="flabel">Rollout % <span id="fm-pct-val" style="color:var(--accent2);font-weight:600">0</span></div>
+      <input type="range" id="fm-pct" min="0" max="100" value="0" oninput="$('fm-pct-val').textContent=this.value" style="width:100%;margin-top:6px;accent-color:var(--accent2)">
+    </div>
+    <div class="modal-foot">
+      <button class="modal-cancel" onclick="$('flag-modal').style.display='none'">Cancel</button>
+      <button class="modal-ok" onclick="saveFlag()">Save Flag</button>
     </div>
   </div>
 </div>
@@ -2120,7 +2167,66 @@ function initResizeHandle(){
   });
   rh.addEventListener('dblclick',()=>{sb.style.width='270px';sb.style.minWidth='270px';toast('Sidebar reset to default');});
 }
-(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();if(!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();})();
+// ── Feature Flags ────────────────────────────────────────────────────────────
+function loadFlags(){
+  fetch('/api/flags').then(r=>r.json()).then(d=>{
+    const el=$('flag-list');if(!el)return;
+    const flags=d.flags||[];
+    if(!flags.length){el.style.display='none';return;}
+    el.style.display='block';
+    el.innerHTML=flags.map(f=>`<div style="display:flex;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border2);font-size:11px;gap:6px">
+      <label style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" ${f.enabled?'checked':''} onchange="toggleFlag('${f.name}',this.checked)" style="accent-color:var(--accent2)">
+        <span style="font-weight:600">${f.name}</span>
+        <span style="color:var(--muted)">${f.rollout_pct}%</span>
+      </label>
+      <span style="color:var(--muted2);font-size:10px;padding:1px 5px;border-radius:4px;background:var(--panel3)">${f.status}</span>
+      <button onclick="deleteFlag('${f.name}')" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px;padding:0 2px" title="Delete">&#x2715;</button>
+    </div>`).join('');
+  }).catch(()=>{});
+}
+function openAddFlag(){
+  const m=$('flag-modal');if(!m)return;
+  $('fm-name').value='';$('fm-desc').value='';$('fm-pct').value=0;$('fm-pct-val').textContent='0';
+  m.style.display='flex';requestAnimationFrame(()=>$('fm-name').focus());
+}
+function saveFlag(){
+  const name=($('fm-name').value||'').trim();
+  if(!name){toast('Flag name required',true);return;}
+  fetch('/api/flags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,description:$('fm-desc').value||'',rollout_pct:parseInt($('fm-pct').value||'0')})})
+    .then(r=>r.json()).then(d=>{
+      if(d.error){toast(d.error,true);return;}
+      $('flag-modal').style.display='none';loadFlags();toast('Flag created');
+    }).catch(e=>toast('Error: '+e.message,true));
+}
+function deleteFlag(name){
+  if(!confirm('Delete flag "'+name+'"?'))return;
+  fetch('/api/flags/'+encodeURIComponent(name),{method:'DELETE'}).then(r=>r.json()).then(d=>{
+    if(d.error){toast(d.error,true);return;}loadFlags();toast('Flag deleted');
+  }).catch(e=>toast('Error: '+e.message,true));
+}
+function toggleFlag(name,enabled){
+  fetch('/api/flags/'+encodeURIComponent(name),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})})
+    .then(r=>r.json()).then(d=>{if(d.error)toast(d.error,true);else loadFlags();}).catch(e=>toast('Error: '+e.message,true));
+}
+// ── Canary Analysis ───────────────────────────────────────────────────────────
+function runCanaryAnalysis(){
+  const flagName=prompt('Flag name:');if(!flagName)return;
+  const ec=parseFloat(prompt('Canary error rate % (e.g. 0.5):')||'0');
+  const eb=parseFloat(prompt('Baseline error rate % (e.g. 0.3):')||'0');
+  const lc=parseFloat(prompt('Canary latency ms (e.g. 120):')||'0');
+  const lb=parseFloat(prompt('Baseline latency ms (e.g. 100):')||'0');
+  const ss=parseInt(prompt('Sample size (e.g. 100):')||'0');
+  fetch('/api/canary/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({flag_name:flagName,error_rate_canary:ec,error_rate_baseline:eb,latency_canary_ms:lc,latency_baseline_ms:lb,sample_size:ss})})
+    .then(r=>r.json()).then(d=>{
+      const el=$('canary-result');if(!el)return;
+      el.style.display='block';
+      const color=d.action==='rollback'?'var(--red)':d.action==='rollout'?'var(--green)':'var(--yellow)';
+      el.innerHTML=`<b style="color:${color}">${(d.action||'').toUpperCase()}</b> &mdash; ${d.reason||''}<br><span style="color:var(--muted)">Next rollout: ${d.next_rollout_pct!=null?d.next_rollout_pct+'%':'unchanged'}</span>`;
+      loadFlags();
+    }).catch(e=>toast('Error: '+e.message,true));
+}
+(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();})();
 </script>
 </body>
 </html>

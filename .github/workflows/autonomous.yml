@@ -1,0 +1,57 @@
+name: Autonomous CI/CD
+
+on:
+  push:
+    branches:
+      - "auto/**"
+
+jobs:
+  test-and-merge:
+    name: Test & Auto-merge
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt sentry-sdk[fastapi] pytest pytest-asyncio httpx rollbar
+
+      - name: Run tests
+        id: run_tests
+        env:
+          GITHUB_CLIENT_ID: ""
+          GITHUB_CLIENT_SECRET: ""
+          HF_TOKEN: ""
+          SENTRY_DSN: ""
+        run: pytest tests/ -v --tb=short 2>&1 | tee /tmp/test-output.txt; echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Auto-merge PR on success
+        if: steps.run_tests.outputs.exit_code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge --squash --auto --delete-branch || true
+
+      - name: Comment on PR with failure summary
+        if: steps.run_tests.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SUMMARY=$(tail -50 /tmp/test-output.txt | head -50)
+          gh pr comment --body "## Test Failures
+
+          \`\`\`
+          ${SUMMARY}
+          \`\`\`
+
+          Auto-merge skipped due to test failures." || true
