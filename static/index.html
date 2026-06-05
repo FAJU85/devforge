@@ -14,7 +14,7 @@
 <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://browser.sentry-cdn.com/8.54.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.rollbar.com/rollbarjs/refs/tags/v2.26.4/rollbar.min.js"></script>
+<script src="https://cdn.rollbar.com/rollbarjs/refs/tags/v3.0.0-rc.1/rollbar.min.js"></script>
 <script>
 (async()=>{
   try{
@@ -44,8 +44,33 @@
         scrubFields:['anthropic_key','groq_key','oci_key','ak','gk','token','ghToken','api_key','secret','password','authorization'],
         scrubTelemetryInputs:true,
         telemetryScrubber(value){
-          // redact API key patterns from any captured strings
-          return typeof value==='string'?value.replace(/sk-[a-zA-Z0-9-]+/g,'sk-[REDACTED]').replace(/gsk_[a-zA-Z0-9]+/g,'gsk-[REDACTED]'):value;
+          return typeof value==='string'
+            ?value.replace(/sk-[a-zA-Z0-9-]+/g,'sk-[REDACTED]').replace(/gsk_[a-zA-Z0-9]+/g,'gsk-[REDACTED]')
+            :value;
+        },
+        // ── Session Replay ────────────────────────────────────────────────
+        replay:{
+          enabled:true,
+          autoStart:true,
+          triggers:[
+            // capture every error & critical at full rate
+            {type:'occurrence',level:['error','critical'],samplingRatio:1.0,preDuration:120,postDuration:30},
+            // warnings at 50% sample — enough signal without burning quota
+            {type:'occurrence',level:['warning'],samplingRatio:0.5,preDuration:60,postDuration:10},
+          ]
+        },
+        recorder:{
+          enabled:true,
+          autoStart:true,
+          // ── Privacy controls ─────────────────────────────────────────
+          maskAllInputs:false,
+          maskInputOptions:{password:true,email:false},
+          // block entire elements from replay (replaced with a placeholder)
+          blockSelector:'[data-rollbar-scrub],[type="password"]',
+          // mask text inside these elements (content replaced with ****)
+          maskTextSelector:'.rb-mask',
+          // ignore keystroke events (value never captured)
+          ignoreSelector:'[data-rollbar-scrub]',
         }
       });
     }
