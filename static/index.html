@@ -14,6 +14,7 @@
 <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://browser.sentry-cdn.com/8.54.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.rollbar.com/rollbarjs/refs/tags/v2.26.4/rollbar.min.js"></script>
 <script>
 (async()=>{
   try{
@@ -25,9 +26,26 @@
         integrations:[Sentry.browserTracingIntegration()],
         tracesSampleRate:0.1,
         beforeSend(event){
-          // strip any API keys that may appear in breadcrumb URLs
           if(event.request?.url)event.request.url=event.request.url.replace(/sk-[a-zA-Z0-9-]+/g,'sk-[REDACTED]');
           return event;
+        }
+      });
+    }
+    if(cfg.rollbar_token){
+      window._rollbar=new Rollbar({
+        accessToken:cfg.rollbar_token,
+        captureUncaught:true,
+        captureUnhandledRejections:true,
+        autoInstrument:{network:true,log:true,dom:true,navigation:true},
+        payload:{
+          environment:cfg.rollbar_env||'production',
+          client:{javascript:{source_map_enabled:false,code_version:'1.0'}}
+        },
+        scrubFields:['anthropic_key','groq_key','oci_key','ak','gk','token','ghToken','api_key','secret','password','authorization'],
+        scrubTelemetryInputs:true,
+        telemetryScrubber(value){
+          // redact API key patterns from any captured strings
+          return typeof value==='string'?value.replace(/sk-[a-zA-Z0-9-]+/g,'sk-[REDACTED]').replace(/gsk_[a-zA-Z0-9]+/g,'gsk-[REDACTED]'):value;
         }
       });
     }
@@ -530,7 +548,7 @@ pre::-webkit-scrollbar{height:4px}
         <button class="prov-btn" role="radio" aria-checked="false" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
       </div>
       <div id="pf-a" style="flex-direction:column;margin-top:8px">
-        <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" oninput="saveEnhance()"></div>
+        <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" data-rollbar-scrub="true" oninput="saveEnhance()"></div>
         <div class="model-selector" role="radiogroup" aria-label="Claude model">
           <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
           <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
@@ -543,7 +561,7 @@ pre::-webkit-scrollbar{height:4px}
       </div>
       <div id="pf-g" style="display:none;margin-top:8px">
         <div class="prov-note green">✓ <strong>Free tier</strong> — <a href="https://console.groq.com" target="_blank">console.groq.com</a></div>
-        <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off" aria-label="Groq API key"></div>
+        <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off" aria-label="Groq API key" data-rollbar-scrub="true"></div>
         <div><div class="flabel">Model</div><select class="finput" id="gm" aria-label="Groq model" onchange="updBadge()"><option value="llama-3.3-70b-versatile">Llama 3.3 70B — Best</option><option value="llama-3.1-8b-instant">Llama 3.1 8B — Fast</option><option value="mixtral-8x7b-32768">Mixtral 8x7B</option><option value="gemma2-9b-it">Gemma 2 9B</option><option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B</option><option value="qwen-qwq-32b">Qwen QwQ 32B</option></select></div></div>
       </div>
       <div id="pf-h" style="display:none;margin-top:8px">
@@ -562,7 +580,7 @@ pre::-webkit-scrollbar{height:4px}
         <div class="pfields">
           <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" aria-label="OpenAI-compatible base URL" oninput="updBadge()"></div>
           <div><div class="flabel">Model</div><input class="finput" id="oci-model" placeholder="llama3" autocomplete="off" aria-label="OpenAI-compatible model name" oninput="updBadge()"></div>
-          <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off" aria-label="OpenAI-compatible API key (optional)"></div>
+          <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off" aria-label="OpenAI-compatible API key (optional)" data-rollbar-scrub="true"></div>
         </div>
       </div>
       <div id="pf-al" style="display:none;margin-top:8px">
@@ -789,7 +807,7 @@ pre::-webkit-scrollbar{height:4px}
     </div>
     <div class="modal-row">
       <div class="flabel">Custom Headers <span style="color:var(--muted);font-weight:400">(JSON object, optional)</span></div>
-      <textarea class="side-textarea" id="tm-headers" placeholder='{"Authorization":"Bearer YOUR_TOKEN"}' style="width:100%;min-height:50px;margin-top:3px;resize:vertical;font-family:&apos;JetBrains Mono&apos;,monospace;font-size:11px"></textarea>
+      <textarea class="side-textarea" id="tm-headers" placeholder='{"Authorization":"Bearer YOUR_TOKEN"}' style="width:100%;min-height:50px;margin-top:3px;resize:vertical;font-family:&apos;JetBrains Mono&apos;,monospace;font-size:11px" data-rollbar-scrub="true"></textarea>
     </div>
     <div class="modal-foot">
       <button class="modal-cancel" onclick="closeToolModal()">Cancel</button>
