@@ -5158,3 +5158,83 @@ class TestGhWriteFile:
             status, result = main._gh_write_file(self._item(), "owner", "repo", "main", "tok")
         assert status == "error"
         assert "too large" in result["error"]
+
+
+# ── New helpers added in C901 refactor ───────────────────────────────────────
+
+class TestParseSSELine:
+    def test_returns_none_for_non_data_line(self):
+        assert main._parse_sse_line("event: ping") is None
+
+    def test_returns_none_for_no_prefix(self):
+        assert main._parse_sse_line('{"choices":[]}') is None
+
+    def test_returns_done_sentinel(self):
+        assert main._parse_sse_line("data: [DONE]") == "[DONE]"
+
+    def test_parses_content_text(self):
+        import json
+        payload = json.dumps({"choices": [{"delta": {"content": "hello"}}]})
+        assert main._parse_sse_line(f"data: {payload}") == "hello"
+
+    def test_returns_empty_string_for_missing_content(self):
+        import json
+        payload = json.dumps({"choices": [{"delta": {}}]})
+        assert main._parse_sse_line(f"data: {payload}") == ""
+
+    def test_returns_none_for_bad_json(self):
+        assert main._parse_sse_line("data: {bad json}") is None
+
+    def test_returns_none_for_missing_keys(self):
+        import json
+        payload = json.dumps({"other": "stuff"})
+        assert main._parse_sse_line(f"data: {payload}") is None
+
+
+class TestPep508Add:
+    def test_adds_package_with_constraint(self):
+        pkgs, seen = [], set()
+        main._pep508_add("requests>=2.0", pkgs, seen)
+        assert pkgs == [{"name": "requests", "constraint": ">=2.0"}]
+
+    def test_normalises_underscores_to_dashes(self):
+        pkgs, seen = [], set()
+        main._pep508_add("my_package>=1.0", pkgs, seen)
+        assert pkgs[0]["name"] == "my-package"
+
+    def test_deduplicates(self):
+        pkgs, seen = [], set()
+        main._pep508_add("requests>=2.0", pkgs, seen)
+        main._pep508_add("requests>=3.0", pkgs, seen)
+        assert len(pkgs) == 1
+
+    def test_skips_invalid_dep(self):
+        pkgs, seen = [], set()
+        main._pep508_add("  ", pkgs, seen)
+        assert pkgs == []
+
+
+class TestAddPoetryDeps:
+    def test_adds_string_version(self):
+        data = {"tool": {"poetry": {"dependencies": {"requests": "^2.28"}}}}
+        pkgs, seen = [], set()
+        main._add_poetry_deps(data, pkgs, seen)
+        assert pkgs == [{"name": "requests", "constraint": "^2.28"}]
+
+    def test_skips_python(self):
+        data = {"tool": {"poetry": {"dependencies": {"python": "^3.11", "flask": "^2.0"}}}}
+        pkgs, seen = [], set()
+        main._add_poetry_deps(data, pkgs, seen)
+        assert len(pkgs) == 1 and pkgs[0]["name"] == "flask"
+
+    def test_extracts_version_from_dict(self):
+        data = {"tool": {"poetry": {"dependencies": {"django": {"version": "^4.0", "extras": ["rest"]}}}}}
+        pkgs, seen = [], set()
+        main._add_poetry_deps(data, pkgs, seen)
+        assert pkgs[0]["constraint"] == "^4.0"
+
+    def test_handles_empty_poetry_section(self):
+        data = {}
+        pkgs, seen = [], set()
+        main._add_poetry_deps(data, pkgs, seen)
+        assert pkgs == []
