@@ -6,7 +6,6 @@ minimum sample-size calculation without external dependencies.
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 
 def two_proportion_z_test(

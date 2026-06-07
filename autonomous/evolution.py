@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-from typing import Any
 
 from . import canary as _canary
 from . import flags as _flags
@@ -106,7 +104,7 @@ async def _open_rollback_pr(
     """Best-effort: open a GitHub PR to document the rollback."""
     try:
         import requests
-        from .fixer import _gh_base, _gh_hdrs, _urlquote, _get_default_branch_and_sha, _create_branch, _open_pr
+        from .fixer import _gh_base, _gh_hdrs, _get_default_branch_and_sha, _create_branch
 
         default_branch, sha = await asyncio.to_thread(
             _get_default_branch_and_sha, owner, repo, token

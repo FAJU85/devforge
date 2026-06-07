@@ -15,17 +15,23 @@ test('sidebar is visible on load', async ({ page }) => {
 
 test('HF build status widget is present', async ({ page }) => {
   await page.goto('/');
+  // The HF Build Status widget lives in the Tools panel — open it first
+  await page.locator('#stab-tools').click();
   await expect(page.locator('#hf-build-dot')).toBeVisible();
   await expect(page.locator('#hf-build-label')).toBeVisible();
 });
 
 test('Feature Flags section is in the sidebar', async ({ page }) => {
   await page.goto('/');
+  // Feature Flags lives in the Tools panel
+  await page.locator('#stab-tools').click();
   await expect(page.getByText('🚩 Feature Flags')).toBeVisible();
 });
 
 test('Canary Analysis section is in the sidebar', async ({ page }) => {
   await page.goto('/');
+  // Canary Analysis lives in the Tools panel
+  await page.locator('#stab-tools').click();
   await expect(page.getByText('🐤 Canary Analysis')).toBeVisible();
 });
 
@@ -43,7 +49,7 @@ test('GET /api/flags returns 200 with array', async ({ request }) => {
   const res = await request.get('/api/flags');
   expect(res.status()).toBe(200);
   const body = await res.json();
-  expect(Array.isArray(body)).toBe(true);
+  expect(Array.isArray(body.flags)).toBe(true);
 });
 
 test('GET /api/hf-build/status returns 200 with stage field', async ({ request }) => {
@@ -58,5 +64,20 @@ test('GET /api/evolution/history returns 200 with array', async ({ request }) =>
   const res = await request.get('/api/evolution/history');
   expect(res.status()).toBe(200);
   const body = await res.json();
-  expect(Array.isArray(body)).toBe(true);
+  expect(Array.isArray(body.history)).toBe(true);
+});
+
+test('POST /api/repo/diff validates required fields', async ({ request }) => {
+  const res = await request.post('/api/repo/diff', {
+    data: { owner: 'user' },
+  });
+  // Missing required fields → 422 Unprocessable Entity
+  expect(res.status()).toBe(422);
+});
+
+test('POST /api/repo/tree validates required fields', async ({ request }) => {
+  const res = await request.post('/api/repo/tree', {
+    data: { owner: 'user' },
+  });
+  expect(res.status()).toBe(422);
 });

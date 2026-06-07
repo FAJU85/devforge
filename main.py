@@ -541,22 +541,22 @@ def _run_hf(q, loop, system, messages, token, model):
             err = "HuggingFace credits exhausted. Purchase pre-paid credits or subscribe to HF PRO at huggingface.co/pricing."
         asyncio.run_coroutine_threadsafe(q.put(("error", err)), loop)
 
+def _parse_sse_line(decoded: str) -> "str | None":
+    """Parse one SSE line; return text chunk, '[DONE]' sentinel, or None to skip."""
+    if not decoded.startswith("data: "):
+        return None
+    data = decoded[6:].strip()
+    if data == "[DONE]":
+        return "[DONE]"
+    try:
+        obj = json.loads(data)
+        return obj["choices"][0]["delta"].get("content") or ""
+    except (json.JSONDecodeError, KeyError, IndexError):
+        return None
+
+
 def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
-    """Thread target: stream completions from any OpenAI-compatible endpoint.
-
-    Args:
-        q: asyncio.Queue for (kind, value) tuples sent back to the async caller.
-        loop: Running event loop used to schedule coroutines thread-safely.
-        system: System prompt string.
-        messages: List of {role, content} message dicts.
-        api_key: Bearer token; omitted from headers when empty (e.g. Ollama).
-        base_url: Root URL of the endpoint, e.g. http://localhost:11434/v1.
-        model: Model identifier forwarded in the request body.
-
-    Returns:
-        None. Results are placed on q as ("text", chunk), ("done", None),
-        or ("error", message).
-    """
+    """Thread target: stream completions from any OpenAI-compatible endpoint."""
     try:
         url = base_url.rstrip("/") + "/chat/completions"
         hdrs = {"Content-Type": "application/json"}
@@ -575,74 +575,74 @@ def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
             if not line:
                 continue
             decoded = line.decode("utf-8") if isinstance(line, bytes) else line
-            if decoded.startswith("data: "):
-                data = decoded[6:].strip()
-                if data == "[DONE]":
-                    break
-                try:
-                    obj = json.loads(data)
-                    text = obj["choices"][0]["delta"].get("content") or ""
-                    if text:
-                        asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
-                except json.JSONDecodeError:
-                    pass
-                except (KeyError, IndexError):
-                    pass
+            text = _parse_sse_line(decoded)
+            if text == "[DONE]":
+                break
+            if text:
+                asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
 
-async def _stream_ai_sse(body, system: str, user_prompt: str, max_tokens: int = 1024, timeout: int = 60):
-    """Async generator yielding SSE chunks for Anthropic (streaming) and Groq (chunked) providers.
+async def _stream_anthropic_sse(body, system: str, user_prompt: str, max_tokens: int, timeout: int):
+    """Anthropic streaming branch for _stream_ai_sse."""
+    q: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+    model = (getattr(body, 'anthropic_model', '') or 'claude-haiku-4-5-20251001').strip() or 'claude-haiku-4-5-20251001'
 
-    Yields raw `data: ...\\n\\n` strings; caller should prepend any initial events (e.g. 'packages').
-    """
-    if body.provider == "anthropic" and body.anthropic_key:
-        q: asyncio.Queue = asyncio.Queue()
-        loop = asyncio.get_running_loop()
-        model = (getattr(body, 'anthropic_model', '') or 'claude-haiku-4-5-20251001').strip() or 'claude-haiku-4-5-20251001'
+    def _run():
+        try:
+            client = Anthropic(api_key=body.anthropic_key)
+            with client.messages.stream(model=model, max_tokens=max_tokens, system=system,
+                    messages=[{"role": "user", "content": user_prompt}]) as stream:
+                for text in stream.text_stream:
+                    asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
+            asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
+        except Exception as e:
+            asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
 
-        def _run():
-            try:
-                client = Anthropic(api_key=body.anthropic_key)
-                with client.messages.stream(model=model, max_tokens=max_tokens, system=system,
-                        messages=[{"role": "user", "content": user_prompt}]) as stream:
-                    for text in stream.text_stream:
-                        asyncio.run_coroutine_threadsafe(q.put(("text", text)), loop)
-                asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
-            except Exception as e:
-                asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
-
-        threading.Thread(target=_run, daemon=True).start()
-        while True:
-            try:
-                kind, val = await asyncio.wait_for(q.get(), timeout=timeout)
-            except asyncio.TimeoutError:
-                yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; return
-            if kind == "text":
-                yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
-            elif kind == "done":
-                break
-            else:
-                yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; return
-    elif body.provider == "groq" and body.groq_key:
-        r = requests.post(  # nosec B113
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-            json={"model": getattr(body, 'groq_model', '') or "llama-3.3-70b-versatile", "max_tokens": max_tokens,
-                  "messages": [{"role": "system", "content": system},
-                               {"role": "user", "content": user_prompt}]},
-            timeout=max(30, timeout // 2),
-        )
-        if r.ok:
-            _choices = r.json().get("choices") or []
-            text = ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
-            if not text:
-                yield f"data: {json.dumps({'t':'error','v':'Empty response from Groq'})}\n\n"; return
-            for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
-                yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
+    threading.Thread(target=_run, daemon=True).start()
+    while True:
+        try:
+            kind, val = await asyncio.wait_for(q.get(), timeout=timeout)
+        except asyncio.TimeoutError:
+            yield f"data: {json.dumps({'t':'error','v':'Request timed out'})}\n\n"; return
+        if kind == "text":
+            yield f"data: {json.dumps({'t':'text','v':val})}\n\n"
+        elif kind == "done":
+            break
         else:
-            yield f"data: {json.dumps({'t':'error','v':r.text[:200]})}\n\n"; return
+            yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; return
+
+
+async def _stream_groq_sse(body, system: str, user_prompt: str, max_tokens: int, timeout: int):
+    """Groq streaming branch for _stream_ai_sse."""
+    r = requests.post(  # nosec B113
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+        json={"model": getattr(body, 'groq_model', '') or "llama-3.3-70b-versatile", "max_tokens": max_tokens,
+              "messages": [{"role": "system", "content": system},
+                           {"role": "user", "content": user_prompt}]},
+        timeout=max(30, timeout // 2),
+    )
+    if not r.ok:
+        yield f"data: {json.dumps({'t':'error','v':r.text[:200]})}\n\n"; return
+    _choices = r.json().get("choices") or []
+    text = ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
+    if not text:
+        yield f"data: {json.dumps({'t':'error','v':'Empty response from Groq'})}\n\n"; return
+    for chunk in [text[i:i+80] for i in range(0, len(text), 80)]:
+        yield f"data: {json.dumps({'t':'text','v':chunk})}\n\n"
+
+
+async def _stream_ai_sse(body, system: str, user_prompt: str, max_tokens: int = 1024, timeout: int = 60):
+    """Async generator yielding SSE chunks for Anthropic and Groq providers."""
+    if body.provider == "anthropic" and body.anthropic_key:
+        async for chunk in _stream_anthropic_sse(body, system, user_prompt, max_tokens, timeout):
+            yield chunk
+    elif body.provider == "groq" and body.groq_key:
+        async for chunk in _stream_groq_sse(body, system, user_prompt, max_tokens, timeout):
+            yield chunk
     else:
         yield f"data: {json.dumps({'t':'error','v':'No provider key'})}\n\n"; return
     yield f"data: {json.dumps({'t':'done'})}\n\n"
@@ -1295,6 +1295,78 @@ async def repo_commits(body: RepoCommitsBody):
     ]
 
 
+class RepoDiffBody(BaseModel):
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
+    base: str = Field(min_length=1, max_length=255)
+    head: str = Field(min_length=1, max_length=255)
+
+
+@app.post("/api/repo/diff")
+async def repo_diff(body: RepoDiffBody):
+    """Return the unified diff between two refs (branch names, tags, or SHAs)."""
+    base_safe = _urlquote(body.base, safe="")
+    head_safe = _urlquote(body.head, safe="")
+    r = requests.get(
+        f"{_gh_base(body.owner, body.repo)}/compare/{base_safe}...{head_safe}",
+        headers={**gh_hdrs(body.token), "Accept": "application/vnd.github.v3.diff"},
+        timeout=20,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Diff failed")
+        except Exception:
+            err = f"HTTP {r.status_code}"
+        return JSONResponse({"error": err}, status_code=400)
+    diff_text = r.text[:50_000]
+    files: list = []
+    for line in diff_text.splitlines():
+        if line.startswith("diff --git "):
+            parts = line.split(" b/", 1)
+            if len(parts) == 2:
+                files.append(parts[1])
+    return {"diff": diff_text, "files_changed": files, "truncated": len(r.text) > 50_000}
+
+
+class RepoTreeBody(BaseModel):
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
+    branch: str = Field(default="main", max_length=255)
+    max_files: int = Field(default=500, ge=1, le=2000)
+
+
+@app.post("/api/repo/tree")
+async def repo_tree(body: RepoTreeBody):
+    """Return the recursive file tree for a branch (paths only, no content)."""
+    ref = _urlquote(body.branch, safe="")
+    r = requests.get(
+        f"{_gh_base(body.owner, body.repo)}/git/trees/{ref}?recursive=1",
+        headers=gh_hdrs(body.token),
+        timeout=15,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Failed to fetch tree")
+        except Exception:
+            err = f"HTTP {r.status_code}"
+        return JSONResponse({"error": err}, status_code=400)
+    data = r.json()
+    tree = data.get("tree", [])
+    files = [
+        {"path": item["path"], "type": item["type"], "size": item.get("size", 0)}
+        for item in tree
+        if item.get("type") in ("blob", "tree")
+    ][:body.max_files]
+    return {
+        "files": files,
+        "total": len(data.get("tree", [])),
+        "truncated": data.get("truncated", False) or len(tree) > body.max_files,
+        "branch": body.branch,
+    }
+
+
 class WorkflowRunsBody(BaseModel):
     token: str = Field(min_length=1, max_length=500)
     owner: str = Field(min_length=1, max_length=100)
@@ -1671,6 +1743,32 @@ def _parse_go_mod(content: str) -> list:
                 pkgs.append({"name": parts[0], "constraint": parts[1]})
     return pkgs
 
+_PEP508_RE = re.compile(r"^([A-Za-z0-9_.-]+)\s*([>=<!~^,][^\s#;]*)?")
+
+
+def _pep508_add(dep: str, pkgs: list, seen: set) -> None:
+    """Parse one PEP 508 dependency string and append to pkgs if not seen."""
+    m = _PEP508_RE.match(str(dep).strip())
+    if m:
+        key = m.group(1).lower().replace("_", "-")
+        if key not in seen:
+            seen.add(key)
+            pkgs.append({"name": key, "constraint": (m.group(2) or "").strip()})
+
+
+def _add_poetry_deps(data: dict, pkgs: list, seen: set) -> None:
+    """Extract poetry dependencies from parsed pyproject.toml data."""
+    poetry_deps = (((data.get("tool") or {}).get("poetry") or {}).get("dependencies") or {})
+    for name, ver in poetry_deps.items():
+        if name.lower() == "python":
+            continue
+        key = name.lower().replace("_", "-")
+        if key not in seen:
+            seen.add(key)
+            constraint = str(ver) if not isinstance(ver, dict) else (ver.get("version") or "")
+            pkgs.append({"name": key, "constraint": constraint})
+
+
 def _parse_pyproject_toml(content: str) -> list:
     try:
         import tomllib
@@ -1682,29 +1780,11 @@ def _parse_pyproject_toml(content: str) -> list:
         return []
     pkgs: list = []
     seen: set = set()
-
-    def _add(name: str, constraint: str) -> None:
-        key = name.lower().replace("_", "-")
-        if key not in seen:
-            seen.add(key)
-            pkgs.append({"name": key, "constraint": constraint})
-
-    # PEP 621: [project].dependencies (PEP 508 strings)
     for dep in ((data.get("project") or {}).get("dependencies") or []):
-        m = re.match(r"^([A-Za-z0-9_.-]+)\s*([>=<!~^,][^\s#;]*)?", str(dep).strip())
-        if m:
-            _add(m.group(1), (m.group(2) or "").strip())
-    # Poetry: [tool.poetry.dependencies]
-    for name, ver in (((data.get("tool") or {}).get("poetry") or {}).get("dependencies") or {}).items():
-        if name.lower() == "python":
-            continue
-        constraint = str(ver) if not isinstance(ver, dict) else (ver.get("version") or "")
-        _add(name, constraint)
-    # build-system.requires
+        _pep508_add(dep, pkgs, seen)
+    _add_poetry_deps(data, pkgs, seen)
     for dep in ((data.get("build-system") or {}).get("requires") or []):
-        m = re.match(r"^([A-Za-z0-9_.-]+)\s*([>=<!~^,][^\s#;]*)?", str(dep).strip())
-        if m:
-            _add(m.group(1), (m.group(2) or "").strip())
+        _pep508_add(dep, pkgs, seen)
     return pkgs
 
 def _parse_cargo_toml(content: str) -> list:
@@ -2049,6 +2129,18 @@ def _build_ma_runners(body: "ChatBody") -> tuple:
     )
 
 
+async def _ma_stream_stage(runner, system: str, msgs: list, out: list):
+    """Yield SSE chunks for one MA stage; append text to out (None sentinel on error)."""
+    async for kind, val in stream_one(runner, system, msgs):
+        if kind == "text":
+            out.append(val)
+            yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
+        elif kind == "error":
+            out.append(None)
+            yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+            return
+
+
 async def _multi_agent_stream(body: "ChatBody", messages: list):
     user_task = messages[-1]["content"] if messages else ""
     prior = messages[:-1]
@@ -2057,43 +2149,42 @@ async def _multi_agent_stream(body: "ChatBody", messages: list):
     except ValueError as exc:
         yield f"data: {json.dumps({'t': 'error', 'v': str(exc)})}\n\n"
         return
+
     yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': f'🗺️ Planning · {_PROV_LABEL.get(plan_prov, plan_prov)}'})}\n\n"
-    plan_text = ""
+    plan_out: list = []
     plan_msgs = [{"role": "user", "content": f"Task: {user_task}\n\nCreate a clear step-by-step implementation plan. List files, key functions, and pitfalls. No code yet."}]
-    async for kind, val in stream_one(plan_runner, MA_PLAN_SYSTEM, plan_msgs):
-        if kind == "text":
-            plan_text += val
-            yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-        elif kind == "error":
-            yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
-            return
+    async for chunk in _ma_stream_stage(plan_runner, MA_PLAN_SYSTEM, plan_msgs, plan_out):
+        yield chunk
+    if None in plan_out:
+        return
+    plan_text = "".join(plan_out)
+
     yield f"data: {json.dumps({'t': 'step', 'v': 'code', 'label': f'⚙️ Implementing · {_PROV_LABEL.get(code_prov, code_prov)}'})}\n\n"
-    code_text = ""
+    code_out: list = []
     code_msgs = prior + [{"role": "user", "content": f"{user_task}\n\n## Plan:\n{plan_text}"}]
-    async for kind, val in stream_one(code_runner, build_system(body), code_msgs):
-        if kind == "text":
-            code_text += val
-            yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-        elif kind == "error":
-            yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
-            return
+    async for chunk in _ma_stream_stage(code_runner, build_system(body), code_msgs, code_out):
+        yield chunk
+    if None in code_out:
+        return
+    code_text = "".join(code_out)
+
     if body.ma_include_test_stage:
         yield f"data: {json.dumps({'t': 'step', 'v': 'test', 'label': f'🧪 Testing · {_PROV_LABEL.get(test_prov, test_prov)}'})}\n\n"
+        test_out: list = []
         test_msgs = [{"role": "user", "content": f"Write comprehensive tests for this implementation:\n\n{code_text}"}]
-        async for kind, val in stream_one(test_runner, MA_TEST_SYSTEM, test_msgs):
-            if kind == "text":
-                yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-            elif kind == "error":
-                yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
-                return
-    yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': f'🔍 Reviewing · {_PROV_LABEL.get(review_prov, review_prov)}'})}\n\n"
-    review_msgs = [{"role": "user", "content": f"Review this implementation for bugs, security issues, missing error handling, and quality:\n\n{code_text}"}]
-    async for kind, val in stream_one(review_runner, MA_REVIEW_SYSTEM, review_msgs):
-        if kind == "text":
-            yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-        elif kind == "error":
-            yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+        async for chunk in _ma_stream_stage(test_runner, MA_TEST_SYSTEM, test_msgs, test_out):
+            yield chunk
+        if None in test_out:
             return
+
+    yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': f'🔍 Reviewing · {_PROV_LABEL.get(review_prov, review_prov)}'})}\n\n"
+    review_out: list = []
+    review_msgs = [{"role": "user", "content": f"Review this implementation for bugs, security issues, missing error handling, and quality:\n\n{code_text}"}]
+    async for chunk in _ma_stream_stage(review_runner, MA_REVIEW_SYSTEM, review_msgs, review_out):
+        yield chunk
+    if None in review_out:
+        return
+
     yield f"data: {json.dumps({'t': 'done'})}\n\n"
 
 
