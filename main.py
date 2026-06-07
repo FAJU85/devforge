@@ -119,29 +119,40 @@ async def _security_headers(request, call_next):
     return response
 
 
+def _emit_posthog_metrics(user_id: str, flag_buckets: dict, path: str, status_code: int, latency_ms: float) -> None:
+    """Best-effort PostHog capture for each active flag bucket on API paths."""
+    if not (flag_buckets and _posthog_sdk and path.startswith("/api/")):
+        return
+    for flag_name, bucket in flag_buckets.items():
+        try:
+            _posthog_sdk.capture(
+                distinct_id=user_id or "anonymous",
+                event="request_completed",
+                properties={
+                    "flag": flag_name,
+                    "bucket": bucket,
+                    "latency_ms": round(latency_ms, 2),
+                    "status_code": status_code,
+                    "path": path,
+                    "$process_person_profile": False,
+                },
+            )
+        except Exception:
+            pass
+
+
 @app.middleware("http")
 async def _flag_routing_middleware(request, call_next):
-    """Assign flag cohort buckets per request and capture latency metrics to PostHog.
-
-    Sets request.state.flag_buckets = {flag_name: "canary" | "control"}.
-    Adds X-Flag-Buckets response header for observability.
-    Captures `request_completed` events to PostHog for real canary metrics.
-    """
+    """Assign flag cohort buckets per request and capture latency metrics to PostHog."""
     import time as _time
-
     start = _time.monotonic()
-
-    # Stable user identifier: forwarded IP → direct IP → empty string
     user_id = (
         request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
         or (request.client.host if request.client else "")
     )
-
-    # Assign buckets — _flags_mod is defined later in the file but resolved at
-    # call time (well after module import completes).
     try:
         active_flags = [
-            f for f in _flags_mod.get_all()  # noqa: F821 — resolved at call time
+            f for f in _flags_mod.get_all()  # noqa: F821
             if f.get("enabled") and f.get("status") in ("canary", "live")
         ]
         flag_buckets: dict[str, str] = {}
@@ -150,37 +161,13 @@ async def _flag_routing_middleware(request, call_next):
             flag_buckets[flag["name"]] = "canary" if is_canary else "control"
     except Exception:
         flag_buckets = {}
-
     request.state.flag_buckets = flag_buckets
     request.state.user_id = user_id
-
     response = await call_next(request)
-
     latency_ms = (_time.monotonic() - start) * 1000.0
-
-    # Capture PostHog metrics events — only for API paths, best-effort only
-    if flag_buckets and _posthog_sdk and request.url.path.startswith("/api/"):
-        for flag_name, bucket in flag_buckets.items():
-            try:
-                _posthog_sdk.capture(
-                    distinct_id=user_id or "anonymous",
-                    event="request_completed",
-                    properties={
-                        "flag": flag_name,
-                        "bucket": bucket,
-                        "latency_ms": round(latency_ms, 2),
-                        "status_code": response.status_code,
-                        "path": request.url.path,
-                        "$process_person_profile": False,
-                    },
-                )
-            except Exception:
-                pass
-
+    _emit_posthog_metrics(user_id, flag_buckets, request.url.path, response.status_code, latency_ms)
     if flag_buckets:
-        bucket_header = ",".join(f"{k}:{v}" for k, v in flag_buckets.items())
-        response.headers["X-Flag-Buckets"] = bucket_header
-
+        response.headers["X-Flag-Buckets"] = ",".join(f"{k}:{v}" for k, v in flag_buckets.items())
     return response
 
 
@@ -228,6 +215,24 @@ MA_CODE_SYSTEM   = "You are an expert coding agent. Implement the task following
 MA_TEST_SYSTEM   = "You are a test engineer. Write comprehensive automated tests for the implementation provided. Include unit tests, edge cases, and error conditions. Show full file paths before every test file. Use the appropriate testing framework for the language (pytest, Jest/Vitest, Go testing, etc.)."
 MA_REVIEW_SYSTEM = "You are a senior code reviewer. Review the implementation and tests for bugs, security issues, performance problems, missing error handling, and code quality. Be specific and constructive."
 
+def _build_skills_section(skills: list) -> str:
+    """Return the formatted skills block for the system prompt."""
+    parts = ["\n\n## Active Skills:\n"]
+    for s in skills:
+        if s in SKILL_PROMPTS:
+            parts.append(f"{SKILL_PROMPTS[s]}\n\n")
+    return "".join(parts)
+
+
+def _build_tools_section(tools: list) -> str:
+    """Return the formatted tools block for the system prompt (non-Anthropic providers)."""
+    lines = ["\n\n## Available Tools:\n"]
+    for t in tools:
+        lines.append(f"- **{t.name}**: {t.description} ({t.method} {t.url})\n")
+    lines.append("\nDescribe needed tool calls in your response; the user will execute them and share results.")
+    return "".join(lines)
+
+
 def build_system(body: "ChatBody") -> str:
     """Compose the system prompt from agent, skills, rules, file context, and session memory."""
     if getattr(body, 'instructions', '') and body.instructions.strip():
@@ -246,10 +251,7 @@ def build_system(body: "ChatBody") -> str:
         )
     skills = getattr(body, 'skills', []) or []
     if skills:
-        base += "\n\n## Active Skills:\n"
-        for s in skills:
-            if s in SKILL_PROMPTS:
-                base += f"{SKILL_PROMPTS[s]}\n\n"
+        base += _build_skills_section(skills)
     rules = (getattr(body, 'rules', '') or '').strip()
     if rules:
         base += f"\n\n## Rules (must follow):\n{rules}"
@@ -258,10 +260,7 @@ def build_system(body: "ChatBody") -> str:
         base += f"\n\n## Previous Session Context (from last conversation on this repo):\n{memory}"
     tools = getattr(body, 'tools', []) or []
     if tools and body.provider != "anthropic":
-        base += "\n\n## Available Tools:\n"
-        for t in tools:
-            base += f"- **{t.name}**: {t.description} ({t.method} {t.url})\n"
-        base += "\nDescribe needed tool calls in your response; the user will execute them and share results."
+        base += _build_tools_section(tools)
     if body.agent in ("code", "refactor", "testgen", "debug"):
         base += SECURITY_FOOTER
     fc = (getattr(body, 'file_context', '') or '').strip()
@@ -270,6 +269,20 @@ def build_system(body: "ChatBody") -> str:
     return base
 
 _airllm_cache: dict = {}
+
+def _build_airllm_prompt(tokenizer, system: str, messages: list) -> str:
+    """Build a prompt string using the tokenizer's chat template or Llama-2 fallback."""
+    chat_msgs = [{"role": "system", "content": system}] + messages
+    if hasattr(tokenizer, "apply_chat_template") and getattr(tokenizer, "chat_template", None):
+        return tokenizer.apply_chat_template(chat_msgs, tokenize=False, add_generation_prompt=True)
+    prompt = f"[INST] <<SYS>>\n{system}\n<</SYS>>\n\n"
+    for m in messages:
+        if m["role"] == "user":
+            prompt += f"{m['content']} [/INST] "
+        elif m["role"] == "assistant":
+            prompt += f"{m['content']} [INST] "
+    return prompt
+
 
 def _run_airllm(q, loop, system: str, messages: list, model_id: str, max_new_tokens: int = 512):
     """Thread target: run local inference via AirLLM (streams model layers from disk/CPU to GPU)."""
@@ -282,51 +295,31 @@ def _run_airllm(q, loop, system: str, messages: list, model_id: str, max_new_tok
                 q.put(("error", "airllm not installed — run: pip install airllm")), loop
             )
             return
-
         if model_id not in _airllm_cache:
             asyncio.run_coroutine_threadsafe(
                 q.put(("text", f"⏳ Loading **{model_id}** — first run downloads and caches the model, may take several minutes…\n\n")), loop
             )
             device = "cuda:0" if torch.cuda.is_available() else "cpu"
             _airllm_cache[model_id] = AutoModel.from_pretrained(model_id, device=device)
-
         model = _airllm_cache[model_id]
         tokenizer = model.tokenizer
         device = next(iter(model.parameters())).device if hasattr(model, "parameters") else "cpu"
-
-        # Build the prompt using the model's chat template when available
-        chat_msgs = [{"role": "system", "content": system}] + messages
-        if hasattr(tokenizer, "apply_chat_template") and getattr(tokenizer, "chat_template", None):
-            prompt = tokenizer.apply_chat_template(chat_msgs, tokenize=False, add_generation_prompt=True)
-        else:
-            # Llama-2 style fallback
-            prompt = f"[INST] <<SYS>>\n{system}\n<</SYS>>\n\n"
-            for m in messages:
-                if m["role"] == "user":
-                    prompt += f"{m['content']} [/INST] "
-                elif m["role"] == "assistant":
-                    prompt += f"{m['content']} [INST] "
-
+        prompt = _build_airllm_prompt(tokenizer, system, messages)
         inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
         input_ids = inputs["input_ids"].to(device)
         input_len = input_ids.shape[-1]
-
         generation_output = model.generate(
             input_ids,
             max_new_tokens=max(1, min(int(max_new_tokens), 4096)),
             use_cache=True,
             return_dict_in_generate=True,
         )
-
         new_ids = generation_output.sequences[0][input_len:]
         result = tokenizer.decode(new_ids, skip_special_tokens=True).strip()
-
-        # Simulate token-level streaming in small chunks
         for i in range(0, max(len(result), 1), 8):
             chunk = result[i:i + 8]
             if chunk:
                 asyncio.run_coroutine_threadsafe(q.put(("text", chunk)), loop)
-
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
@@ -381,21 +374,64 @@ def _run_anthropic_thinking(q, loop, system, messages, api_key, model, thinking_
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", _friendly_anthropic_error(e))), loop)
 
+def _build_anth_tools(tools: list) -> list:
+    return [
+        {
+            "name": t.name,
+            "description": t.description,
+            "input_schema": t.input_schema or {"type": "object", "properties": {}},
+        }
+        for t in tools
+    ]
+
+
+def _execute_http_tool(tool_def, block) -> str:
+    if not re.match(r"^https?://", tool_def.url or ""):
+        return "Error: Tool URL must start with http:// or https://"
+    hdrs = dict(tool_def.headers or {})
+    url = tool_def.url
+    inp = block.input or {}
+    for k, v in inp.items():
+        url = url.replace(f"{{{k}}}", _urlquote(str(v), safe=""))
+    method = (tool_def.method or "GET").upper()
+    if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+        return f"Error: Unsupported method {method}"
+    if method == "GET":
+        params = {k: v for k, v in inp.items() if f"{{{k}}}" not in tool_def.url}
+        r = requests.get(url, headers=hdrs, params=params, timeout=15)
+        return r.text[:2000]
+    hdrs.setdefault("Content-Type", "application/json")
+    r = requests.request(method, url, headers=hdrs, json=inp, timeout=15)
+    return r.text[:2000]
+
+
+def _execute_tool_call(block, tools: list) -> str:
+    tool_def = next((t for t in tools if t.name == block.name), None)
+    if not tool_def:
+        return f"Error: Tool '{block.name}' not found"
+    try:
+        return _execute_http_tool(tool_def, block)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def _collect_assistant_turn(msg) -> list:
+    content = []
+    for block in msg.content:
+        if block.type == "text":
+            content.append({"type": "text", "text": block.text})
+        elif block.type == "tool_use":
+            content.append({"type": "tool_use", "id": block.id, "name": block.name, "input": block.input})
+    return content
+
+
 def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="claude-sonnet-4-6"):
     """Run Anthropic with native tool use, executing HTTP calls and looping until done."""
     try:
         client = Anthropic(api_key=api_key)
-        anth_tools = [
-            {
-                "name": t.name,
-                "description": t.description,
-                "input_schema": t.input_schema or {"type": "object", "properties": {}},
-            }
-            for t in tools
-        ]
+        anth_tools = _build_anth_tools(tools)
         current_messages = list(messages)
         total_usage = {"input": 0, "output": 0}
-
         for _ in range(5):
             with client.messages.stream(
                 model=model or "claude-sonnet-4-6",
@@ -414,16 +450,7 @@ def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="
                     pass
                 if msg.stop_reason != "tool_use":
                     break
-
-            # Serialize assistant content for next turn
-            assistant_content = []
-            for block in msg.content:
-                if block.type == "text":
-                    assistant_content.append({"type": "text", "text": block.text})
-                elif block.type == "tool_use":
-                    assistant_content.append({"type": "tool_use", "id": block.id, "name": block.name, "input": block.input})
-            current_messages.append({"role": "assistant", "content": assistant_content})
-
+            current_messages.append({"role": "assistant", "content": _collect_assistant_turn(msg)})
             tool_results = []
             for block in msg.content:
                 if block.type != "tool_use":
@@ -431,38 +458,12 @@ def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="
                 asyncio.run_coroutine_threadsafe(
                     q.put(("tool_call", {"id": block.id, "name": block.name, "input": block.input})), loop
                 )
-                tool_def = next((t for t in tools if t.name == block.name), None)
-                if not tool_def:
-                    result_content = f"Error: Tool '{block.name}' not found"
-                else:
-                    try:
-                        if not re.match(r"^https?://", tool_def.url or ""):
-                            result_content = "Error: Tool URL must start with http:// or https://"
-                        else:
-                            hdrs = dict(tool_def.headers or {})
-                            url = tool_def.url
-                            inp = block.input or {}
-                            for k, v in inp.items():
-                                url = url.replace(f"{{{k}}}", _urlquote(str(v), safe=''))
-                            method = (tool_def.method or "GET").upper()
-                            if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
-                                result_content = f"Error: Unsupported method {method}"
-                            elif method == "GET":
-                                params = {k: v for k, v in inp.items() if f"{{{k}}}" not in tool_def.url}
-                                r = requests.get(url, headers=hdrs, params=params, timeout=15)
-                                result_content = r.text[:2000]
-                            else:
-                                hdrs.setdefault("Content-Type", "application/json")
-                                r = requests.request(method, url, headers=hdrs, json=inp, timeout=15)
-                                result_content = r.text[:2000]
-                    except Exception as e:
-                        result_content = f"Error: {e}"
+                result_content = _execute_tool_call(block, tools)
                 asyncio.run_coroutine_threadsafe(
                     q.put(("tool_result", {"id": block.id, "name": block.name, "result": result_content})), loop
                 )
                 tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": result_content})
             current_messages.append({"role": "user", "content": tool_results})
-
         asyncio.run_coroutine_threadsafe(q.put(("usage", total_usage)), loop)
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
@@ -625,7 +626,7 @@ async def _stream_ai_sse(body, system: str, user_prompt: str, max_tokens: int = 
             else:
                 yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; return
     elif body.provider == "groq" and body.groq_key:
-        r = requests.post(
+        r = requests.post(  # nosec B113
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
             json={"model": getattr(body, 'groq_model', '') or "llama-3.3-70b-versatile", "max_tokens": max_tokens,
@@ -908,53 +909,61 @@ class SuggestFilesBody(BaseModel):
     files: List[str] = Field(max_length=500)
     max_suggestions: int = Field(default=6, ge=1, le=20)
 
-def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> tuple[bool, str]:
-    """Call an AI provider with the given system prompt and user prompt.
+def _call_anthropic_sync(body, system: str, prompt: str, max_tokens: int) -> tuple[bool, str]:
+    """Non-streaming Anthropic call; returns (success, text)."""
+    client = Anthropic(api_key=body.anthropic_key)
+    msg = client.messages.create(
+        model="claude-haiku-4-5-20251001", max_tokens=max_tokens,
+        system=system, messages=[{"role": "user", "content": prompt}],
+    )
+    return True, msg.content[0].text if msg.content else ""
 
-    Returns: (success: bool, result: str)
-    """
+
+def _call_openai_compat_sync(body, system: str, prompt: str, max_tokens: int) -> tuple[bool, str]:
+    """Non-streaming OpenAI-compat call; returns (success, text)."""
+    if not _valid_http_url(body.openai_compat_base_url):
+        return False, "openai_compat_base_url must be http:// or https://"
+    url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
+    hdrs = {"Content-Type": "application/json"}
+    if body.openai_compat_key:
+        hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
+    r = requests.post(url, headers=hdrs, json={
+        "model": body.openai_compat_model or "llama3",
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+        "max_tokens": max_tokens, "stream": False,
+    }, timeout=20)
+    if r.ok:
+        _choices = r.json().get("choices") or []
+        return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
+    return False, ""
+
+
+def _call_groq_sync(body, system: str, prompt: str, max_tokens: int) -> tuple[bool, str]:
+    """Non-streaming Groq call; returns (success, text)."""
+    r = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+        json={"model": body.groq_model or "llama-3.1-8b-instant",
+              "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+              "max_tokens": max_tokens, "stream": False},
+        timeout=20,
+    )
+    if r.ok:
+        _choices = r.json().get("choices") or []
+        return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
+    return False, ""
+
+
+def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> tuple[bool, str]:
+    """Dispatch a single-turn AI call to the configured provider; returns (success, text)."""
     try:
         if body.provider == "anthropic" and body.anthropic_key:
-            client = Anthropic(api_key=body.anthropic_key)
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            return True, msg.content[0].text if msg.content else ""
-        elif body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": body.groq_model or "llama-3.1-8b-instant", "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": prompt},
-                ], "max_tokens": max_tokens, "stream": False},
-                timeout=20,
-            )
-            if r.ok:
-                _choices = r.json().get("choices") or []
-                return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
-            return False, ""
-        elif body.provider == "openai_compat" and body.openai_compat_base_url:
-            if not _valid_http_url(body.openai_compat_base_url):
-                return False, "openai_compat_base_url must be http:// or https://"
-            url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
-            hdrs = {"Content-Type": "application/json"}
-            if body.openai_compat_key:
-                hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
-            r = requests.post(url, headers=hdrs, json={
-                "model": body.openai_compat_model or "llama3",
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-                "max_tokens": max_tokens, "stream": False,
-            }, timeout=20)
-            if r.ok:
-                _choices = r.json().get("choices") or []
-                return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
-            return False, ""
-        else:
-            return False, "No usable provider configured"
+            return _call_anthropic_sync(body, system, prompt, max_tokens)
+        if body.provider == "groq" and body.groq_key:
+            return _call_groq_sync(body, system, prompt, max_tokens)
+        if body.provider == "openai_compat" and body.openai_compat_base_url:
+            return _call_openai_compat_sync(body, system, prompt, max_tokens)
+        return False, "No usable provider configured"
     except Exception as e:
         return False, str(e)
 
@@ -1027,51 +1036,48 @@ class BatchWriteBody(BaseModel):
     branch: str = Field(min_length=1, max_length=255)
     files: List[BatchWriteItem] = Field(min_length=1, max_length=50)
 
+def _gh_write_file(item, owner: str, repo: str, branch: str, token: str) -> tuple:
+    """PUT a single file to GitHub Contents API; returns ("ok"|"error", result_dict)."""
+    safe_p = _gh_path(item.path)
+    sha = None
+    try:
+        existing = requests.get(
+            f"{_gh_base(owner, repo)}/contents/{safe_p}",
+            headers=gh_hdrs(token), params={"ref": branch}, timeout=10,
+        )
+        if existing.ok:
+            sha = existing.json().get("sha")
+    except Exception:
+        pass
+    payload = {
+        "message": item.message,
+        "content": base64.b64encode(item.content.encode("utf-8")).decode("utf-8"),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    try:
+        w = requests.put(
+            f"{_gh_base(owner, repo)}/contents/{safe_p}",
+            headers=gh_hdrs(token), json=payload, timeout=15,
+        )
+        if w.ok:
+            return ("ok", {"path": item.path, "commit_url": w.json().get("commit", {}).get("html_url", "")})
+        try:
+            err_msg = w.json().get("message", "Write failed")
+        except Exception:
+            err_msg = "Write failed"
+        return ("error", {"path": item.path, "error": err_msg})
+    except Exception as e:
+        return ("error", {"path": item.path, "error": str(e)})
+
+
 @app.post("/api/repo/write/batch")
 async def repo_write_batch(body: BatchWriteBody):
     """Commit multiple files to the repository, reporting per-file results."""
-
-    def write_file(item):
-        safe_p = _gh_path(item.path)
-        sha = None
-        try:
-            existing = requests.get(
-                f"{_gh_base(body.owner, body.repo)}/contents/{safe_p}",
-                headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
-            )
-            if existing.ok:
-                sha = existing.json().get("sha")
-        except Exception:
-            pass
-
-        payload = {
-            "message": item.message,
-            "content": base64.b64encode(item.content.encode("utf-8")).decode("utf-8"),
-            "branch": body.branch,
-        }
-        if sha:
-            payload["sha"] = sha
-
-        try:
-            w = requests.put(
-                f"{_gh_base(body.owner, body.repo)}/contents/{safe_p}",
-                headers=gh_hdrs(body.token), json=payload, timeout=15,
-            )
-            if w.ok:
-                data = w.json()
-                return ("ok", {"path": item.path, "commit_url": data.get("commit", {}).get("html_url", "")})
-            else:
-                try:
-                    err_msg = w.json().get("message", "Write failed")
-                except Exception:
-                    err_msg = "Write failed"
-                return ("error", {"path": item.path, "error": err_msg})
-        except Exception as e:
-            return ("error", {"path": item.path, "error": str(e)})
-
     committed, errors = [], []
     with ThreadPoolExecutor(max_workers=5) as ex:
-        futures = {ex.submit(write_file, item): item for item in body.files}
+        futures = {ex.submit(_gh_write_file, item, body.owner, body.repo, body.branch, body.token): item for item in body.files}
         for future in _futs_done(futures, timeout=60):
             try:
                 status, result = future.result()
@@ -1082,7 +1088,6 @@ async def repo_write_batch(body: BatchWriteBody):
             except Exception as e:
                 item = futures[future]
                 errors.append({"path": item.path, "error": str(e)})
-
     return {"committed": committed, "errors": errors}
 
 
@@ -1488,50 +1493,70 @@ class CodeScanBody(BaseModel):
     language: str = Field(default="text", max_length=50)
 
 
+_SECRET_KEYWORDS = ("password", "secret", "api_key", "token", "private_key")
+
+
+def _ast_check_call(node: "_ast.Call", ln: "int | None", issues: list) -> None:
+    """Inspect an AST Call node for dangerous function/attribute calls and shell=True."""
+    func = node.func
+    if isinstance(func, _ast.Name) and func.id in _DANGEROUS_CALLS:
+        sev = _DANGEROUS_CALLS[func.id]
+        issues.append({"severity": sev, "pattern": f"{func.id}()",
+            "message": f"{func.id}() can execute arbitrary code — avoid or restrict carefully",
+            "line": ln, "source": "ast"})
+    elif isinstance(func, _ast.Attribute) and isinstance(func.value, _ast.Name):
+        pair = (func.value.id, func.attr)
+        if pair in _DANGEROUS_ATTRS:
+            sev = _DANGEROUS_ATTRS[pair]
+            issues.append({"severity": sev, "pattern": f"{pair[0]}.{pair[1]}()",
+                "message": f"{pair[0]}.{pair[1]}() is a high-risk call — validate all inputs",
+                "line": ln, "source": "ast"})
+    for kw in node.keywords:
+        if kw.arg == "shell" and isinstance(kw.value, _ast.Constant) and kw.value.value is True:
+            issues.append({"severity": "high", "pattern": "shell=True",
+                "message": "shell=True creates command injection risk — pass args as a list",
+                "line": ln, "source": "ast"})
+
+
+def _ast_check_assign(node: "_ast.Assign", ln: "int | None", issues: list) -> None:
+    """Inspect an AST Assign node for hardcoded secret-like string values."""
+    for target in node.targets:
+        if not isinstance(target, _ast.Name):
+            continue
+        nm = target.id.lower()
+        if not any(kw in nm for kw in _SECRET_KEYWORDS):
+            continue
+        if isinstance(node.value, _ast.Constant) and isinstance(node.value.value, str) and len(node.value.value) >= 6:
+            issues.append({"severity": "high", "pattern": f"{target.id} = '...'",
+                "message": f"Hardcoded {target.id} — use os.environ or a secrets manager",
+                "line": ln, "source": "ast"})
+
+
+def _python_ast_issues(code: str) -> list:
+    """Return security issues found via AST walk of Python source (max 50K chars)."""
+    issues: list = []
+    try:
+        tree = _ast.parse(code[:50_000])
+        for node in _ast.walk(tree):
+            ln = getattr(node, "lineno", None)
+            if isinstance(node, _ast.Call):
+                _ast_check_call(node, ln, issues)
+            elif isinstance(node, _ast.Assign):
+                _ast_check_assign(node, ln, issues)
+    except SyntaxError as e:
+        issues.append({"severity": "medium", "pattern": "SyntaxError",
+            "message": f"Code has syntax errors: {e.msg}", "line": e.lineno, "source": "ast"})
+    return issues
+
+
 @app.post("/api/code/scan")
 async def scan_code(body: CodeScanBody):
     """Scan code for security issues using AST analysis (Python) and pattern matching."""
-    issues: list = []
     code = (body.code or "").strip()[:100_000]
     lang = (body.language or "text").lower()
     if not code:
         return {"issues": [], "safe": True, "language": lang, "total": 0}
-
-    # Python AST deep scan (limit to 50K to bound parse time)
-    if lang == "python":
-        try:
-            tree = _ast.parse(code[:50_000])
-            for node in _ast.walk(tree):
-                ln = getattr(node, "lineno", None)
-                if isinstance(node, _ast.Call):
-                    func = node.func
-                    if isinstance(func, _ast.Name) and func.id in _DANGEROUS_CALLS:
-                        sev = _DANGEROUS_CALLS[func.id]
-                        issues.append({"severity": sev, "pattern": f"{func.id}()",
-                            "message": f"{func.id}() can execute arbitrary code — avoid or restrict carefully", "line": ln, "source": "ast"})
-                    elif isinstance(func, _ast.Attribute) and isinstance(func.value, _ast.Name):
-                        pair = (func.value.id, func.attr)
-                        if pair in _DANGEROUS_ATTRS:
-                            sev = _DANGEROUS_ATTRS[pair]
-                            issues.append({"severity": sev, "pattern": f"{pair[0]}.{pair[1]}()",
-                                "message": f"{pair[0]}.{pair[1]}() is a high-risk call — validate all inputs", "line": ln, "source": "ast"})
-                    for kw in node.keywords:
-                        if kw.arg == "shell" and isinstance(kw.value, _ast.Constant) and kw.value.value is True:
-                            issues.append({"severity": "high", "pattern": "shell=True",
-                                "message": "shell=True creates command injection risk — pass args as a list", "line": ln, "source": "ast"})
-                elif isinstance(node, _ast.Assign):
-                    for target in node.targets:
-                        if isinstance(target, _ast.Name):
-                            nm = target.id.lower()
-                            if any(kw in nm for kw in ("password", "secret", "api_key", "token", "private_key")):
-                                if isinstance(node.value, _ast.Constant) and isinstance(node.value.value, str) and len(node.value.value) >= 6:
-                                    issues.append({"severity": "high", "pattern": f"{target.id} = '...'",
-                                        "message": f"Hardcoded {target.id} — use os.environ or a secrets manager", "line": ln, "source": "ast"})
-        except SyntaxError as e:
-            issues.append({"severity": "medium", "pattern": "SyntaxError",
-                "message": f"Code has syntax errors: {e.msg}", "line": e.lineno, "source": "ast"})
-
-    # Regex scan — language-specific + generic patterns
+    issues: list = _python_ast_issues(code) if lang == "python" else []
     lang_patterns = SECURITY_PATTERNS.get(lang, [])
     ast_high_lines = {i["line"] for i in issues if i.get("source") == "ast" and i.get("severity") == "high"}
     seen: set = set()
@@ -1543,7 +1568,6 @@ async def scan_code(body: CodeScanBody):
                     seen.add(key)
                     clean_pat = re.sub(r'[\\^$.*+?()\[\]{}|]', '', pat)[:30].strip()
                     issues.append({"severity": sev, "pattern": clean_pat, "message": msg, "line": lineno, "source": "pattern"})
-
     sev_order = {"high": 0, "medium": 1, "low": 2}
     issues.sort(key=lambda x: (sev_order.get(x.get("severity", "low"), 3), x.get("line") or 9999))
     issues = issues[:15]
@@ -1712,6 +1736,57 @@ class ScanDepsBody(BaseModel):
     anthropic_model: Optional[str] = Field(default="claude-haiku-4-5-20251001", max_length=200)
 
 
+_DEPS_ECOSYSTEM_MAP: dict = {
+    "pyproject.toml": ("python", _parse_pyproject_toml, _pypi_latest),
+    "package.json": ("javascript", _parse_package_json, _npm_latest),
+    "go.mod": ("go", _parse_go_mod, None),
+    "cargo.toml": ("rust", _parse_cargo_toml, None),
+}
+
+
+def _detect_deps_ecosystem(fname: str, content: str) -> tuple:
+    """Return (ecosystem, packages, checker) for the given dependency filename."""
+    if fname in _DEPS_ECOSYSTEM_MAP:
+        ecosystem, parser, checker = _DEPS_ECOSYSTEM_MAP[fname]
+        return ecosystem, parser(content), checker
+    if fname == "requirements.txt" or fname.endswith("requirements.txt"):
+        return "python", _parse_requirements(content), _pypi_latest
+    return "unknown", _parse_requirements(content), None
+
+
+def _parallel_version_check(packages: list, checker) -> dict:
+    """Return {name: latest_version} for the first 20 packages using a thread pool."""
+    version_map: dict = {}
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        futs = {ex.submit(checker, p["name"]): p["name"] for p in packages[:20]}
+        for f in _futs_done(futs, timeout=12):
+            try:
+                rv = f.result()
+                if rv.get("latest"):
+                    version_map[rv["name"]] = rv["latest"]
+            except Exception:
+                pass
+    return version_map
+
+
+def _build_pkg_results(packages: list, version_map: dict, ecosystem: str) -> list:
+    """Build per-package result dicts with pinned/latest/outdated/unpinned fields."""
+    def _extract_pinned(constraint: str) -> "str | None":
+        m = re.search(r'==\s*([^\s,;]+)', constraint)
+        return m.group(1) if m else None
+    results = []
+    for p in packages[:20]:
+        pinned = _extract_pinned(p["constraint"])
+        latest = version_map.get(p["name"])
+        results.append({
+            "name": p["name"], "constraint": p["constraint"],
+            "pinned": pinned, "latest": latest,
+            "outdated": bool(pinned and latest and pinned != latest),
+            "unpinned": not pinned and ecosystem == "python",
+        })
+    return results
+
+
 @app.post("/api/repo/scan-deps")
 async def scan_deps(body: ScanDepsBody):
     """Parse a dependency file, check latest versions, and stream an AI security audit."""
@@ -1719,53 +1794,11 @@ async def scan_deps(body: ScanDepsBody):
     content = (body.content or "").strip()[:200_000]
     if not content:
         return JSONResponse({"error": "content required"}, status_code=400)
-
-    # Detect ecosystem
-    if fname == "pyproject.toml":
-        ecosystem, packages, checker = "python", _parse_pyproject_toml(content), _pypi_latest
-    elif fname == "requirements.txt" or fname.endswith("requirements.txt"):
-        ecosystem, packages, checker = "python", _parse_requirements(content), _pypi_latest
-    elif fname == "package.json":
-        ecosystem, packages, checker = "javascript", _parse_package_json(content), _npm_latest
-    elif fname == "go.mod":
-        ecosystem, packages, checker = "go", _parse_go_mod(content), None
-    elif fname == "cargo.toml":
-        ecosystem, packages, checker = "rust", _parse_cargo_toml(content), None
-    else:
-        ecosystem, packages, checker = "unknown", _parse_requirements(content), None
-
+    ecosystem, packages, checker = _detect_deps_ecosystem(fname, content)
     if not packages:
         return JSONResponse({"error": "No packages found in file"}, status_code=400)
-
-    # Parallel version checks (top 20 packages, 5 workers, 12s total)
-    to_check = packages[:20]
-    version_map: dict = {}
-    if checker:
-        with ThreadPoolExecutor(max_workers=5) as ex:
-            futs = {ex.submit(checker, p["name"]): p["name"] for p in to_check}
-            for f in _futs_done(futs, timeout=12):
-                try:
-                    rv = f.result()
-                    if rv.get("latest"):
-                        version_map[rv["name"]] = rv["latest"]
-                except Exception:
-                    pass
-
-    def _extract_pinned(constraint: str) -> "str | None":
-        m = re.search(r'==\s*([^\s,;]+)', constraint)
-        return m.group(1) if m else None
-
-    pkg_results = []
-    for p in packages[:20]:
-        pinned = _extract_pinned(p["constraint"])
-        latest = version_map.get(p["name"])
-        pkg_results.append({
-            "name": p["name"], "constraint": p["constraint"],
-            "pinned": pinned, "latest": latest,
-            "outdated": bool(pinned and latest and pinned != latest),
-            "unpinned": not pinned and ecosystem == "python",
-        })
-
+    version_map = _parallel_version_check(packages, checker) if checker else {}
+    pkg_results = _build_pkg_results(packages, version_map, ecosystem)
     audit_lines = "\n".join(
         f"- {p['name']}: {p['pinned'] or p['constraint']} (latest: {p['latest'] or '?'})"
         + (" ⚠️ OUTDATED" if p["outdated"] else "")
@@ -1809,33 +1842,49 @@ _SSRF_BLOCKED = re.compile(
     re.IGNORECASE,
 )
 
-@app.post("/api/tools/call")
-async def call_tool(body: ToolCallBody):
-    """Proxy a user-defined tool HTTP call to avoid CORS issues."""
+_BLOCKED_HDRS = frozenset({
+    "host", "transfer-encoding", "connection", "upgrade",
+    "proxy-authorization", "te", "trailers", "keep-alive",
+})
+
+
+def _validate_body_json(body_json) -> "JSONResponse | None":
+    """Return error JSONResponse if body_json is invalid or oversized, else None."""
+    if body_json is None:
+        return None
+    try:
+        size = len(json.dumps(body_json))
+    except Exception:
+        return JSONResponse({"error": "body_json is not JSON-serialisable"}, status_code=400)
+    if size > 65_536:
+        return JSONResponse({"error": "body_json exceeds 64 KB limit"}, status_code=413)
+    return None
+
+
+def _validate_tool_call(body) -> "JSONResponse | None":
+    """Return an error JSONResponse for an invalid tool call request, or None if valid."""
     if not re.match(r"^https?://", body.url):
         return JSONResponse({"error": "Only http:// and https:// URLs are supported"}, status_code=400)
     if _SSRF_BLOCKED.match(body.url):
         return JSONResponse({"error": "Requests to internal/private addresses are not allowed"}, status_code=400)
+    if body.method.upper() not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+        return JSONResponse({"error": f"Unsupported method: {body.method}"}, status_code=400)
+    body_err = _validate_body_json(body.body_json)
+    if body_err is not None:
+        return body_err
+    return None
+
+
+@app.post("/api/tools/call")
+async def call_tool(body: ToolCallBody):
+    """Proxy a user-defined tool HTTP call to avoid CORS issues."""
+    err = _validate_tool_call(body)
+    if err is not None:
+        return err
     method = body.method.upper()
-    if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
-        return JSONResponse({"error": f"Unsupported method: {method}"}, status_code=400)
-    if body.body_json is not None:
-        try:
-            _payload_size = len(json.dumps(body.body_json))
-        except Exception:
-            return JSONResponse({"error": "body_json is not JSON-serialisable"}, status_code=400)
-        if _payload_size > 65_536:
-            return JSONResponse({"error": "body_json exceeds 64 KB limit"}, status_code=413)
-    # Sanitize headers: string values only, block hop-by-hop / sensitive headers
-    _BLOCKED_HDRS = {"host", "transfer-encoding", "connection", "upgrade",
-                     "proxy-authorization", "te", "trailers", "keep-alive"}
     try:
         raw_hdrs = dict(list((body.headers or {}).items())[:50])
-        hdrs = {
-            str(k)[:200]: str(v)[:2000]
-            for k, v in raw_hdrs.items()
-            if str(k).lower() not in _BLOCKED_HDRS
-        }
+        hdrs = {str(k)[:200]: str(v)[:2000] for k, v in raw_hdrs.items() if str(k).lower() not in _BLOCKED_HDRS}
         if method != "GET":
             hdrs.setdefault("Content-Type", "application/json")
         if method == "GET":
@@ -1864,6 +1913,19 @@ class PromptEnhanceBody(BaseModel):
     hf_token: Optional[str] = Field(default="", max_length=500)
     prompt: str = Field(max_length=4000)
 
+def _enhance_with_hf(p: str, hf_token: str) -> tuple[bool, str]:
+    """Run HF-based prompt enhancement; returns (success, text)."""
+    token = hf_token.strip() or HF_TOKEN
+    if not token:
+        return False, "no provider key"
+    hf = InferenceClient(token=token)
+    result = hf.chat_completion(
+        model="meta-llama/Llama-3.1-8B-Instruct", max_tokens=512,
+        messages=[{"role": "system", "content": ENHANCE_SYSTEM}, {"role": "user", "content": p}],
+    )
+    return True, result.choices[0].message.content.strip()
+
+
 @app.post("/api/prompt/enhance")
 async def enhance_prompt(body: PromptEnhanceBody):
     """Use a fast AI model to improve a user's coding prompt."""
@@ -1873,20 +1935,11 @@ async def enhance_prompt(body: PromptEnhanceBody):
             return JSONResponse({"error": "prompt required"}, status_code=400)
         if body.provider in ("anthropic", "groq", "openai_compat"):
             success, result = _call_ai_provider(body, ENHANCE_SYSTEM, p, max_tokens=512)
-            if not success:
-                return JSONResponse({"error": result}, status_code=400)
-            return {"enhanced": result.strip()}
         else:
-            token = (body.hf_token or "").strip() or HF_TOKEN
-            if not token:
-                return JSONResponse({"error": "no provider key"}, status_code=400)
-            hf = InferenceClient(token=token)
-            result = hf.chat_completion(
-                model="meta-llama/Llama-3.1-8B-Instruct", max_tokens=512,
-                messages=[{"role": "system", "content": ENHANCE_SYSTEM},
-                           {"role": "user", "content": p}],
-            )
-            return {"enhanced": result.choices[0].message.content.strip()}
+            success, result = _enhance_with_hf(p, body.hf_token or "")
+        if not success:
+            return JSONResponse({"error": result}, status_code=400)
+        return {"enhanced": result.strip()}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -1931,6 +1984,33 @@ class ChatBody(BaseModel):
 
 _PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom", "airllm": "AirLLM"}
 
+
+def _get_anthropic_runner(body: "ChatBody") -> Callable:
+    """Select the correct Anthropic run function (tools / thinking / plain)."""
+    tools = getattr(body, 'tools', []) or []
+    model = (getattr(body, 'anthropic_model', '') or 'claude-sonnet-4-6').strip() or 'claude-sonnet-4-6'
+    thinking = bool(getattr(body, 'thinking_mode', False)) and 'opus' in model
+    thinking_budget = int(getattr(body, 'thinking_budget', 2000) or 2000)
+    if tools:
+        return lambda q, loop, sys, msgs: _run_anthropic_with_tools(q, loop, sys, msgs, body.anthropic_key, tools, model)
+    if thinking:
+        return lambda q, loop, sys, msgs: _run_anthropic_thinking(q, loop, sys, msgs, body.anthropic_key, model, thinking_budget)
+    return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key, model)
+
+
+def _get_openai_compat_runner(body: "ChatBody") -> Callable:
+    """Validate openai_compat URL and return the run lambda."""
+    oc_url = body.openai_compat_base_url or "http://localhost:11434/v1"
+    if not _valid_http_url(oc_url):
+        raise ValueError("openai_compat_base_url must be http:// or https://")
+    return lambda q, loop, sys, msgs: _run_openai_compat(
+        q, loop, sys, msgs,
+        body.openai_compat_key or "",
+        oc_url,
+        body.openai_compat_model or "llama3",
+    )
+
+
 def get_runner(body: ChatBody, provider: str = "") -> Callable:
     """Return a thread-target callable bound to the chosen provider's run function.
 
@@ -1943,34 +2023,79 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
     """
     p = provider if provider else body.provider
     if p == "anthropic":
-        tools = getattr(body, 'tools', []) or []
-        model = (getattr(body, 'anthropic_model', '') or 'claude-sonnet-4-6').strip() or 'claude-sonnet-4-6'
-        thinking = bool(getattr(body, 'thinking_mode', False)) and 'opus' in model
-        thinking_budget = int(getattr(body, 'thinking_budget', 2000) or 2000)
-        if tools:
-            return lambda q, loop, sys, msgs: _run_anthropic_with_tools(q, loop, sys, msgs, body.anthropic_key, tools, model)
-        if thinking:
-            return lambda q, loop, sys, msgs: _run_anthropic_thinking(q, loop, sys, msgs, body.anthropic_key, model, thinking_budget)
-        return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key, model)
-    elif p == "groq":
+        return _get_anthropic_runner(body)
+    if p == "groq":
         return lambda q, loop, sys, msgs: _run_groq(q, loop, sys, msgs, body.groq_key, body.groq_model or "llama-3.3-70b-versatile")
-    elif p == "openai_compat":
-        oc_url = body.openai_compat_base_url or "http://localhost:11434/v1"
-        if not _valid_http_url(oc_url):
-            raise ValueError("openai_compat_base_url must be http:// or https://")
-        return lambda q, loop, sys, msgs: _run_openai_compat(
-            q, loop, sys, msgs,
-            body.openai_compat_key or "",
-            oc_url,
-            body.openai_compat_model or "llama3",
-        )
-    elif p == "airllm":
+    if p == "openai_compat":
+        return _get_openai_compat_runner(body)
+    if p == "airllm":
         al_model = (getattr(body, 'airllm_model', '') or 'meta-llama/Llama-2-7b-chat-hf').strip() or 'meta-llama/Llama-2-7b-chat-hf'
         al_max_tokens = int(getattr(body, 'airllm_max_tokens', 512) or 512)
         return lambda q, loop, sys, msgs: _run_airllm(q, loop, sys, msgs, al_model, al_max_tokens)
-    else:
-        token = (body.hf_token or "").strip() or HF_TOKEN
-        return lambda q, loop, sys, msgs: _run_hf(q, loop, sys, msgs, token, body.hf_model)
+    token = (body.hf_token or "").strip() or HF_TOKEN
+    return lambda q, loop, sys, msgs: _run_hf(q, loop, sys, msgs, token, body.hf_model)
+
+def _build_ma_runners(body: "ChatBody") -> tuple:
+    """Resolve multi-agent stage providers and return (prov, runner) pairs as an 8-tuple."""
+    plan_prov   = body.ma_plan_provider   or body.provider
+    code_prov   = body.ma_code_provider   or body.provider
+    test_prov   = body.ma_test_provider   or body.provider
+    review_prov = body.ma_review_provider or body.provider
+    return (
+        plan_prov,   get_runner(body, plan_prov),
+        code_prov,   get_runner(body, code_prov),
+        test_prov,   get_runner(body, test_prov),
+        review_prov, get_runner(body, review_prov),
+    )
+
+
+async def _multi_agent_stream(body: "ChatBody", messages: list):
+    user_task = messages[-1]["content"] if messages else ""
+    prior = messages[:-1]
+    try:
+        plan_prov, plan_runner, code_prov, code_runner, test_prov, test_runner, review_prov, review_runner = _build_ma_runners(body)
+    except ValueError as exc:
+        yield f"data: {json.dumps({'t': 'error', 'v': str(exc)})}\n\n"
+        return
+    yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': f'🗺️ Planning · {_PROV_LABEL.get(plan_prov, plan_prov)}'})}\n\n"
+    plan_text = ""
+    plan_msgs = [{"role": "user", "content": f"Task: {user_task}\n\nCreate a clear step-by-step implementation plan. List files, key functions, and pitfalls. No code yet."}]
+    async for kind, val in stream_one(plan_runner, MA_PLAN_SYSTEM, plan_msgs):
+        if kind == "text":
+            plan_text += val
+            yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
+        elif kind == "error":
+            yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+            return
+    yield f"data: {json.dumps({'t': 'step', 'v': 'code', 'label': f'⚙️ Implementing · {_PROV_LABEL.get(code_prov, code_prov)}'})}\n\n"
+    code_text = ""
+    code_msgs = prior + [{"role": "user", "content": f"{user_task}\n\n## Plan:\n{plan_text}"}]
+    async for kind, val in stream_one(code_runner, build_system(body), code_msgs):
+        if kind == "text":
+            code_text += val
+            yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
+        elif kind == "error":
+            yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+            return
+    if body.ma_include_test_stage:
+        yield f"data: {json.dumps({'t': 'step', 'v': 'test', 'label': f'🧪 Testing · {_PROV_LABEL.get(test_prov, test_prov)}'})}\n\n"
+        test_msgs = [{"role": "user", "content": f"Write comprehensive tests for this implementation:\n\n{code_text}"}]
+        async for kind, val in stream_one(test_runner, MA_TEST_SYSTEM, test_msgs):
+            if kind == "text":
+                yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
+            elif kind == "error":
+                yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+                return
+    yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': f'🔍 Reviewing · {_PROV_LABEL.get(review_prov, review_prov)}'})}\n\n"
+    review_msgs = [{"role": "user", "content": f"Review this implementation for bugs, security issues, missing error handling, and quality:\n\n{code_text}"}]
+    async for kind, val in stream_one(review_runner, MA_REVIEW_SYSTEM, review_msgs):
+        if kind == "text":
+            yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
+        elif kind == "error":
+            yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+            return
+    yield f"data: {json.dumps({'t': 'done'})}\n\n"
+
 
 @app.post("/api/chat/stream")
 async def chat_stream(body: ChatBody):
@@ -1986,68 +2111,7 @@ async def chat_stream(body: ChatBody):
             yield f"data: {json.dumps({'t': kind, 'v': val})}\n\n"
         yield f"data: {json.dumps({'t': 'done'})}\n\n"
 
-    async def multi_agent_stream():
-        user_task = messages[-1]["content"] if messages else ""
-        prior = messages[:-1]
-
-        plan_prov   = body.ma_plan_provider   or body.provider
-        code_prov   = body.ma_code_provider   or body.provider
-        test_prov   = body.ma_test_provider   or body.provider
-        review_prov = body.ma_review_provider or body.provider
-        try:
-            plan_runner   = get_runner(body, plan_prov)
-            code_runner   = get_runner(body, code_prov)
-            test_runner   = get_runner(body, test_prov)
-            review_runner = get_runner(body, review_prov)
-        except ValueError as exc:
-            yield f"data: {json.dumps({'t': 'error', 'v': str(exc)})}\n\n"
-            return
-
-        yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': f'🗺️ Planning · {_PROV_LABEL.get(plan_prov, plan_prov)}'})}\n\n"
-        plan_text = ""
-        plan_msgs = [{"role": "user", "content": f"Task: {user_task}\n\nCreate a clear step-by-step implementation plan. List files, key functions, and pitfalls. No code yet."}]
-        async for kind, val in stream_one(plan_runner, MA_PLAN_SYSTEM, plan_msgs):
-            if kind == "text":
-                plan_text += val
-                yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-            elif kind == "error":
-                yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
-                return
-
-        yield f"data: {json.dumps({'t': 'step', 'v': 'code', 'label': f'⚙️ Implementing · {_PROV_LABEL.get(code_prov, code_prov)}'})}\n\n"
-        code_text = ""
-        code_system = build_system(body)
-        code_msgs = prior + [{"role": "user", "content": f"{user_task}\n\n## Plan:\n{plan_text}"}]
-        async for kind, val in stream_one(code_runner, code_system, code_msgs):
-            if kind == "text":
-                code_text += val
-                yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-            elif kind == "error":
-                yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
-                return
-
-        if body.ma_include_test_stage:
-            yield f"data: {json.dumps({'t': 'step', 'v': 'test', 'label': f'🧪 Testing · {_PROV_LABEL.get(test_prov, test_prov)}'})}\n\n"
-            test_msgs = [{"role": "user", "content": f"Write comprehensive tests for this implementation:\n\n{code_text}"}]
-            async for kind, val in stream_one(test_runner, MA_TEST_SYSTEM, test_msgs):
-                if kind == "text":
-                    yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-                elif kind == "error":
-                    yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
-                    return
-
-        yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': f'🔍 Reviewing · {_PROV_LABEL.get(review_prov, review_prov)}'})}\n\n"
-        review_msgs = [{"role": "user", "content": f"Review this implementation for bugs, security issues, missing error handling, and quality:\n\n{code_text}"}]
-        async for kind, val in stream_one(review_runner, MA_REVIEW_SYSTEM, review_msgs):
-            if kind == "text":
-                yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-            elif kind == "error":
-                yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
-                return
-
-        yield f"data: {json.dumps({'t': 'done'})}\n\n"
-
-    gen = multi_agent_stream() if body.multi_agent else single_stream()
+    gen = _multi_agent_stream(body, messages) if body.multi_agent else single_stream()
     return StreamingResponse(gen, media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -2412,60 +2476,50 @@ class EvolutionRunBody(BaseModel):
     metrics_hours: int = Field(default=1, ge=1, le=24, description="Hours of history to query for real metrics")
 
 
+def _resolve_real_metrics(flag_name: str, fallback: dict, use_real: bool, hours: int) -> dict:
+    """Fetch PostHog metrics for a flag if use_real is True; fall back to supplied values."""
+    if not use_real:
+        return fallback
+    from autonomous import metrics as _metrics_mod
+    real = _metrics_mod.fetch_metrics_for_flag(flag_name, hours=hours)
+    if real.get("source") == "posthog":
+        return {
+            "error_rate_canary": real["error_rate_canary"],
+            "error_rate_baseline": real["error_rate_baseline"],
+            "latency_canary_ms": max(0.001, real["latency_canary_ms"]),
+            "latency_baseline_ms": max(0.001, real["latency_baseline_ms"]),
+            "sample_size": real["sample_size"],
+        }
+    return fallback
+
+
 @app.post("/api/evolution/run")
 async def evolution_run(body: EvolutionRunBody):
     """Run one evolution cycle iteration for all canary flags (or a specific flag)."""
-    from autonomous import metrics as _metrics_mod
-
     token = body.github_token or os.environ.get("GITHUB_TOKEN", "")
     owner = body.github_owner or os.environ.get("GITHUB_OWNER", "")
     repo = body.github_repo or os.environ.get("GITHUB_REPO", "")
     metrics = body.metrics.model_dump()
-
-    def _maybe_real_metrics(flag_name: str) -> dict:
-        """Fetch real metrics from PostHog/Rollbar if requested, else return body metrics."""
-        if not body.use_real_metrics:
-            return metrics
-        real = _metrics_mod.fetch_metrics_for_flag(
-            flag_name,
-            hours=body.metrics_hours,
-        )
-        if real.get("source") == "posthog":
-            # Full segmented metrics — use them directly
-            return {
-                "error_rate_canary": real["error_rate_canary"],
-                "error_rate_baseline": real["error_rate_baseline"],
-                "latency_canary_ms": max(0.001, real["latency_canary_ms"]),
-                "latency_baseline_ms": max(0.001, real["latency_baseline_ms"]),
-                "sample_size": real["sample_size"],
-            }
-        # Partial or unavailable — fall back to supplied values
-        return metrics
-
+    gh_kwargs = {"github_token": token, "github_owner": owner, "github_repo": repo}
     if body.flag_name:
-        effective_metrics = await asyncio.to_thread(_maybe_real_metrics, body.flag_name)
-        result = await _evolution_mod.run_cycle(
-            body.flag_name, effective_metrics,
-            github_token=token, github_owner=owner, github_repo=repo,
+        effective = await asyncio.to_thread(
+            _resolve_real_metrics, body.flag_name, metrics, body.use_real_metrics, body.metrics_hours
         )
+        result = await _evolution_mod.run_cycle(body.flag_name, effective, **gh_kwargs)
         return {"results": [result]}
-
-    # Fan out over all active canary/dark flags
     flags = [f for f in _flags_mod.get_all() if f.get("status") in ("canary", "dark") and f.get("enabled", True)]
     if body.use_real_metrics:
         tasks = [
             _evolution_mod.run_cycle(
                 f["name"],
-                await asyncio.to_thread(_maybe_real_metrics, f["name"]),
-                github_token=token, github_owner=owner, github_repo=repo,
+                await asyncio.to_thread(_resolve_real_metrics, f["name"], metrics, True, body.metrics_hours),
+                **gh_kwargs,
             )
             for f in flags
         ]
         results = list(await asyncio.gather(*tasks)) if tasks else []
     else:
-        results = await _evolution_mod.run_all_canary_flags(
-            metrics, github_token=token, github_owner=owner, github_repo=repo,
-        )
+        results = await _evolution_mod.run_all_canary_flags(metrics, **gh_kwargs)
     return {"results": results}
 
 
