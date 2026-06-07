@@ -4694,3 +4694,160 @@ class TestHfBuildStatus:
             r = client.get("/api/hf-build/status")
         assert r.status_code == 502
         assert r.json()["stage"] == "UNKNOWN"
+
+
+# ---------------------------------------------------------------------------
+# /api/sidecar/grep
+# ---------------------------------------------------------------------------
+
+class TestSidecarGrep:
+    def test_returns_503_when_go_url_not_configured(self, monkeypatch):
+        # The 503 fires when the env var is explicitly set to a non-http value
+        monkeypatch.setenv("GO_DATA_PLANE_URL", "not-configured")
+        r = client.post("/api/sidecar/grep", json={"pattern": "foo"})
+        assert r.status_code == 503
+        body = r.json()
+        assert "GO_DATA_PLANE_URL" in body["error"]
+
+    def test_returns_502_on_httpx_exception(self, monkeypatch):
+        monkeypatch.setenv("GO_DATA_PLANE_URL", "http://localhost:8080")
+        import httpx
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=False)
+            mock_ctx.post = AsyncMock(side_effect=Exception("connect refused"))
+            mock_cls.return_value = mock_ctx
+            r = client.post("/api/sidecar/grep", json={"pattern": "bar"})
+        assert r.status_code == 502
+
+    def test_validates_pattern_min_length(self):
+        r = client.post("/api/sidecar/grep", json={"pattern": ""})
+        assert r.status_code == 422
+
+    def test_validates_max_results_upper_bound(self):
+        r = client.post("/api/sidecar/grep", json={"pattern": "x", "max_results": 999})
+        assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# /api/flags (feature flag CRUD)
+# ---------------------------------------------------------------------------
+
+class TestFeatureFlags:
+    def setup_method(self):
+        from autonomous import flags as _f
+        _f._FLAGS.clear()
+
+    def test_list_returns_empty_initially(self):
+        r = client.get("/api/flags")
+        assert r.status_code == 200
+        assert r.json()["flags"] == []
+
+    def test_create_flag(self):
+        r = client.post("/api/flags", json={"name": "my_flag", "rollout_pct": 10})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["name"] == "my_flag"
+        assert body["rollout_pct"] == 10
+
+    def test_create_duplicate_flag_returns_400(self):
+        client.post("/api/flags", json={"name": "dup_flag"})
+        r = client.post("/api/flags", json={"name": "dup_flag"})
+        assert r.status_code == 400
+
+    def test_list_includes_created_flag(self):
+        client.post("/api/flags", json={"name": "visible_flag"})
+        r = client.get("/api/flags")
+        names = [f["name"] for f in r.json()["flags"]]
+        assert "visible_flag" in names
+
+    def test_update_flag_enabled(self):
+        client.post("/api/flags", json={"name": "upd_flag"})
+        r = client.patch("/api/flags/upd_flag", json={"enabled": True})
+        assert r.status_code == 200
+        assert r.json()["enabled"] is True
+
+    def test_update_nonexistent_flag_returns_404(self):
+        r = client.patch("/api/flags/ghost", json={"enabled": True})
+        assert r.status_code == 404
+
+    def test_update_with_no_fields_returns_400(self):
+        client.post("/api/flags", json={"name": "empty_upd"})
+        r = client.patch("/api/flags/empty_upd", json={})
+        assert r.status_code == 400
+
+    def test_delete_flag(self):
+        client.post("/api/flags", json={"name": "del_flag"})
+        r = client.delete("/api/flags/del_flag")
+        assert r.status_code == 200
+        assert r.json()["deleted"] is True
+
+    def test_delete_nonexistent_flag_returns_404(self):
+        r = client.delete("/api/flags/nope")
+        assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# /api/repo/branch/create
+# ---------------------------------------------------------------------------
+
+class TestBranchCreate:
+    def _body(self, **kwargs):
+        base = {
+            "token": "ghp_test",
+            "owner": "acme",
+            "repo": "myrepo",
+            "new_branch": "feature/test",
+            "from_branch": "main",
+        }
+        base.update(kwargs)
+        return base
+
+    def test_returns_400_when_source_branch_not_found(self):
+        mock_resp = MagicMock()
+        mock_resp.ok = False
+        mock_resp.status_code = 404
+        with patch("main.requests.get", return_value=mock_resp):
+            r = client.post("/api/repo/branch/create", json=self._body())
+        assert r.status_code == 400
+        assert "main" in r.json()["error"]
+
+    def test_returns_502_on_malformed_github_response(self):
+        mock_get = MagicMock()
+        mock_get.ok = True
+        mock_get.json.return_value = {"unexpected": "schema"}
+        with patch("main.requests.get", return_value=mock_get):
+            r = client.post("/api/repo/branch/create", json=self._body())
+        assert r.status_code == 502
+
+    def test_returns_400_when_create_ref_fails(self):
+        mock_get = MagicMock()
+        mock_get.ok = True
+        mock_get.json.return_value = {"object": {"sha": "abc123"}}
+
+        mock_post = MagicMock()
+        mock_post.ok = False
+        mock_post.json.return_value = {"message": "Reference already exists"}
+
+        with patch("main.requests.get", return_value=mock_get), \
+             patch("main.requests.post", return_value=mock_post):
+            r = client.post("/api/repo/branch/create", json=self._body())
+        assert r.status_code == 400
+        assert "already exists" in r.json()["error"]
+
+    def test_success_returns_branch_and_sha(self):
+        mock_get = MagicMock()
+        mock_get.ok = True
+        mock_get.json.return_value = {"object": {"sha": "deadbeef"}}
+
+        mock_post = MagicMock()
+        mock_post.ok = True
+
+        with patch("main.requests.get", return_value=mock_get), \
+             patch("main.requests.post", return_value=mock_post):
+            r = client.post("/api/repo/branch/create", json=self._body())
+        assert r.status_code == 200
+        body = r.json()
+        assert body["branch"] == "feature/test"
+        assert body["sha"] == "deadbeef"
