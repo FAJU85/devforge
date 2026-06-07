@@ -6,8 +6,6 @@ import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 # ---------------------------------------------------------------------------
 # Bootstrap minimal stubs so main.py can be imported without real packages
 # ---------------------------------------------------------------------------
@@ -1223,7 +1221,7 @@ class TestBatchWriteEndpoint:
         with patch("main.requests.get") as mock_get, patch("main.requests.put") as mock_put:
             mock_get.return_value = MagicMock(ok=False)
             call_count = {"n": 0}
-            def _put(*a, **kw):
+            def _put(*_args, **kw):
                 call_count["n"] += 1
                 if call_count["n"] == 1:
                     return MagicMock(ok=True, json=lambda: {"commit": {"sha": "x", "html_url": ""}, "content": {}})
@@ -1688,13 +1686,13 @@ class TestAnthropicTokenUsage:
             events = []
             loop2 = asyncio.get_event_loop()
 
-            def runner(rq, rl, s, m):
+            def runner(_rq, _rl, _s, _m):
                 pass  # queue already populated
 
             # patch stream_one to just drain the queue
             original = main.stream_one
 
-            async def patched_stream(runner_fn, sys_p, msgs_p):
+            async def patched_stream(_runner_fn, _sys_p, _msgs_p):
                 while True:
                     kind, val = await q.get()
                     if kind in ("text", "usage"):
@@ -3926,8 +3924,9 @@ class TestAgentRunEndpoint:
 
     def test_emits_error_event_on_exception(self):
         async def _raise(state):
+            if False:  # pragma: no cover  # noqa: makes this an async generator
+                yield
             raise RuntimeError("graph exploded")
-            yield  # make it a generator
 
         mock_graph = MagicMock()
         mock_graph.astream = _raise

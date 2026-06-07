@@ -215,6 +215,24 @@ MA_CODE_SYSTEM   = "You are an expert coding agent. Implement the task following
 MA_TEST_SYSTEM   = "You are a test engineer. Write comprehensive automated tests for the implementation provided. Include unit tests, edge cases, and error conditions. Show full file paths before every test file. Use the appropriate testing framework for the language (pytest, Jest/Vitest, Go testing, etc.)."
 MA_REVIEW_SYSTEM = "You are a senior code reviewer. Review the implementation and tests for bugs, security issues, performance problems, missing error handling, and code quality. Be specific and constructive."
 
+def _build_skills_section(skills: list) -> str:
+    """Return the formatted skills block for the system prompt."""
+    parts = ["\n\n## Active Skills:\n"]
+    for s in skills:
+        if s in SKILL_PROMPTS:
+            parts.append(f"{SKILL_PROMPTS[s]}\n\n")
+    return "".join(parts)
+
+
+def _build_tools_section(tools: list) -> str:
+    """Return the formatted tools block for the system prompt (non-Anthropic providers)."""
+    lines = ["\n\n## Available Tools:\n"]
+    for t in tools:
+        lines.append(f"- **{t.name}**: {t.description} ({t.method} {t.url})\n")
+    lines.append("\nDescribe needed tool calls in your response; the user will execute them and share results.")
+    return "".join(lines)
+
+
 def build_system(body: "ChatBody") -> str:
     """Compose the system prompt from agent, skills, rules, file context, and session memory."""
     if getattr(body, 'instructions', '') and body.instructions.strip():
@@ -233,10 +251,7 @@ def build_system(body: "ChatBody") -> str:
         )
     skills = getattr(body, 'skills', []) or []
     if skills:
-        base += "\n\n## Active Skills:\n"
-        for s in skills:
-            if s in SKILL_PROMPTS:
-                base += f"{SKILL_PROMPTS[s]}\n\n"
+        base += _build_skills_section(skills)
     rules = (getattr(body, 'rules', '') or '').strip()
     if rules:
         base += f"\n\n## Rules (must follow):\n{rules}"
@@ -245,10 +260,7 @@ def build_system(body: "ChatBody") -> str:
         base += f"\n\n## Previous Session Context (from last conversation on this repo):\n{memory}"
     tools = getattr(body, 'tools', []) or []
     if tools and body.provider != "anthropic":
-        base += "\n\n## Available Tools:\n"
-        for t in tools:
-            base += f"- **{t.name}**: {t.description} ({t.method} {t.url})\n"
-        base += "\nDescribe needed tool calls in your response; the user will execute them and share results."
+        base += _build_tools_section(tools)
     if body.agent in ("code", "refactor", "testgen", "debug"):
         base += SECURITY_FOOTER
     fc = (getattr(body, 'file_context', '') or '').strip()
@@ -897,53 +909,56 @@ class SuggestFilesBody(BaseModel):
     files: List[str] = Field(max_length=500)
     max_suggestions: int = Field(default=6, ge=1, le=20)
 
-def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> tuple[bool, str]:
-    """Call an AI provider with the given system prompt and user prompt.
+def _call_anthropic_sync(body, system: str, prompt: str, max_tokens: int) -> tuple[bool, str]:
+    """Non-streaming Anthropic call; returns (success, text)."""
+    client = Anthropic(api_key=body.anthropic_key)
+    msg = client.messages.create(
+        model="claude-haiku-4-5-20251001", max_tokens=max_tokens,
+        system=system, messages=[{"role": "user", "content": prompt}],
+    )
+    return True, msg.content[0].text if msg.content else ""
 
-    Returns: (success: bool, result: str)
-    """
+
+def _call_openai_compat_sync(body, system: str, prompt: str, max_tokens: int) -> tuple[bool, str]:
+    """Non-streaming OpenAI-compat call; returns (success, text)."""
+    if not _valid_http_url(body.openai_compat_base_url):
+        return False, "openai_compat_base_url must be http:// or https://"
+    url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
+    hdrs = {"Content-Type": "application/json"}
+    if body.openai_compat_key:
+        hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
+    r = requests.post(url, headers=hdrs, json={
+        "model": body.openai_compat_model or "llama3",
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+        "max_tokens": max_tokens, "stream": False,
+    }, timeout=20)
+    if r.ok:
+        _choices = r.json().get("choices") or []
+        return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
+    return False, ""
+
+
+def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> tuple[bool, str]:
+    """Dispatch a single-turn AI call to the configured provider; returns (success, text)."""
     try:
         if body.provider == "anthropic" and body.anthropic_key:
-            client = Anthropic(api_key=body.anthropic_key)
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            return True, msg.content[0].text if msg.content else ""
-        elif body.provider == "groq" and body.groq_key:
+            return _call_anthropic_sync(body, system, prompt, max_tokens)
+        if body.provider == "groq" and body.groq_key:
             r = requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": body.groq_model or "llama-3.1-8b-instant", "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": prompt},
-                ], "max_tokens": max_tokens, "stream": False},
+                json={"model": body.groq_model or "llama-3.1-8b-instant",
+                      "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                      "max_tokens": max_tokens, "stream": False},
                 timeout=20,
             )
             if r.ok:
                 _choices = r.json().get("choices") or []
                 return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
             return False, ""
-        elif body.provider == "openai_compat" and body.openai_compat_base_url:
-            if not _valid_http_url(body.openai_compat_base_url):
-                return False, "openai_compat_base_url must be http:// or https://"
-            url = body.openai_compat_base_url.rstrip("/") + "/chat/completions"
-            hdrs = {"Content-Type": "application/json"}
-            if body.openai_compat_key:
-                hdrs["Authorization"] = f"Bearer {body.openai_compat_key}"
-            r = requests.post(url, headers=hdrs, json={
-                "model": body.openai_compat_model or "llama3",
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-                "max_tokens": max_tokens, "stream": False,
-            }, timeout=20)
-            if r.ok:
-                _choices = r.json().get("choices") or []
-                return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
-            return False, ""
-        else:
-            return False, "No usable provider configured"
+        if body.provider == "openai_compat" and body.openai_compat_base_url:
+            return _call_openai_compat_sync(body, system, prompt, max_tokens)
+        return False, "No usable provider configured"
     except Exception as e:
         return False, str(e)
 
@@ -1473,6 +1488,45 @@ class CodeScanBody(BaseModel):
     language: str = Field(default="text", max_length=50)
 
 
+_SECRET_KEYWORDS = ("password", "secret", "api_key", "token", "private_key")
+
+
+def _ast_check_call(node: "_ast.Call", ln: "int | None", issues: list) -> None:
+    """Inspect an AST Call node for dangerous function/attribute calls and shell=True."""
+    func = node.func
+    if isinstance(func, _ast.Name) and func.id in _DANGEROUS_CALLS:
+        sev = _DANGEROUS_CALLS[func.id]
+        issues.append({"severity": sev, "pattern": f"{func.id}()",
+            "message": f"{func.id}() can execute arbitrary code — avoid or restrict carefully",
+            "line": ln, "source": "ast"})
+    elif isinstance(func, _ast.Attribute) and isinstance(func.value, _ast.Name):
+        pair = (func.value.id, func.attr)
+        if pair in _DANGEROUS_ATTRS:
+            sev = _DANGEROUS_ATTRS[pair]
+            issues.append({"severity": sev, "pattern": f"{pair[0]}.{pair[1]}()",
+                "message": f"{pair[0]}.{pair[1]}() is a high-risk call — validate all inputs",
+                "line": ln, "source": "ast"})
+    for kw in node.keywords:
+        if kw.arg == "shell" and isinstance(kw.value, _ast.Constant) and kw.value.value is True:
+            issues.append({"severity": "high", "pattern": "shell=True",
+                "message": "shell=True creates command injection risk — pass args as a list",
+                "line": ln, "source": "ast"})
+
+
+def _ast_check_assign(node: "_ast.Assign", ln: "int | None", issues: list) -> None:
+    """Inspect an AST Assign node for hardcoded secret-like string values."""
+    for target in node.targets:
+        if not isinstance(target, _ast.Name):
+            continue
+        nm = target.id.lower()
+        if not any(kw in nm for kw in _SECRET_KEYWORDS):
+            continue
+        if isinstance(node.value, _ast.Constant) and isinstance(node.value.value, str) and len(node.value.value) >= 6:
+            issues.append({"severity": "high", "pattern": f"{target.id} = '...'",
+                "message": f"Hardcoded {target.id} — use os.environ or a secrets manager",
+                "line": ln, "source": "ast"})
+
+
 def _python_ast_issues(code: str) -> list:
     """Return security issues found via AST walk of Python source (max 50K chars)."""
     issues: list = []
@@ -1481,29 +1535,9 @@ def _python_ast_issues(code: str) -> list:
         for node in _ast.walk(tree):
             ln = getattr(node, "lineno", None)
             if isinstance(node, _ast.Call):
-                func = node.func
-                if isinstance(func, _ast.Name) and func.id in _DANGEROUS_CALLS:
-                    sev = _DANGEROUS_CALLS[func.id]
-                    issues.append({"severity": sev, "pattern": f"{func.id}()",
-                        "message": f"{func.id}() can execute arbitrary code — avoid or restrict carefully", "line": ln, "source": "ast"})
-                elif isinstance(func, _ast.Attribute) and isinstance(func.value, _ast.Name):
-                    pair = (func.value.id, func.attr)
-                    if pair in _DANGEROUS_ATTRS:
-                        sev = _DANGEROUS_ATTRS[pair]
-                        issues.append({"severity": sev, "pattern": f"{pair[0]}.{pair[1]}()",
-                            "message": f"{pair[0]}.{pair[1]}() is a high-risk call — validate all inputs", "line": ln, "source": "ast"})
-                for kw in node.keywords:
-                    if kw.arg == "shell" and isinstance(kw.value, _ast.Constant) and kw.value.value is True:
-                        issues.append({"severity": "high", "pattern": "shell=True",
-                            "message": "shell=True creates command injection risk — pass args as a list", "line": ln, "source": "ast"})
+                _ast_check_call(node, ln, issues)
             elif isinstance(node, _ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, _ast.Name):
-                        nm = target.id.lower()
-                        if any(kw in nm for kw in ("password", "secret", "api_key", "token", "private_key")):
-                            if isinstance(node.value, _ast.Constant) and isinstance(node.value.value, str) and len(node.value.value) >= 6:
-                                issues.append({"severity": "high", "pattern": f"{target.id} = '...'",
-                                    "message": f"Hardcoded {target.id} — use os.environ or a secrets manager", "line": ln, "source": "ast"})
+                _ast_check_assign(node, ln, issues)
     except SyntaxError as e:
         issues.append({"severity": "medium", "pattern": "SyntaxError",
             "message": f"Code has syntax errors: {e.msg}", "line": e.lineno, "source": "ast"})
@@ -1922,6 +1956,33 @@ class ChatBody(BaseModel):
 
 _PROV_LABEL: dict = {"anthropic": "Claude", "groq": "Groq", "hf": "HF", "openai_compat": "Custom", "airllm": "AirLLM"}
 
+
+def _get_anthropic_runner(body: "ChatBody") -> Callable:
+    """Select the correct Anthropic run function (tools / thinking / plain)."""
+    tools = getattr(body, 'tools', []) or []
+    model = (getattr(body, 'anthropic_model', '') or 'claude-sonnet-4-6').strip() or 'claude-sonnet-4-6'
+    thinking = bool(getattr(body, 'thinking_mode', False)) and 'opus' in model
+    thinking_budget = int(getattr(body, 'thinking_budget', 2000) or 2000)
+    if tools:
+        return lambda q, loop, sys, msgs: _run_anthropic_with_tools(q, loop, sys, msgs, body.anthropic_key, tools, model)
+    if thinking:
+        return lambda q, loop, sys, msgs: _run_anthropic_thinking(q, loop, sys, msgs, body.anthropic_key, model, thinking_budget)
+    return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key, model)
+
+
+def _get_openai_compat_runner(body: "ChatBody") -> Callable:
+    """Validate openai_compat URL and return the run lambda."""
+    oc_url = body.openai_compat_base_url or "http://localhost:11434/v1"
+    if not _valid_http_url(oc_url):
+        raise ValueError("openai_compat_base_url must be http:// or https://")
+    return lambda q, loop, sys, msgs: _run_openai_compat(
+        q, loop, sys, msgs,
+        body.openai_compat_key or "",
+        oc_url,
+        body.openai_compat_model or "llama3",
+    )
+
+
 def get_runner(body: ChatBody, provider: str = "") -> Callable:
     """Return a thread-target callable bound to the chosen provider's run function.
 
@@ -1934,34 +1995,17 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
     """
     p = provider if provider else body.provider
     if p == "anthropic":
-        tools = getattr(body, 'tools', []) or []
-        model = (getattr(body, 'anthropic_model', '') or 'claude-sonnet-4-6').strip() or 'claude-sonnet-4-6'
-        thinking = bool(getattr(body, 'thinking_mode', False)) and 'opus' in model
-        thinking_budget = int(getattr(body, 'thinking_budget', 2000) or 2000)
-        if tools:
-            return lambda q, loop, sys, msgs: _run_anthropic_with_tools(q, loop, sys, msgs, body.anthropic_key, tools, model)
-        if thinking:
-            return lambda q, loop, sys, msgs: _run_anthropic_thinking(q, loop, sys, msgs, body.anthropic_key, model, thinking_budget)
-        return lambda q, loop, sys, msgs: _run_anthropic(q, loop, sys, msgs, body.anthropic_key, model)
-    elif p == "groq":
+        return _get_anthropic_runner(body)
+    if p == "groq":
         return lambda q, loop, sys, msgs: _run_groq(q, loop, sys, msgs, body.groq_key, body.groq_model or "llama-3.3-70b-versatile")
-    elif p == "openai_compat":
-        oc_url = body.openai_compat_base_url or "http://localhost:11434/v1"
-        if not _valid_http_url(oc_url):
-            raise ValueError("openai_compat_base_url must be http:// or https://")
-        return lambda q, loop, sys, msgs: _run_openai_compat(
-            q, loop, sys, msgs,
-            body.openai_compat_key or "",
-            oc_url,
-            body.openai_compat_model or "llama3",
-        )
-    elif p == "airllm":
+    if p == "openai_compat":
+        return _get_openai_compat_runner(body)
+    if p == "airllm":
         al_model = (getattr(body, 'airllm_model', '') or 'meta-llama/Llama-2-7b-chat-hf').strip() or 'meta-llama/Llama-2-7b-chat-hf'
         al_max_tokens = int(getattr(body, 'airllm_max_tokens', 512) or 512)
         return lambda q, loop, sys, msgs: _run_airllm(q, loop, sys, msgs, al_model, al_max_tokens)
-    else:
-        token = (body.hf_token or "").strip() or HF_TOKEN
-        return lambda q, loop, sys, msgs: _run_hf(q, loop, sys, msgs, token, body.hf_model)
+    token = (body.hf_token or "").strip() or HF_TOKEN
+    return lambda q, loop, sys, msgs: _run_hf(q, loop, sys, msgs, token, body.hf_model)
 
 def _build_ma_runners(body: "ChatBody") -> tuple:
     """Resolve multi-agent stage providers and return (prov, runner) pairs as an 8-tuple."""
