@@ -119,29 +119,40 @@ async def _security_headers(request, call_next):
     return response
 
 
+def _emit_posthog_metrics(user_id: str, flag_buckets: dict, path: str, status_code: int, latency_ms: float) -> None:
+    """Best-effort PostHog capture for each active flag bucket on API paths."""
+    if not (flag_buckets and _posthog_sdk and path.startswith("/api/")):
+        return
+    for flag_name, bucket in flag_buckets.items():
+        try:
+            _posthog_sdk.capture(
+                distinct_id=user_id or "anonymous",
+                event="request_completed",
+                properties={
+                    "flag": flag_name,
+                    "bucket": bucket,
+                    "latency_ms": round(latency_ms, 2),
+                    "status_code": status_code,
+                    "path": path,
+                    "$process_person_profile": False,
+                },
+            )
+        except Exception:
+            pass
+
+
 @app.middleware("http")
 async def _flag_routing_middleware(request, call_next):
-    """Assign flag cohort buckets per request and capture latency metrics to PostHog.
-
-    Sets request.state.flag_buckets = {flag_name: "canary" | "control"}.
-    Adds X-Flag-Buckets response header for observability.
-    Captures `request_completed` events to PostHog for real canary metrics.
-    """
+    """Assign flag cohort buckets per request and capture latency metrics to PostHog."""
     import time as _time
-
     start = _time.monotonic()
-
-    # Stable user identifier: forwarded IP → direct IP → empty string
     user_id = (
         request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
         or (request.client.host if request.client else "")
     )
-
-    # Assign buckets — _flags_mod is defined later in the file but resolved at
-    # call time (well after module import completes).
     try:
         active_flags = [
-            f for f in _flags_mod.get_all()  # noqa: F821 — resolved at call time
+            f for f in _flags_mod.get_all()  # noqa: F821
             if f.get("enabled") and f.get("status") in ("canary", "live")
         ]
         flag_buckets: dict[str, str] = {}
@@ -150,37 +161,13 @@ async def _flag_routing_middleware(request, call_next):
             flag_buckets[flag["name"]] = "canary" if is_canary else "control"
     except Exception:
         flag_buckets = {}
-
     request.state.flag_buckets = flag_buckets
     request.state.user_id = user_id
-
     response = await call_next(request)
-
     latency_ms = (_time.monotonic() - start) * 1000.0
-
-    # Capture PostHog metrics events — only for API paths, best-effort only
-    if flag_buckets and _posthog_sdk and request.url.path.startswith("/api/"):
-        for flag_name, bucket in flag_buckets.items():
-            try:
-                _posthog_sdk.capture(
-                    distinct_id=user_id or "anonymous",
-                    event="request_completed",
-                    properties={
-                        "flag": flag_name,
-                        "bucket": bucket,
-                        "latency_ms": round(latency_ms, 2),
-                        "status_code": response.status_code,
-                        "path": request.url.path,
-                        "$process_person_profile": False,
-                    },
-                )
-            except Exception:
-                pass
-
+    _emit_posthog_metrics(user_id, flag_buckets, request.url.path, response.status_code, latency_ms)
     if flag_buckets:
-        bucket_header = ",".join(f"{k}:{v}" for k, v in flag_buckets.items())
-        response.headers["X-Flag-Buckets"] = bucket_header
-
+        response.headers["X-Flag-Buckets"] = ",".join(f"{k}:{v}" for k, v in flag_buckets.items())
     return response
 
 
@@ -271,6 +258,20 @@ def build_system(body: "ChatBody") -> str:
 
 _airllm_cache: dict = {}
 
+def _build_airllm_prompt(tokenizer, system: str, messages: list) -> str:
+    """Build a prompt string using the tokenizer's chat template or Llama-2 fallback."""
+    chat_msgs = [{"role": "system", "content": system}] + messages
+    if hasattr(tokenizer, "apply_chat_template") and getattr(tokenizer, "chat_template", None):
+        return tokenizer.apply_chat_template(chat_msgs, tokenize=False, add_generation_prompt=True)
+    prompt = f"[INST] <<SYS>>\n{system}\n<</SYS>>\n\n"
+    for m in messages:
+        if m["role"] == "user":
+            prompt += f"{m['content']} [/INST] "
+        elif m["role"] == "assistant":
+            prompt += f"{m['content']} [INST] "
+    return prompt
+
+
 def _run_airllm(q, loop, system: str, messages: list, model_id: str, max_new_tokens: int = 512):
     """Thread target: run local inference via AirLLM (streams model layers from disk/CPU to GPU)."""
     try:
@@ -282,51 +283,31 @@ def _run_airllm(q, loop, system: str, messages: list, model_id: str, max_new_tok
                 q.put(("error", "airllm not installed — run: pip install airllm")), loop
             )
             return
-
         if model_id not in _airllm_cache:
             asyncio.run_coroutine_threadsafe(
                 q.put(("text", f"⏳ Loading **{model_id}** — first run downloads and caches the model, may take several minutes…\n\n")), loop
             )
             device = "cuda:0" if torch.cuda.is_available() else "cpu"
             _airllm_cache[model_id] = AutoModel.from_pretrained(model_id, device=device)
-
         model = _airllm_cache[model_id]
         tokenizer = model.tokenizer
         device = next(iter(model.parameters())).device if hasattr(model, "parameters") else "cpu"
-
-        # Build the prompt using the model's chat template when available
-        chat_msgs = [{"role": "system", "content": system}] + messages
-        if hasattr(tokenizer, "apply_chat_template") and getattr(tokenizer, "chat_template", None):
-            prompt = tokenizer.apply_chat_template(chat_msgs, tokenize=False, add_generation_prompt=True)
-        else:
-            # Llama-2 style fallback
-            prompt = f"[INST] <<SYS>>\n{system}\n<</SYS>>\n\n"
-            for m in messages:
-                if m["role"] == "user":
-                    prompt += f"{m['content']} [/INST] "
-                elif m["role"] == "assistant":
-                    prompt += f"{m['content']} [INST] "
-
+        prompt = _build_airllm_prompt(tokenizer, system, messages)
         inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
         input_ids = inputs["input_ids"].to(device)
         input_len = input_ids.shape[-1]
-
         generation_output = model.generate(
             input_ids,
             max_new_tokens=max(1, min(int(max_new_tokens), 4096)),
             use_cache=True,
             return_dict_in_generate=True,
         )
-
         new_ids = generation_output.sequences[0][input_len:]
         result = tokenizer.decode(new_ids, skip_special_tokens=True).strip()
-
-        # Simulate token-level streaming in small chunks
         for i in range(0, max(len(result), 1), 8):
             chunk = result[i:i + 8]
             if chunk:
                 asyncio.run_coroutine_threadsafe(q.put(("text", chunk)), loop)
-
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
@@ -633,7 +614,7 @@ async def _stream_ai_sse(body, system: str, user_prompt: str, max_tokens: int = 
             else:
                 yield f"data: {json.dumps({'t':'error','v':val})}\n\n"; return
     elif body.provider == "groq" and body.groq_key:
-        r = requests.post(
+        r = requests.post(  # nosec B113
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
             json={"model": getattr(body, 'groq_model', '') or "llama-3.3-70b-versatile", "max_tokens": max_tokens,
@@ -1035,51 +1016,48 @@ class BatchWriteBody(BaseModel):
     branch: str = Field(min_length=1, max_length=255)
     files: List[BatchWriteItem] = Field(min_length=1, max_length=50)
 
+def _gh_write_file(item, owner: str, repo: str, branch: str, token: str) -> tuple:
+    """PUT a single file to GitHub Contents API; returns ("ok"|"error", result_dict)."""
+    safe_p = _gh_path(item.path)
+    sha = None
+    try:
+        existing = requests.get(
+            f"{_gh_base(owner, repo)}/contents/{safe_p}",
+            headers=gh_hdrs(token), params={"ref": branch}, timeout=10,
+        )
+        if existing.ok:
+            sha = existing.json().get("sha")
+    except Exception:
+        pass
+    payload = {
+        "message": item.message,
+        "content": base64.b64encode(item.content.encode("utf-8")).decode("utf-8"),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    try:
+        w = requests.put(
+            f"{_gh_base(owner, repo)}/contents/{safe_p}",
+            headers=gh_hdrs(token), json=payload, timeout=15,
+        )
+        if w.ok:
+            return ("ok", {"path": item.path, "commit_url": w.json().get("commit", {}).get("html_url", "")})
+        try:
+            err_msg = w.json().get("message", "Write failed")
+        except Exception:
+            err_msg = "Write failed"
+        return ("error", {"path": item.path, "error": err_msg})
+    except Exception as e:
+        return ("error", {"path": item.path, "error": str(e)})
+
+
 @app.post("/api/repo/write/batch")
 async def repo_write_batch(body: BatchWriteBody):
     """Commit multiple files to the repository, reporting per-file results."""
-
-    def write_file(item):
-        safe_p = _gh_path(item.path)
-        sha = None
-        try:
-            existing = requests.get(
-                f"{_gh_base(body.owner, body.repo)}/contents/{safe_p}",
-                headers=gh_hdrs(body.token), params={"ref": body.branch}, timeout=10,
-            )
-            if existing.ok:
-                sha = existing.json().get("sha")
-        except Exception:
-            pass
-
-        payload = {
-            "message": item.message,
-            "content": base64.b64encode(item.content.encode("utf-8")).decode("utf-8"),
-            "branch": body.branch,
-        }
-        if sha:
-            payload["sha"] = sha
-
-        try:
-            w = requests.put(
-                f"{_gh_base(body.owner, body.repo)}/contents/{safe_p}",
-                headers=gh_hdrs(body.token), json=payload, timeout=15,
-            )
-            if w.ok:
-                data = w.json()
-                return ("ok", {"path": item.path, "commit_url": data.get("commit", {}).get("html_url", "")})
-            else:
-                try:
-                    err_msg = w.json().get("message", "Write failed")
-                except Exception:
-                    err_msg = "Write failed"
-                return ("error", {"path": item.path, "error": err_msg})
-        except Exception as e:
-            return ("error", {"path": item.path, "error": str(e)})
-
     committed, errors = [], []
     with ThreadPoolExecutor(max_workers=5) as ex:
-        futures = {ex.submit(write_file, item): item for item in body.files}
+        futures = {ex.submit(_gh_write_file, item, body.owner, body.repo, body.branch, body.token): item for item in body.files}
         for future in _futs_done(futures, timeout=60):
             try:
                 status, result = future.result()
@@ -1090,7 +1068,6 @@ async def repo_write_batch(body: BatchWriteBody):
             except Exception as e:
                 item = futures[future]
                 errors.append({"path": item.path, "error": str(e)})
-
     return {"committed": committed, "errors": errors}
 
 
@@ -1496,50 +1473,51 @@ class CodeScanBody(BaseModel):
     language: str = Field(default="text", max_length=50)
 
 
+def _python_ast_issues(code: str) -> list:
+    """Return security issues found via AST walk of Python source (max 50K chars)."""
+    issues: list = []
+    try:
+        tree = _ast.parse(code[:50_000])
+        for node in _ast.walk(tree):
+            ln = getattr(node, "lineno", None)
+            if isinstance(node, _ast.Call):
+                func = node.func
+                if isinstance(func, _ast.Name) and func.id in _DANGEROUS_CALLS:
+                    sev = _DANGEROUS_CALLS[func.id]
+                    issues.append({"severity": sev, "pattern": f"{func.id}()",
+                        "message": f"{func.id}() can execute arbitrary code — avoid or restrict carefully", "line": ln, "source": "ast"})
+                elif isinstance(func, _ast.Attribute) and isinstance(func.value, _ast.Name):
+                    pair = (func.value.id, func.attr)
+                    if pair in _DANGEROUS_ATTRS:
+                        sev = _DANGEROUS_ATTRS[pair]
+                        issues.append({"severity": sev, "pattern": f"{pair[0]}.{pair[1]}()",
+                            "message": f"{pair[0]}.{pair[1]}() is a high-risk call — validate all inputs", "line": ln, "source": "ast"})
+                for kw in node.keywords:
+                    if kw.arg == "shell" and isinstance(kw.value, _ast.Constant) and kw.value.value is True:
+                        issues.append({"severity": "high", "pattern": "shell=True",
+                            "message": "shell=True creates command injection risk — pass args as a list", "line": ln, "source": "ast"})
+            elif isinstance(node, _ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, _ast.Name):
+                        nm = target.id.lower()
+                        if any(kw in nm for kw in ("password", "secret", "api_key", "token", "private_key")):
+                            if isinstance(node.value, _ast.Constant) and isinstance(node.value.value, str) and len(node.value.value) >= 6:
+                                issues.append({"severity": "high", "pattern": f"{target.id} = '...'",
+                                    "message": f"Hardcoded {target.id} — use os.environ or a secrets manager", "line": ln, "source": "ast"})
+    except SyntaxError as e:
+        issues.append({"severity": "medium", "pattern": "SyntaxError",
+            "message": f"Code has syntax errors: {e.msg}", "line": e.lineno, "source": "ast"})
+    return issues
+
+
 @app.post("/api/code/scan")
 async def scan_code(body: CodeScanBody):
     """Scan code for security issues using AST analysis (Python) and pattern matching."""
-    issues: list = []
     code = (body.code or "").strip()[:100_000]
     lang = (body.language or "text").lower()
     if not code:
         return {"issues": [], "safe": True, "language": lang, "total": 0}
-
-    # Python AST deep scan (limit to 50K to bound parse time)
-    if lang == "python":
-        try:
-            tree = _ast.parse(code[:50_000])
-            for node in _ast.walk(tree):
-                ln = getattr(node, "lineno", None)
-                if isinstance(node, _ast.Call):
-                    func = node.func
-                    if isinstance(func, _ast.Name) and func.id in _DANGEROUS_CALLS:
-                        sev = _DANGEROUS_CALLS[func.id]
-                        issues.append({"severity": sev, "pattern": f"{func.id}()",
-                            "message": f"{func.id}() can execute arbitrary code — avoid or restrict carefully", "line": ln, "source": "ast"})
-                    elif isinstance(func, _ast.Attribute) and isinstance(func.value, _ast.Name):
-                        pair = (func.value.id, func.attr)
-                        if pair in _DANGEROUS_ATTRS:
-                            sev = _DANGEROUS_ATTRS[pair]
-                            issues.append({"severity": sev, "pattern": f"{pair[0]}.{pair[1]}()",
-                                "message": f"{pair[0]}.{pair[1]}() is a high-risk call — validate all inputs", "line": ln, "source": "ast"})
-                    for kw in node.keywords:
-                        if kw.arg == "shell" and isinstance(kw.value, _ast.Constant) and kw.value.value is True:
-                            issues.append({"severity": "high", "pattern": "shell=True",
-                                "message": "shell=True creates command injection risk — pass args as a list", "line": ln, "source": "ast"})
-                elif isinstance(node, _ast.Assign):
-                    for target in node.targets:
-                        if isinstance(target, _ast.Name):
-                            nm = target.id.lower()
-                            if any(kw in nm for kw in ("password", "secret", "api_key", "token", "private_key")):
-                                if isinstance(node.value, _ast.Constant) and isinstance(node.value.value, str) and len(node.value.value) >= 6:
-                                    issues.append({"severity": "high", "pattern": f"{target.id} = '...'",
-                                        "message": f"Hardcoded {target.id} — use os.environ or a secrets manager", "line": ln, "source": "ast"})
-        except SyntaxError as e:
-            issues.append({"severity": "medium", "pattern": "SyntaxError",
-                "message": f"Code has syntax errors: {e.msg}", "line": e.lineno, "source": "ast"})
-
-    # Regex scan — language-specific + generic patterns
+    issues: list = _python_ast_issues(code) if lang == "python" else []
     lang_patterns = SECURITY_PATTERNS.get(lang, [])
     ast_high_lines = {i["line"] for i in issues if i.get("source") == "ast" and i.get("severity") == "high"}
     seen: set = set()
@@ -1551,7 +1529,6 @@ async def scan_code(body: CodeScanBody):
                     seen.add(key)
                     clean_pat = re.sub(r'[\\^$.*+?()\[\]{}|]', '', pat)[:30].strip()
                     issues.append({"severity": sev, "pattern": clean_pat, "message": msg, "line": lineno, "source": "pattern"})
-
     sev_order = {"high": 0, "medium": 1, "low": 2}
     issues.sort(key=lambda x: (sev_order.get(x.get("severity", "low"), 3), x.get("line") or 9999))
     issues = issues[:15]
@@ -1720,6 +1697,54 @@ class ScanDepsBody(BaseModel):
     anthropic_model: Optional[str] = Field(default="claude-haiku-4-5-20251001", max_length=200)
 
 
+def _detect_deps_ecosystem(fname: str, content: str) -> tuple:
+    """Return (ecosystem, packages, checker) for the given dependency filename."""
+    if fname == "pyproject.toml":
+        return "python", _parse_pyproject_toml(content), _pypi_latest
+    if fname == "requirements.txt" or fname.endswith("requirements.txt"):
+        return "python", _parse_requirements(content), _pypi_latest
+    if fname == "package.json":
+        return "javascript", _parse_package_json(content), _npm_latest
+    if fname == "go.mod":
+        return "go", _parse_go_mod(content), None
+    if fname == "cargo.toml":
+        return "rust", _parse_cargo_toml(content), None
+    return "unknown", _parse_requirements(content), None
+
+
+def _parallel_version_check(packages: list, checker) -> dict:
+    """Return {name: latest_version} for the first 20 packages using a thread pool."""
+    version_map: dict = {}
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        futs = {ex.submit(checker, p["name"]): p["name"] for p in packages[:20]}
+        for f in _futs_done(futs, timeout=12):
+            try:
+                rv = f.result()
+                if rv.get("latest"):
+                    version_map[rv["name"]] = rv["latest"]
+            except Exception:
+                pass
+    return version_map
+
+
+def _build_pkg_results(packages: list, version_map: dict, ecosystem: str) -> list:
+    """Build per-package result dicts with pinned/latest/outdated/unpinned fields."""
+    def _extract_pinned(constraint: str) -> "str | None":
+        m = re.search(r'==\s*([^\s,;]+)', constraint)
+        return m.group(1) if m else None
+    results = []
+    for p in packages[:20]:
+        pinned = _extract_pinned(p["constraint"])
+        latest = version_map.get(p["name"])
+        results.append({
+            "name": p["name"], "constraint": p["constraint"],
+            "pinned": pinned, "latest": latest,
+            "outdated": bool(pinned and latest and pinned != latest),
+            "unpinned": not pinned and ecosystem == "python",
+        })
+    return results
+
+
 @app.post("/api/repo/scan-deps")
 async def scan_deps(body: ScanDepsBody):
     """Parse a dependency file, check latest versions, and stream an AI security audit."""
@@ -1727,53 +1752,11 @@ async def scan_deps(body: ScanDepsBody):
     content = (body.content or "").strip()[:200_000]
     if not content:
         return JSONResponse({"error": "content required"}, status_code=400)
-
-    # Detect ecosystem
-    if fname == "pyproject.toml":
-        ecosystem, packages, checker = "python", _parse_pyproject_toml(content), _pypi_latest
-    elif fname == "requirements.txt" or fname.endswith("requirements.txt"):
-        ecosystem, packages, checker = "python", _parse_requirements(content), _pypi_latest
-    elif fname == "package.json":
-        ecosystem, packages, checker = "javascript", _parse_package_json(content), _npm_latest
-    elif fname == "go.mod":
-        ecosystem, packages, checker = "go", _parse_go_mod(content), None
-    elif fname == "cargo.toml":
-        ecosystem, packages, checker = "rust", _parse_cargo_toml(content), None
-    else:
-        ecosystem, packages, checker = "unknown", _parse_requirements(content), None
-
+    ecosystem, packages, checker = _detect_deps_ecosystem(fname, content)
     if not packages:
         return JSONResponse({"error": "No packages found in file"}, status_code=400)
-
-    # Parallel version checks (top 20 packages, 5 workers, 12s total)
-    to_check = packages[:20]
-    version_map: dict = {}
-    if checker:
-        with ThreadPoolExecutor(max_workers=5) as ex:
-            futs = {ex.submit(checker, p["name"]): p["name"] for p in to_check}
-            for f in _futs_done(futs, timeout=12):
-                try:
-                    rv = f.result()
-                    if rv.get("latest"):
-                        version_map[rv["name"]] = rv["latest"]
-                except Exception:
-                    pass
-
-    def _extract_pinned(constraint: str) -> "str | None":
-        m = re.search(r'==\s*([^\s,;]+)', constraint)
-        return m.group(1) if m else None
-
-    pkg_results = []
-    for p in packages[:20]:
-        pinned = _extract_pinned(p["constraint"])
-        latest = version_map.get(p["name"])
-        pkg_results.append({
-            "name": p["name"], "constraint": p["constraint"],
-            "pinned": pinned, "latest": latest,
-            "outdated": bool(pinned and latest and pinned != latest),
-            "unpinned": not pinned and ecosystem == "python",
-        })
-
+    version_map = _parallel_version_check(packages, checker) if checker else {}
+    pkg_results = _build_pkg_results(packages, version_map, ecosystem)
     audit_lines = "\n".join(
         f"- {p['name']}: {p['pinned'] or p['constraint']} (latest: {p['latest'] or '?'})"
         + (" ⚠️ OUTDATED" if p["outdated"] else "")
@@ -2421,60 +2404,50 @@ class EvolutionRunBody(BaseModel):
     metrics_hours: int = Field(default=1, ge=1, le=24, description="Hours of history to query for real metrics")
 
 
+def _resolve_real_metrics(flag_name: str, fallback: dict, use_real: bool, hours: int) -> dict:
+    """Fetch PostHog metrics for a flag if use_real is True; fall back to supplied values."""
+    if not use_real:
+        return fallback
+    from autonomous import metrics as _metrics_mod
+    real = _metrics_mod.fetch_metrics_for_flag(flag_name, hours=hours)
+    if real.get("source") == "posthog":
+        return {
+            "error_rate_canary": real["error_rate_canary"],
+            "error_rate_baseline": real["error_rate_baseline"],
+            "latency_canary_ms": max(0.001, real["latency_canary_ms"]),
+            "latency_baseline_ms": max(0.001, real["latency_baseline_ms"]),
+            "sample_size": real["sample_size"],
+        }
+    return fallback
+
+
 @app.post("/api/evolution/run")
 async def evolution_run(body: EvolutionRunBody):
     """Run one evolution cycle iteration for all canary flags (or a specific flag)."""
-    from autonomous import metrics as _metrics_mod
-
     token = body.github_token or os.environ.get("GITHUB_TOKEN", "")
     owner = body.github_owner or os.environ.get("GITHUB_OWNER", "")
     repo = body.github_repo or os.environ.get("GITHUB_REPO", "")
     metrics = body.metrics.model_dump()
-
-    def _maybe_real_metrics(flag_name: str) -> dict:
-        """Fetch real metrics from PostHog/Rollbar if requested, else return body metrics."""
-        if not body.use_real_metrics:
-            return metrics
-        real = _metrics_mod.fetch_metrics_for_flag(
-            flag_name,
-            hours=body.metrics_hours,
-        )
-        if real.get("source") == "posthog":
-            # Full segmented metrics — use them directly
-            return {
-                "error_rate_canary": real["error_rate_canary"],
-                "error_rate_baseline": real["error_rate_baseline"],
-                "latency_canary_ms": max(0.001, real["latency_canary_ms"]),
-                "latency_baseline_ms": max(0.001, real["latency_baseline_ms"]),
-                "sample_size": real["sample_size"],
-            }
-        # Partial or unavailable — fall back to supplied values
-        return metrics
-
+    gh_kwargs = {"github_token": token, "github_owner": owner, "github_repo": repo}
     if body.flag_name:
-        effective_metrics = await asyncio.to_thread(_maybe_real_metrics, body.flag_name)
-        result = await _evolution_mod.run_cycle(
-            body.flag_name, effective_metrics,
-            github_token=token, github_owner=owner, github_repo=repo,
+        effective = await asyncio.to_thread(
+            _resolve_real_metrics, body.flag_name, metrics, body.use_real_metrics, body.metrics_hours
         )
+        result = await _evolution_mod.run_cycle(body.flag_name, effective, **gh_kwargs)
         return {"results": [result]}
-
-    # Fan out over all active canary/dark flags
     flags = [f for f in _flags_mod.get_all() if f.get("status") in ("canary", "dark") and f.get("enabled", True)]
     if body.use_real_metrics:
         tasks = [
             _evolution_mod.run_cycle(
                 f["name"],
-                await asyncio.to_thread(_maybe_real_metrics, f["name"]),
-                github_token=token, github_owner=owner, github_repo=repo,
+                await asyncio.to_thread(_resolve_real_metrics, f["name"], metrics, True, body.metrics_hours),
+                **gh_kwargs,
             )
             for f in flags
         ]
         results = list(await asyncio.gather(*tasks)) if tasks else []
     else:
-        results = await _evolution_mod.run_all_canary_flags(
-            metrics, github_token=token, github_owner=owner, github_repo=repo,
-        )
+        results = await _evolution_mod.run_all_canary_flags(metrics, **gh_kwargs)
     return {"results": results}
 
 

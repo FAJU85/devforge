@@ -4851,3 +4851,313 @@ class TestBranchCreate:
         body = r.json()
         assert body["branch"] == "feature/test"
         assert body["sha"] == "deadbeef"
+
+
+# ── Helper unit tests (Cycles 3-6 extracted helpers) ─────────────────────────
+
+class TestPythonAstIssues:
+    """Unit tests for _python_ast_issues helper (covers missing AST branch paths)."""
+
+    def test_dangerous_attr_os_system(self):
+        issues = main._python_ast_issues("import os\nos.system('ls')")
+        sigs = [(i["pattern"], i["severity"]) for i in issues]
+        assert ("os.system()", "high") in sigs
+
+    def test_attr_not_in_dangerous_attrs_no_issue(self):
+        issues = main._python_ast_issues("obj.safe_method()")
+        assert not any(i["source"] == "ast" and i["pattern"] == "obj.safe_method()" for i in issues)
+
+    def test_shell_true_detected(self):
+        issues = main._python_ast_issues("import subprocess\nsubprocess.run(['ls'], shell=True)")
+        assert any(i["pattern"] == "shell=True" for i in issues)
+
+    def test_keyword_not_shell_no_ast_issue(self):
+        issues = main._python_ast_issues("import subprocess\nsubprocess.run(['ls'], timeout=5)")
+        assert not any(i["pattern"] == "shell=True" for i in issues)
+
+    def test_hardcoded_token_variable_detected(self):
+        issues = main._python_ast_issues("api_key = 'abc123secret'")
+        assert any(i["pattern"] == "api_key = '...'" for i in issues)
+
+    def test_short_secret_value_not_flagged(self):
+        issues = main._python_ast_issues("password = 'hi'")
+        assert not any(i["pattern"] == "password = '...'" for i in issues)
+
+    def test_syntax_error_returns_medium_issue(self):
+        issues = main._python_ast_issues("def broken(::")
+        assert any(i["severity"] == "medium" and i["source"] == "ast" for i in issues)
+
+
+class TestBuildAirllmPrompt:
+    """Unit tests for _build_airllm_prompt helper."""
+
+    def test_uses_chat_template_when_available(self):
+        tokenizer = MagicMock()
+        tokenizer.chat_template = "<tmpl>"
+        tokenizer.apply_chat_template.return_value = "<formatted>"
+        result = main._build_airllm_prompt(tokenizer, "sys", [{"role": "user", "content": "hi"}])
+        assert result == "<formatted>"
+        tokenizer.apply_chat_template.assert_called_once()
+
+    def test_fallback_llama2_format_user_message(self):
+        tokenizer = MagicMock(spec=[])
+        result = main._build_airllm_prompt(tokenizer, "my-system", [{"role": "user", "content": "hello"}])
+        assert "[INST]" in result
+        assert "my-system" in result
+        assert "hello" in result
+
+    def test_fallback_includes_assistant_turn(self):
+        tokenizer = MagicMock(spec=[])
+        msgs = [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}]
+        result = main._build_airllm_prompt(tokenizer, "sys", msgs)
+        assert "q" in result
+        assert "a" in result
+
+
+class TestParallelVersionCheck:
+    """Unit tests for _parallel_version_check helper."""
+
+    def test_skips_packages_with_no_latest(self):
+        def checker(name):
+            return {"name": name, "latest": None}
+        result = main._parallel_version_check([{"name": "requests", "constraint": "==2.28.0"}], checker)
+        assert result == {}
+
+    def test_captures_latest_when_present(self):
+        def checker(name):
+            return {"name": name, "latest": "3.0.0"}
+        result = main._parallel_version_check([{"name": "flask", "constraint": "==2.0.0"}], checker)
+        assert result == {"flask": "3.0.0"}
+
+    def test_handles_checker_exception_gracefully(self):
+        def checker(name):
+            raise RuntimeError("network error")
+        result = main._parallel_version_check([{"name": "bad", "constraint": "==1.0.0"}], checker)
+        assert result == {}
+
+
+class TestEmitPosthogMetrics:
+    """Unit tests for _emit_posthog_metrics helper."""
+
+    def test_no_op_when_flag_buckets_empty(self):
+        with patch.object(main, "_posthog_sdk", MagicMock()):
+            main._emit_posthog_metrics("user1", {}, "/api/flags", 200, 10.0)
+            main._posthog_sdk.capture.assert_not_called()
+
+    def test_captures_for_each_bucket(self):
+        mock_ph = MagicMock()
+        with patch.object(main, "_posthog_sdk", mock_ph):
+            main._emit_posthog_metrics("u1", {"flag-a": "canary"}, "/api/flags", 200, 5.0)
+        mock_ph.capture.assert_called_once()
+
+    def test_exception_in_capture_is_swallowed(self):
+        mock_ph = MagicMock()
+        mock_ph.capture.side_effect = RuntimeError("posthog down")
+        with patch.object(main, "_posthog_sdk", mock_ph):
+            main._emit_posthog_metrics("u1", {"f": "c"}, "/api/x", 200, 1.0)
+
+
+class TestResolveRealMetrics:
+    """Unit tests for _resolve_real_metrics helper."""
+
+    def test_returns_fallback_when_use_real_false(self):
+        fallback = {"error_rate_canary": 0.01, "error_rate_baseline": 0.005,
+                    "latency_canary_ms": 100.0, "latency_baseline_ms": 90.0, "sample_size": 500}
+        result = main._resolve_real_metrics("my-flag", fallback, False, 24)
+        assert result is fallback
+
+    def test_posthog_path_returns_real_metrics(self):
+        fallback = {"error_rate_canary": 0.1, "error_rate_baseline": 0.05,
+                    "latency_canary_ms": 200.0, "latency_baseline_ms": 180.0, "sample_size": 100}
+        real = {"source": "posthog", "error_rate_canary": 0.02, "error_rate_baseline": 0.01,
+                "latency_canary_ms": 50.0, "latency_baseline_ms": 45.0, "sample_size": 1000}
+        import autonomous.metrics as _m
+        orig = _m.fetch_metrics_for_flag
+        try:
+            _m.fetch_metrics_for_flag = lambda flag, hours: real
+            result = main._resolve_real_metrics("my-flag", fallback, True, 24)
+            assert result["error_rate_canary"] == 0.02
+            assert result["sample_size"] == 1000
+        finally:
+            _m.fetch_metrics_for_flag = orig
+
+    def test_non_posthog_source_returns_fallback(self):
+        fallback = {"error_rate_canary": 0.1, "error_rate_baseline": 0.05,
+                    "latency_canary_ms": 200.0, "latency_baseline_ms": 180.0, "sample_size": 100}
+        real = {"source": "unavailable"}
+        import autonomous.metrics as _m
+        orig = _m.fetch_metrics_for_flag
+        try:
+            _m.fetch_metrics_for_flag = lambda flag, hours: real
+            result = main._resolve_real_metrics("my-flag", fallback, True, 24)
+            assert result is fallback
+        finally:
+            _m.fetch_metrics_for_flag = orig
+
+class TestExecuteHttpTool:
+    """Unit tests for _execute_http_tool helper (Cycle 1)."""
+
+    def _tool(self, url="https://api.example.com/{id}", method="GET", headers=None):
+        t = MagicMock()
+        t.url = url
+        t.method = method
+        t.headers = headers or {}
+        return t
+
+    def _block(self, inp=None):
+        b = MagicMock()
+        b.input = inp or {}
+        return b
+
+    def test_invalid_url_returns_error(self):
+        result = main._execute_http_tool(self._tool(url="ftp://bad"), self._block())
+        assert result.startswith("Error:")
+
+    def test_unsupported_method_returns_error(self):
+        result = main._execute_http_tool(self._tool(method="BREW"), self._block())
+        assert "Unsupported method" in result
+
+    def test_get_request_calls_requests_get(self):
+        mock_resp = MagicMock()
+        mock_resp.text = "ok"
+        with patch("main.requests.get", return_value=mock_resp) as mock_get:
+            result = main._execute_http_tool(self._tool(), self._block())
+        assert result == "ok"
+        mock_get.assert_called_once()
+
+    def test_post_request_calls_requests_request(self):
+        mock_resp = MagicMock()
+        mock_resp.text = "created"
+        with patch("main.requests.request", return_value=mock_resp) as mock_req:
+            result = main._execute_http_tool(self._tool(method="POST"), self._block({"key": "val"}))
+        assert result == "created"
+        mock_req.assert_called_once()
+
+    def test_url_path_param_substituted(self):
+        mock_resp = MagicMock()
+        mock_resp.text = "done"
+        with patch("main.requests.get", return_value=mock_resp) as mock_get:
+            main._execute_http_tool(self._tool(url="https://api.example.com/{id}"), self._block({"id": "42"}))
+        called_url = mock_get.call_args[0][0]
+        assert "42" in called_url
+
+
+class TestExecuteToolCall:
+    """Unit tests for _execute_tool_call helper (Cycle 1)."""
+
+    def test_tool_not_found_returns_error(self):
+        block = MagicMock()
+        block.name = "missing_tool"
+        result = main._execute_tool_call(block, [])
+        assert "not found" in result
+
+    def test_tool_found_delegates_to_execute_http_tool(self):
+        block = MagicMock()
+        block.name = "my_tool"
+        block.input = {}
+        tool = MagicMock()
+        tool.name = "my_tool"
+        tool.url = "https://example.com/"
+        tool.method = "GET"
+        tool.headers = {}
+        mock_resp = MagicMock()
+        mock_resp.text = "result"
+        with patch("main.requests.get", return_value=mock_resp):
+            result = main._execute_tool_call(block, [tool])
+        assert result == "result"
+
+    def test_exception_wrapped_in_error_string(self):
+        block = MagicMock()
+        block.name = "boom"
+        tool = MagicMock()
+        tool.name = "boom"
+        tool.url = "https://example.com/"
+        tool.method = "GET"
+        tool.headers = {}
+        with patch("main.requests.get", side_effect=RuntimeError("network down")):
+            result = main._execute_tool_call(block, [tool])
+        assert result.startswith("Error:")
+
+
+class TestCollectAssistantTurn:
+    """Unit tests for _collect_assistant_turn helper (Cycle 1)."""
+
+    def _make_text_block(self, text):
+        b = MagicMock()
+        b.type = "text"
+        b.text = text
+        return b
+
+    def _make_tool_block(self, name="my_tool", bid="call_1", inp=None):
+        b = MagicMock()
+        b.type = "tool_use"
+        b.name = name
+        b.id = bid
+        b.input = inp or {}
+        return b
+
+    def test_text_block_collected(self):
+        msg = MagicMock()
+        msg.content = [self._make_text_block("hello")]
+        result = main._collect_assistant_turn(msg)
+        assert result == [{"type": "text", "text": "hello"}]
+
+    def test_tool_use_block_collected(self):
+        msg = MagicMock()
+        msg.content = [self._make_tool_block("search", "c1", {"q": "test"})]
+        result = main._collect_assistant_turn(msg)
+        assert result == [{"type": "tool_use", "id": "c1", "name": "search", "input": {"q": "test"}}]
+
+    def test_mixed_blocks_collected(self):
+        msg = MagicMock()
+        msg.content = [self._make_text_block("thinking"), self._make_tool_block("lookup", "c2")]
+        result = main._collect_assistant_turn(msg)
+        assert len(result) == 2
+
+
+class TestGhWriteFile:
+    """Unit tests for _gh_write_file helper (Cycle 4)."""
+
+    def _item(self, path="src/file.py", content="print('hi')", message="update file"):
+        item = MagicMock()
+        item.path = path
+        item.content = content
+        item.message = message
+        return item
+
+    def test_new_file_no_sha(self):
+        existing_r = MagicMock()
+        existing_r.ok = False
+        write_r = MagicMock()
+        write_r.ok = True
+        write_r.json.return_value = {"commit": {"html_url": "https://github.com/c/1"}}
+        with patch("main.requests.get", return_value=existing_r), \
+             patch("main.requests.put", return_value=write_r):
+            status, result = main._gh_write_file(self._item(), "owner", "repo", "main", "tok")
+        assert status == "ok"
+        assert result["path"] == "src/file.py"
+
+    def test_existing_file_passes_sha(self):
+        existing_r = MagicMock()
+        existing_r.ok = True
+        existing_r.json.return_value = {"sha": "abc123"}
+        write_r = MagicMock()
+        write_r.ok = True
+        write_r.json.return_value = {"commit": {"html_url": "url"}}
+        with patch("main.requests.get", return_value=existing_r), \
+             patch("main.requests.put", return_value=write_r) as mock_put:
+            status, _ = main._gh_write_file(self._item(), "owner", "repo", "main", "tok")
+        assert status == "ok"
+        assert mock_put.call_args[1]["json"]["sha"] == "abc123"
+
+    def test_write_failure_returns_error_tuple(self):
+        existing_r = MagicMock()
+        existing_r.ok = False
+        write_r = MagicMock()
+        write_r.ok = False
+        write_r.json.return_value = {"message": "file too large"}
+        with patch("main.requests.get", return_value=existing_r), \
+             patch("main.requests.put", return_value=write_r):
+            status, result = main._gh_write_file(self._item(), "owner", "repo", "main", "tok")
+        assert status == "error"
+        assert "too large" in result["error"]
