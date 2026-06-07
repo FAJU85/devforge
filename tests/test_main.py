@@ -398,6 +398,33 @@ class TestRunAnthropic:
 
 
 # ---------------------------------------------------------------------------
+# _friendly_anthropic_error
+# ---------------------------------------------------------------------------
+
+class TestFriendlyAnthropicError:
+    def test_401_returns_invalid_key_message(self):
+        msg = main._friendly_anthropic_error(Exception("401 authentication_error"))
+        assert "invalid" in msg.lower() or "missing" in msg.lower()
+        assert "console.anthropic.com" in msg
+
+    def test_429_returns_rate_limit_message(self):
+        msg = main._friendly_anthropic_error(Exception("429 rate_limit_error"))
+        assert "rate limit" in msg.lower()
+
+    def test_529_returns_overloaded_message(self):
+        msg = main._friendly_anthropic_error(Exception("529 overloaded_error"))
+        assert "overloaded" in msg.lower()
+
+    def test_403_returns_permission_message(self):
+        msg = main._friendly_anthropic_error(Exception("403 permission_error"))
+        assert "permission" in msg.lower()
+
+    def test_unknown_error_returns_original(self):
+        msg = main._friendly_anthropic_error(Exception("some unexpected error"))
+        assert msg == "some unexpected error"
+
+
+# ---------------------------------------------------------------------------
 # _run_hf
 # ---------------------------------------------------------------------------
 
@@ -430,6 +457,16 @@ class TestRunHf:
 
         kinds = [k for k, _ in items]
         assert "error" in kinds
+
+    def test_run_hf_402_credits_exhausted(self):
+        msg = "Client error '402 Payment Required' for url 'https://router.huggingface.co/v1/chat/completions'. You have depleted your monthly included credits."
+        with patch("main.InferenceClient", side_effect=Exception(msg)):
+            items = _run_runner_sync(main._run_hf, "sys", [], "token", "model")
+
+        error_vals = [v for k, v in items if k == "error"]
+        assert error_vals
+        assert "credits" in error_vals[0].lower()
+        assert "huggingface.co/pricing" in error_vals[0]
 
     def test_run_hf_puts_error_when_token_empty(self):
         items = _run_runner_sync(main._run_hf, "sys", [], "", "model")

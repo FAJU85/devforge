@@ -331,6 +331,18 @@ def _run_airllm(q, loop, system: str, messages: list, model_id: str, max_new_tok
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
 
+def _friendly_anthropic_error(e: Exception) -> str:
+    msg = str(e)
+    if "401" in msg or "authentication_error" in msg or "invalid x-api-key" in msg.lower():
+        return "Anthropic API key is invalid or missing. Check your key at console.anthropic.com."
+    if "429" in msg or "rate_limit_error" in msg:
+        return "Anthropic rate limit reached. Wait a moment and try again."
+    if "529" in msg or "overloaded_error" in msg:
+        return "Anthropic API is temporarily overloaded. Try again in a few seconds."
+    if "403" in msg or "permission_error" in msg:
+        return "Anthropic API key does not have permission for this model or feature."
+    return msg
+
 def _run_anthropic_thinking(q, loop, system, messages, api_key, model, thinking_budget):
     """Run Anthropic with extended thinking enabled; emits ('thinking', text) chunks."""
     try:
@@ -367,7 +379,7 @@ def _run_anthropic_thinking(q, loop, system, messages, api_key, model, thinking_
                 pass
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
-        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+        asyncio.run_coroutine_threadsafe(q.put(("error", _friendly_anthropic_error(e))), loop)
 
 def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="claude-sonnet-4-6"):
     """Run Anthropic with native tool use, executing HTTP calls and looping until done."""
@@ -454,7 +466,7 @@ def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="
         asyncio.run_coroutine_threadsafe(q.put(("usage", total_usage)), loop)
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
-        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+        asyncio.run_coroutine_threadsafe(q.put(("error", _friendly_anthropic_error(e))), loop)
 
 def _run_anthropic(q, loop, system, messages, api_key, model="claude-sonnet-4-6"):
     try:
@@ -471,7 +483,7 @@ def _run_anthropic(q, loop, system, messages, api_key, model="claude-sonnet-4-6"
                 pass
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
-        asyncio.run_coroutine_threadsafe(q.put(("error", str(e))), loop)
+        asyncio.run_coroutine_threadsafe(q.put(("error", _friendly_anthropic_error(e))), loop)
 
 def _run_groq(q, loop, system, messages, api_key, model):
     try:
@@ -524,6 +536,8 @@ def _run_hf(q, loop, system, messages, token, model):
         err = str(e)
         if "401" in err or "Unauthorized" in err or "Invalid username" in err:
             err = "HuggingFace token is invalid or expired. Update the HF_TOKEN Space secret."
+        elif "402" in err or "Payment Required" in err or "depleted" in err or "credits" in err.lower():
+            err = "HuggingFace credits exhausted. Purchase pre-paid credits or subscribe to HF PRO at huggingface.co/pricing."
         asyncio.run_coroutine_threadsafe(q.put(("error", err)), loop)
 
 def _run_openai_compat(q, loop, system, messages, api_key, base_url, model):
