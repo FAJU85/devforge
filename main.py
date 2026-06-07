@@ -1980,6 +1980,68 @@ def get_runner(body: ChatBody, provider: str = "") -> Callable:
         token = (body.hf_token or "").strip() or HF_TOKEN
         return lambda q, loop, sys, msgs: _run_hf(q, loop, sys, msgs, token, body.hf_model)
 
+def _build_ma_runners(body: "ChatBody") -> tuple:
+    """Resolve multi-agent stage providers and return (prov, runner) pairs as an 8-tuple."""
+    plan_prov   = body.ma_plan_provider   or body.provider
+    code_prov   = body.ma_code_provider   or body.provider
+    test_prov   = body.ma_test_provider   or body.provider
+    review_prov = body.ma_review_provider or body.provider
+    return (
+        plan_prov,   get_runner(body, plan_prov),
+        code_prov,   get_runner(body, code_prov),
+        test_prov,   get_runner(body, test_prov),
+        review_prov, get_runner(body, review_prov),
+    )
+
+
+async def _multi_agent_stream(body: "ChatBody", messages: list):
+    user_task = messages[-1]["content"] if messages else ""
+    prior = messages[:-1]
+    try:
+        plan_prov, plan_runner, code_prov, code_runner, test_prov, test_runner, review_prov, review_runner = _build_ma_runners(body)
+    except ValueError as exc:
+        yield f"data: {json.dumps({'t': 'error', 'v': str(exc)})}\n\n"
+        return
+    yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': f'🗺️ Planning · {_PROV_LABEL.get(plan_prov, plan_prov)}'})}\n\n"
+    plan_text = ""
+    plan_msgs = [{"role": "user", "content": f"Task: {user_task}\n\nCreate a clear step-by-step implementation plan. List files, key functions, and pitfalls. No code yet."}]
+    async for kind, val in stream_one(plan_runner, MA_PLAN_SYSTEM, plan_msgs):
+        if kind == "text":
+            plan_text += val
+            yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
+        elif kind == "error":
+            yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+            return
+    yield f"data: {json.dumps({'t': 'step', 'v': 'code', 'label': f'⚙️ Implementing · {_PROV_LABEL.get(code_prov, code_prov)}'})}\n\n"
+    code_text = ""
+    code_msgs = prior + [{"role": "user", "content": f"{user_task}\n\n## Plan:\n{plan_text}"}]
+    async for kind, val in stream_one(code_runner, build_system(body), code_msgs):
+        if kind == "text":
+            code_text += val
+            yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
+        elif kind == "error":
+            yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+            return
+    if body.ma_include_test_stage:
+        yield f"data: {json.dumps({'t': 'step', 'v': 'test', 'label': f'🧪 Testing · {_PROV_LABEL.get(test_prov, test_prov)}'})}\n\n"
+        test_msgs = [{"role": "user", "content": f"Write comprehensive tests for this implementation:\n\n{code_text}"}]
+        async for kind, val in stream_one(test_runner, MA_TEST_SYSTEM, test_msgs):
+            if kind == "text":
+                yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
+            elif kind == "error":
+                yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+                return
+    yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': f'🔍 Reviewing · {_PROV_LABEL.get(review_prov, review_prov)}'})}\n\n"
+    review_msgs = [{"role": "user", "content": f"Review this implementation for bugs, security issues, missing error handling, and quality:\n\n{code_text}"}]
+    async for kind, val in stream_one(review_runner, MA_REVIEW_SYSTEM, review_msgs):
+        if kind == "text":
+            yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
+        elif kind == "error":
+            yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
+            return
+    yield f"data: {json.dumps({'t': 'done'})}\n\n"
+
+
 @app.post("/api/chat/stream")
 async def chat_stream(body: ChatBody):
     system = build_system(body)
@@ -1994,68 +2056,7 @@ async def chat_stream(body: ChatBody):
             yield f"data: {json.dumps({'t': kind, 'v': val})}\n\n"
         yield f"data: {json.dumps({'t': 'done'})}\n\n"
 
-    async def multi_agent_stream():
-        user_task = messages[-1]["content"] if messages else ""
-        prior = messages[:-1]
-
-        plan_prov   = body.ma_plan_provider   or body.provider
-        code_prov   = body.ma_code_provider   or body.provider
-        test_prov   = body.ma_test_provider   or body.provider
-        review_prov = body.ma_review_provider or body.provider
-        try:
-            plan_runner   = get_runner(body, plan_prov)
-            code_runner   = get_runner(body, code_prov)
-            test_runner   = get_runner(body, test_prov)
-            review_runner = get_runner(body, review_prov)
-        except ValueError as exc:
-            yield f"data: {json.dumps({'t': 'error', 'v': str(exc)})}\n\n"
-            return
-
-        yield f"data: {json.dumps({'t': 'step', 'v': 'plan', 'label': f'🗺️ Planning · {_PROV_LABEL.get(plan_prov, plan_prov)}'})}\n\n"
-        plan_text = ""
-        plan_msgs = [{"role": "user", "content": f"Task: {user_task}\n\nCreate a clear step-by-step implementation plan. List files, key functions, and pitfalls. No code yet."}]
-        async for kind, val in stream_one(plan_runner, MA_PLAN_SYSTEM, plan_msgs):
-            if kind == "text":
-                plan_text += val
-                yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-            elif kind == "error":
-                yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
-                return
-
-        yield f"data: {json.dumps({'t': 'step', 'v': 'code', 'label': f'⚙️ Implementing · {_PROV_LABEL.get(code_prov, code_prov)}'})}\n\n"
-        code_text = ""
-        code_system = build_system(body)
-        code_msgs = prior + [{"role": "user", "content": f"{user_task}\n\n## Plan:\n{plan_text}"}]
-        async for kind, val in stream_one(code_runner, code_system, code_msgs):
-            if kind == "text":
-                code_text += val
-                yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-            elif kind == "error":
-                yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
-                return
-
-        if body.ma_include_test_stage:
-            yield f"data: {json.dumps({'t': 'step', 'v': 'test', 'label': f'🧪 Testing · {_PROV_LABEL.get(test_prov, test_prov)}'})}\n\n"
-            test_msgs = [{"role": "user", "content": f"Write comprehensive tests for this implementation:\n\n{code_text}"}]
-            async for kind, val in stream_one(test_runner, MA_TEST_SYSTEM, test_msgs):
-                if kind == "text":
-                    yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-                elif kind == "error":
-                    yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
-                    return
-
-        yield f"data: {json.dumps({'t': 'step', 'v': 'review', 'label': f'🔍 Reviewing · {_PROV_LABEL.get(review_prov, review_prov)}'})}\n\n"
-        review_msgs = [{"role": "user", "content": f"Review this implementation for bugs, security issues, missing error handling, and quality:\n\n{code_text}"}]
-        async for kind, val in stream_one(review_runner, MA_REVIEW_SYSTEM, review_msgs):
-            if kind == "text":
-                yield f"data: {json.dumps({'t': 'text', 'v': val})}\n\n"
-            elif kind == "error":
-                yield f"data: {json.dumps({'t': 'error', 'v': val})}\n\n"
-                return
-
-        yield f"data: {json.dumps({'t': 'done'})}\n\n"
-
-    gen = multi_agent_stream() if body.multi_agent else single_stream()
+    gen = _multi_agent_stream(body, messages) if body.multi_agent else single_stream()
     return StreamingResponse(gen, media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
