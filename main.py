@@ -938,24 +938,29 @@ def _call_openai_compat_sync(body, system: str, prompt: str, max_tokens: int) ->
     return False, ""
 
 
+def _call_groq_sync(body, system: str, prompt: str, max_tokens: int) -> tuple[bool, str]:
+    """Non-streaming Groq call; returns (success, text)."""
+    r = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
+        json={"model": body.groq_model or "llama-3.1-8b-instant",
+              "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+              "max_tokens": max_tokens, "stream": False},
+        timeout=20,
+    )
+    if r.ok:
+        _choices = r.json().get("choices") or []
+        return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
+    return False, ""
+
+
 def _call_ai_provider(body, system: str, prompt: str, max_tokens: int = 256) -> tuple[bool, str]:
     """Dispatch a single-turn AI call to the configured provider; returns (success, text)."""
     try:
         if body.provider == "anthropic" and body.anthropic_key:
             return _call_anthropic_sync(body, system, prompt, max_tokens)
         if body.provider == "groq" and body.groq_key:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {body.groq_key}", "Content-Type": "application/json"},
-                json={"model": body.groq_model or "llama-3.1-8b-instant",
-                      "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-                      "max_tokens": max_tokens, "stream": False},
-                timeout=20,
-            )
-            if r.ok:
-                _choices = r.json().get("choices") or []
-                return True, ((_choices[0].get("message") or {}).get("content") or "") if _choices else ""
-            return False, ""
+            return _call_groq_sync(body, system, prompt, max_tokens)
         if body.provider == "openai_compat" and body.openai_compat_base_url:
             return _call_openai_compat_sync(body, system, prompt, max_tokens)
         return False, "No usable provider configured"
@@ -1731,18 +1736,21 @@ class ScanDepsBody(BaseModel):
     anthropic_model: Optional[str] = Field(default="claude-haiku-4-5-20251001", max_length=200)
 
 
+_DEPS_ECOSYSTEM_MAP: dict = {
+    "pyproject.toml": ("python", _parse_pyproject_toml, _pypi_latest),
+    "package.json": ("javascript", _parse_package_json, _npm_latest),
+    "go.mod": ("go", _parse_go_mod, None),
+    "cargo.toml": ("rust", _parse_cargo_toml, None),
+}
+
+
 def _detect_deps_ecosystem(fname: str, content: str) -> tuple:
     """Return (ecosystem, packages, checker) for the given dependency filename."""
-    if fname == "pyproject.toml":
-        return "python", _parse_pyproject_toml(content), _pypi_latest
+    if fname in _DEPS_ECOSYSTEM_MAP:
+        ecosystem, parser, checker = _DEPS_ECOSYSTEM_MAP[fname]
+        return ecosystem, parser(content), checker
     if fname == "requirements.txt" or fname.endswith("requirements.txt"):
         return "python", _parse_requirements(content), _pypi_latest
-    if fname == "package.json":
-        return "javascript", _parse_package_json(content), _npm_latest
-    if fname == "go.mod":
-        return "go", _parse_go_mod(content), None
-    if fname == "cargo.toml":
-        return "rust", _parse_cargo_toml(content), None
     return "unknown", _parse_requirements(content), None
 
 
@@ -1834,33 +1842,49 @@ _SSRF_BLOCKED = re.compile(
     re.IGNORECASE,
 )
 
-@app.post("/api/tools/call")
-async def call_tool(body: ToolCallBody):
-    """Proxy a user-defined tool HTTP call to avoid CORS issues."""
+_BLOCKED_HDRS = frozenset({
+    "host", "transfer-encoding", "connection", "upgrade",
+    "proxy-authorization", "te", "trailers", "keep-alive",
+})
+
+
+def _validate_body_json(body_json) -> "JSONResponse | None":
+    """Return error JSONResponse if body_json is invalid or oversized, else None."""
+    if body_json is None:
+        return None
+    try:
+        size = len(json.dumps(body_json))
+    except Exception:
+        return JSONResponse({"error": "body_json is not JSON-serialisable"}, status_code=400)
+    if size > 65_536:
+        return JSONResponse({"error": "body_json exceeds 64 KB limit"}, status_code=413)
+    return None
+
+
+def _validate_tool_call(body) -> "JSONResponse | None":
+    """Return an error JSONResponse for an invalid tool call request, or None if valid."""
     if not re.match(r"^https?://", body.url):
         return JSONResponse({"error": "Only http:// and https:// URLs are supported"}, status_code=400)
     if _SSRF_BLOCKED.match(body.url):
         return JSONResponse({"error": "Requests to internal/private addresses are not allowed"}, status_code=400)
+    if body.method.upper() not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+        return JSONResponse({"error": f"Unsupported method: {body.method}"}, status_code=400)
+    body_err = _validate_body_json(body.body_json)
+    if body_err is not None:
+        return body_err
+    return None
+
+
+@app.post("/api/tools/call")
+async def call_tool(body: ToolCallBody):
+    """Proxy a user-defined tool HTTP call to avoid CORS issues."""
+    err = _validate_tool_call(body)
+    if err is not None:
+        return err
     method = body.method.upper()
-    if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
-        return JSONResponse({"error": f"Unsupported method: {method}"}, status_code=400)
-    if body.body_json is not None:
-        try:
-            _payload_size = len(json.dumps(body.body_json))
-        except Exception:
-            return JSONResponse({"error": "body_json is not JSON-serialisable"}, status_code=400)
-        if _payload_size > 65_536:
-            return JSONResponse({"error": "body_json exceeds 64 KB limit"}, status_code=413)
-    # Sanitize headers: string values only, block hop-by-hop / sensitive headers
-    _BLOCKED_HDRS = {"host", "transfer-encoding", "connection", "upgrade",
-                     "proxy-authorization", "te", "trailers", "keep-alive"}
     try:
         raw_hdrs = dict(list((body.headers or {}).items())[:50])
-        hdrs = {
-            str(k)[:200]: str(v)[:2000]
-            for k, v in raw_hdrs.items()
-            if str(k).lower() not in _BLOCKED_HDRS
-        }
+        hdrs = {str(k)[:200]: str(v)[:2000] for k, v in raw_hdrs.items() if str(k).lower() not in _BLOCKED_HDRS}
         if method != "GET":
             hdrs.setdefault("Content-Type", "application/json")
         if method == "GET":
@@ -1889,6 +1913,19 @@ class PromptEnhanceBody(BaseModel):
     hf_token: Optional[str] = Field(default="", max_length=500)
     prompt: str = Field(max_length=4000)
 
+def _enhance_with_hf(p: str, hf_token: str) -> tuple[bool, str]:
+    """Run HF-based prompt enhancement; returns (success, text)."""
+    token = hf_token.strip() or HF_TOKEN
+    if not token:
+        return False, "no provider key"
+    hf = InferenceClient(token=token)
+    result = hf.chat_completion(
+        model="meta-llama/Llama-3.1-8B-Instruct", max_tokens=512,
+        messages=[{"role": "system", "content": ENHANCE_SYSTEM}, {"role": "user", "content": p}],
+    )
+    return True, result.choices[0].message.content.strip()
+
+
 @app.post("/api/prompt/enhance")
 async def enhance_prompt(body: PromptEnhanceBody):
     """Use a fast AI model to improve a user's coding prompt."""
@@ -1898,20 +1935,11 @@ async def enhance_prompt(body: PromptEnhanceBody):
             return JSONResponse({"error": "prompt required"}, status_code=400)
         if body.provider in ("anthropic", "groq", "openai_compat"):
             success, result = _call_ai_provider(body, ENHANCE_SYSTEM, p, max_tokens=512)
-            if not success:
-                return JSONResponse({"error": result}, status_code=400)
-            return {"enhanced": result.strip()}
         else:
-            token = (body.hf_token or "").strip() or HF_TOKEN
-            if not token:
-                return JSONResponse({"error": "no provider key"}, status_code=400)
-            hf = InferenceClient(token=token)
-            result = hf.chat_completion(
-                model="meta-llama/Llama-3.1-8B-Instruct", max_tokens=512,
-                messages=[{"role": "system", "content": ENHANCE_SYSTEM},
-                           {"role": "user", "content": p}],
-            )
-            return {"enhanced": result.choices[0].message.content.strip()}
+            success, result = _enhance_with_hf(p, body.hf_token or "")
+        if not success:
+            return JSONResponse({"error": result}, status_code=400)
+        return {"enhanced": result.strip()}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

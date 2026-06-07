@@ -1,0 +1,7 @@
+[flake8]
+max-line-length = 120
+max-function-length = 50
+max-returns-amount = 5
+max-parameters-amount = 7
+max-complexity = 12
+extend-ignore = E501,W503

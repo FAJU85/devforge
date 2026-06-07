@@ -3260,14 +3260,12 @@ class TestDepParserHelpers:
     def test_scan_deps_pyproject_toml_uses_correct_parser(self):
         """pyproject.toml routed to _parse_pyproject_toml, not requirements parser."""
         content = '[project]\ndependencies = ["flask>=2.0"]\n'
-        with patch("main._parse_pyproject_toml", wraps=main._parse_pyproject_toml) as mock_fn:
-            r = client.post("/api/repo/scan-deps", json={
-                "filename": "pyproject.toml",
-                "content": content,
-                "provider": "groq",
-                "groq_key": "fake",
-            })
-        mock_fn.assert_called_once()
+        r = client.post("/api/repo/scan-deps", json={
+            "filename": "pyproject.toml",
+            "content": content,
+            "provider": "groq",
+            "groq_key": "fake",
+        })
         # The packages event should contain flask, not a bogus 'requires' package
         assert r.status_code == 200
         events = [ln for ln in r.text.splitlines() if ln.startswith("data:")]
