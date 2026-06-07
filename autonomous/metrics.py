@@ -11,7 +11,6 @@ PostHog is not configured.
 from __future__ import annotations
 
 import logging
-import math
 import os
 import time
 from typing import Optional
