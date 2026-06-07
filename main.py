@@ -1295,6 +1295,78 @@ async def repo_commits(body: RepoCommitsBody):
     ]
 
 
+class RepoDiffBody(BaseModel):
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
+    base: str = Field(min_length=1, max_length=255)
+    head: str = Field(min_length=1, max_length=255)
+
+
+@app.post("/api/repo/diff")
+async def repo_diff(body: RepoDiffBody):
+    """Return the unified diff between two refs (branch names, tags, or SHAs)."""
+    base_safe = _urlquote(body.base, safe="")
+    head_safe = _urlquote(body.head, safe="")
+    r = requests.get(
+        f"{_gh_base(body.owner, body.repo)}/compare/{base_safe}...{head_safe}",
+        headers={**gh_hdrs(body.token), "Accept": "application/vnd.github.v3.diff"},
+        timeout=20,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Diff failed")
+        except Exception:
+            err = f"HTTP {r.status_code}"
+        return JSONResponse({"error": err}, status_code=400)
+    diff_text = r.text[:50_000]
+    files: list = []
+    for line in diff_text.splitlines():
+        if line.startswith("diff --git "):
+            parts = line.split(" b/", 1)
+            if len(parts) == 2:
+                files.append(parts[1])
+    return {"diff": diff_text, "files_changed": files, "truncated": len(r.text) > 50_000}
+
+
+class RepoTreeBody(BaseModel):
+    token: str = Field(min_length=1, max_length=500)
+    owner: str = Field(min_length=1, max_length=100)
+    repo: str = Field(min_length=1, max_length=100)
+    branch: str = Field(default="main", max_length=255)
+    max_files: int = Field(default=500, ge=1, le=2000)
+
+
+@app.post("/api/repo/tree")
+async def repo_tree(body: RepoTreeBody):
+    """Return the recursive file tree for a branch (paths only, no content)."""
+    ref = _urlquote(body.branch, safe="")
+    r = requests.get(
+        f"{_gh_base(body.owner, body.repo)}/git/trees/{ref}?recursive=1",
+        headers=gh_hdrs(body.token),
+        timeout=15,
+    )
+    if not r.ok:
+        try:
+            err = r.json().get("message", "Failed to fetch tree")
+        except Exception:
+            err = f"HTTP {r.status_code}"
+        return JSONResponse({"error": err}, status_code=400)
+    data = r.json()
+    tree = data.get("tree", [])
+    files = [
+        {"path": item["path"], "type": item["type"], "size": item.get("size", 0)}
+        for item in tree
+        if item.get("type") in ("blob", "tree")
+    ][:body.max_files]
+    return {
+        "files": files,
+        "total": len(data.get("tree", [])),
+        "truncated": data.get("truncated", False) or len(tree) > body.max_files,
+        "branch": body.branch,
+    }
+
+
 class WorkflowRunsBody(BaseModel):
     token: str = Field(min_length=1, max_length=500)
     owner: str = Field(min_length=1, max_length=100)

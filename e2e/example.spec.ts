@@ -66,3 +66,18 @@ test('GET /api/evolution/history returns 200 with array', async ({ request }) =>
   const body = await res.json();
   expect(Array.isArray(body.history)).toBe(true);
 });
+
+test('POST /api/repo/diff validates required fields', async ({ request }) => {
+  const res = await request.post('/api/repo/diff', {
+    data: { owner: 'user' },
+  });
+  // Missing required fields → 422 Unprocessable Entity
+  expect(res.status()).toBe(422);
+});
+
+test('POST /api/repo/tree validates required fields', async ({ request }) => {
+  const res = await request.post('/api/repo/tree', {
+    data: { owner: 'user' },
+  });
+  expect(res.status()).toBe(422);
+});
