@@ -381,21 +381,64 @@ def _run_anthropic_thinking(q, loop, system, messages, api_key, model, thinking_
     except Exception as e:
         asyncio.run_coroutine_threadsafe(q.put(("error", _friendly_anthropic_error(e))), loop)
 
+def _build_anth_tools(tools: list) -> list:
+    return [
+        {
+            "name": t.name,
+            "description": t.description,
+            "input_schema": t.input_schema or {"type": "object", "properties": {}},
+        }
+        for t in tools
+    ]
+
+
+def _execute_http_tool(tool_def, block) -> str:
+    if not re.match(r"^https?://", tool_def.url or ""):
+        return "Error: Tool URL must start with http:// or https://"
+    hdrs = dict(tool_def.headers or {})
+    url = tool_def.url
+    inp = block.input or {}
+    for k, v in inp.items():
+        url = url.replace(f"{{{k}}}", _urlquote(str(v), safe=""))
+    method = (tool_def.method or "GET").upper()
+    if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+        return f"Error: Unsupported method {method}"
+    if method == "GET":
+        params = {k: v for k, v in inp.items() if f"{{{k}}}" not in tool_def.url}
+        r = requests.get(url, headers=hdrs, params=params, timeout=15)
+        return r.text[:2000]
+    hdrs.setdefault("Content-Type", "application/json")
+    r = requests.request(method, url, headers=hdrs, json=inp, timeout=15)
+    return r.text[:2000]
+
+
+def _execute_tool_call(block, tools: list) -> str:
+    tool_def = next((t for t in tools if t.name == block.name), None)
+    if not tool_def:
+        return f"Error: Tool '{block.name}' not found"
+    try:
+        return _execute_http_tool(tool_def, block)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def _collect_assistant_turn(msg) -> list:
+    content = []
+    for block in msg.content:
+        if block.type == "text":
+            content.append({"type": "text", "text": block.text})
+        elif block.type == "tool_use":
+            content.append({"type": "tool_use", "id": block.id, "name": block.name, "input": block.input})
+    return content
+
+
 def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="claude-sonnet-4-6"):
     """Run Anthropic with native tool use, executing HTTP calls and looping until done."""
     try:
         client = Anthropic(api_key=api_key)
-        anth_tools = [
-            {
-                "name": t.name,
-                "description": t.description,
-                "input_schema": t.input_schema or {"type": "object", "properties": {}},
-            }
-            for t in tools
-        ]
+        anth_tools = _build_anth_tools(tools)
         current_messages = list(messages)
         total_usage = {"input": 0, "output": 0}
-
         for _ in range(5):
             with client.messages.stream(
                 model=model or "claude-sonnet-4-6",
@@ -414,16 +457,7 @@ def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="
                     pass
                 if msg.stop_reason != "tool_use":
                     break
-
-            # Serialize assistant content for next turn
-            assistant_content = []
-            for block in msg.content:
-                if block.type == "text":
-                    assistant_content.append({"type": "text", "text": block.text})
-                elif block.type == "tool_use":
-                    assistant_content.append({"type": "tool_use", "id": block.id, "name": block.name, "input": block.input})
-            current_messages.append({"role": "assistant", "content": assistant_content})
-
+            current_messages.append({"role": "assistant", "content": _collect_assistant_turn(msg)})
             tool_results = []
             for block in msg.content:
                 if block.type != "tool_use":
@@ -431,38 +465,12 @@ def _run_anthropic_with_tools(q, loop, system, messages, api_key, tools, model="
                 asyncio.run_coroutine_threadsafe(
                     q.put(("tool_call", {"id": block.id, "name": block.name, "input": block.input})), loop
                 )
-                tool_def = next((t for t in tools if t.name == block.name), None)
-                if not tool_def:
-                    result_content = f"Error: Tool '{block.name}' not found"
-                else:
-                    try:
-                        if not re.match(r"^https?://", tool_def.url or ""):
-                            result_content = "Error: Tool URL must start with http:// or https://"
-                        else:
-                            hdrs = dict(tool_def.headers or {})
-                            url = tool_def.url
-                            inp = block.input or {}
-                            for k, v in inp.items():
-                                url = url.replace(f"{{{k}}}", _urlquote(str(v), safe=''))
-                            method = (tool_def.method or "GET").upper()
-                            if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
-                                result_content = f"Error: Unsupported method {method}"
-                            elif method == "GET":
-                                params = {k: v for k, v in inp.items() if f"{{{k}}}" not in tool_def.url}
-                                r = requests.get(url, headers=hdrs, params=params, timeout=15)
-                                result_content = r.text[:2000]
-                            else:
-                                hdrs.setdefault("Content-Type", "application/json")
-                                r = requests.request(method, url, headers=hdrs, json=inp, timeout=15)
-                                result_content = r.text[:2000]
-                    except Exception as e:
-                        result_content = f"Error: {e}"
+                result_content = _execute_tool_call(block, tools)
                 asyncio.run_coroutine_threadsafe(
                     q.put(("tool_result", {"id": block.id, "name": block.name, "result": result_content})), loop
                 )
                 tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": result_content})
             current_messages.append({"role": "user", "content": tool_results})
-
         asyncio.run_coroutine_threadsafe(q.put(("usage", total_usage)), loop)
         asyncio.run_coroutine_threadsafe(q.put(("done", None)), loop)
     except Exception as e:
