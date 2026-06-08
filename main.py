@@ -175,6 +175,22 @@ GITHUB_CLIENT_ID     = os.environ.get("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "")
 HF_TOKEN             = os.environ.get("HF_TOKEN", "")
 
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "vooom")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "asd1234")
+
+
+class AdminLoginBody(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/admin/login")
+async def admin_login(body: AdminLoginBody):
+    """Simple admin auth — credentials configurable via ADMIN_USERNAME / ADMIN_PASSWORD env vars."""
+    if body.username == ADMIN_USERNAME and body.password == ADMIN_PASSWORD:
+        return {"ok": True}
+    return {"ok": False}
+
 AGENT_PROMPTS = {
     "code":      "You are an expert coding agent. Write high-quality, production-ready code. Always show the full file path before every code block. Explain every change clearly.",
     "review":    "You are an expert code reviewer. Find bugs, security vulnerabilities, performance issues, and bad patterns. Give specific, actionable feedback with improved code snippets.",
