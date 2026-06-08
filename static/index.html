@@ -604,78 +604,6 @@ pre::-webkit-scrollbar{height:4px}
         </div>
       </div>
     </div>
-    <div class="s-sec">
-      <div class="s-lbl" onclick="toggleSec(this)">AI Provider <span class="s-arr">▼</span></div>
-      <div class="s-content">
-        <div style="padding:4px 10px 8px">
-          <div class="prov-row" role="radiogroup" aria-label="AI provider">
-            <button class="prov-btn on" role="radio" aria-checked="true" id="pa" onclick="setProv('anthropic')">Claude</button>
-            <button class="prov-btn" role="radio" aria-checked="false" id="pg" onclick="setProv('groq')">⚡ Groq</button>
-            <button class="prov-btn" role="radio" aria-checked="false" id="ph" onclick="setProv('hf')">🤗 HF</button>
-            <button class="prov-btn" role="radio" aria-checked="false" id="po" onclick="setProv('openai_compat')">🔌 Custom</button>
-            <button class="prov-btn" role="radio" aria-checked="false" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
-          </div>
-          <div id="pf-a" style="flex-direction:column;margin-top:8px">
-            <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" data-rollbar-scrub="true" oninput="saveEnhance()"></div>
-            <div class="model-selector" style="margin-top:8px" role="radiogroup" aria-label="Claude model">
-              <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest">⚡<br>Haiku</button>
-              <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most tasks">⚖️<br>Sonnet</button>
-              <button class="msel-btn" role="radio" aria-checked="false" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent">🧠<br>Opus</button>
-            </div>
-            <div class="think-opts" id="think-opts">
-              <div class="ma-row"><div><div class="ma-label" style="font-size:12px">Extended Thinking</div><div class="ma-sub">Opus reasons before answering</div></div><div><input type="checkbox" id="think-toggle" class="toggle-input" onchange="saveEnhance()"><label for="think-toggle" class="toggle-label"></label></div></div>
-              <div style="display:flex;align-items:center;gap:8px;padding:0 2px"><span class="flabel" style="flex:1;margin:0">Budget tokens</span><select class="finput" id="think-budget" style="width:110px;padding:3px 6px" onchange="saveEnhance()"><option value="2000">2K (fast)</option><option value="4000">4K</option><option value="8000">8K (deep)</option><option value="16000">16K (max)</option></select></div>
-            </div>
-          </div>
-          <div id="pf-g" style="display:none;margin-top:8px">
-            <div class="prov-note green">✓ <strong>Free tier</strong> — <a href="https://console.groq.com" target="_blank">console.groq.com</a></div>
-            <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off" aria-label="Groq API key" data-rollbar-scrub="true"></div>
-            <div><div class="flabel">Model</div><select class="finput" id="gm" aria-label="Groq model" onchange="updBadge()"><option value="llama-3.3-70b-versatile">Llama 3.3 70B — Best</option><option value="llama-3.1-8b-instant">Llama 3.1 8B — Fast</option><option value="mixtral-8x7b-32768">Mixtral 8x7B</option><option value="gemma2-9b-it">Gemma 2 9B</option><option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B</option><option value="qwen-qwq-32b">Qwen QwQ 32B</option></select></div></div>
-          </div>
-          <div id="pf-h" style="display:none;margin-top:8px">
-            <div class="prov-note green">✓ <strong>Token pre-configured</strong> — HF_TOKEN set via Space secrets.</div>
-            <div id="hf-selected" class="hf-selected" style="display:none"><span>🤗</span><span class="hf-sel-name" id="hf-sel-name">—</span><button class="hf-sel-clear" onclick="clearModel()">✕</button></div>
-            <div id="hf-browser"><div class="search-wrap" style="padding:0 0 6px"><span class="search-icon">⌕</span><input class="search-in" id="model-search" placeholder="Search HF models…" oninput="debounceSearch(this.value)"></div><div class="list-scroll" id="model-list"><div class="list-msg">Search to browse models</div></div></div>
-          </div>
-          <div id="pf-o" style="display:none;margin-top:8px">
-            <div class="prov-note">OpenAI-compatible endpoint — quick-fill or enter manually:</div>
-            <div style="padding:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">
-              <button class="qfill-btn" onclick="fillEndpoint('vercel')">🌐 Vercel Gateway</button>
-              <button class="qfill-btn" onclick="fillEndpoint('openrouter')">🔄 OpenRouter</button>
-              <button class="qfill-btn" onclick="fillEndpoint('ollama')">🦙 Ollama</button>
-              <button class="qfill-btn" onclick="fillEndpoint('lmstudio')">🖥 LM Studio</button>
-            </div>
-            <div class="pfields">
-              <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" aria-label="OpenAI-compatible base URL" oninput="updBadge()"></div>
-              <div><div class="flabel">Model</div><input class="finput" id="oci-model" placeholder="llama3" autocomplete="off" aria-label="OpenAI-compatible model name" oninput="updBadge()"></div>
-              <div><div class="flabel">API Key (optional)</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off" aria-label="OpenAI-compatible API key (optional)" data-rollbar-scrub="true"></div>
-            </div>
-          </div>
-          <div id="pf-al" style="display:none;margin-top:8px">
-            <div class="prov-note">Run any HuggingFace model locally with minimal GPU memory — layers stream from disk to GPU via <strong>AirLLM</strong>. Requires <code>pip install airllm</code>.</div>
-            <div style="padding:0 0 8px;display:flex;gap:5px;flex-wrap:wrap">
-              <button class="qfill-btn" onclick="fillAirLLM('meta-llama/Llama-2-7b-chat-hf')">🦙 Llama-2 7B</button>
-              <button class="qfill-btn" onclick="fillAirLLM('mistralai/Mistral-7B-Instruct-v0.2')">✨ Mistral 7B</button>
-              <button class="qfill-btn" onclick="fillAirLLM('Qwen/Qwen2.5-7B-Instruct')">🌟 Qwen2.5 7B</button>
-              <button class="qfill-btn" onclick="fillAirLLM('microsoft/Phi-3-mini-4k-instruct')">💡 Phi-3 Mini</button>
-            </div>
-            <div class="pfields">
-              <div><div class="flabel">HuggingFace Model ID</div><input class="finput" id="al-model" placeholder="meta-llama/Llama-2-7b-chat-hf" autocomplete="off" oninput="updBadge();saveEnhance()"></div>
-              <div><div class="flabel">Max new tokens</div><input class="finput" id="al-tokens" type="number" min="1" max="4096" value="512" oninput="saveEnhance()"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="s-sec closed">
-      <div class="s-lbl" onclick="toggleSec(this)">Custom Instructions <span class="s-arr">▼</span></div>
-      <div class="s-content">
-        <div class="cfg-hdr" style="margin:0"><span>Coding Rules</span><label class="ul-lbl" for="rules-upload" title="Load from file">📎</label><input type="file" id="rules-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'rules-input')"></div>
-        <div style="padding:0 10px 8px"><textarea class="side-textarea" id="rules-input" placeholder="e.g. Never use var. Always add types." oninput="saveEnhance()" style="margin:0"></textarea></div>
-        <div class="cfg-hdr" style="border-top:1px solid var(--border2)"><span>System Instructions</span><label class="ul-lbl" for="instr-upload" title="Load from file">📎</label><input type="file" id="instr-upload" accept=".txt,.md,.text" style="display:none" onchange="uploadToArea(this,'instr-input')"></div>
-        <div style="padding:0 10px 8px"><textarea class="side-textarea" id="instr-input" placeholder="Override the default agent behavior…" oninput="saveEnhance()" style="margin:0"></textarea></div>
-      </div>
-    </div>
   </div>
   <!-- ── Panel: AI Config (multi-agent stored here, providers moved to spanel-files) ── -->
   <div id="spanel-config" class="s-panel hidden">
@@ -2180,9 +2108,6 @@ function repoTreeCtx(){if(!S.repo||!Array.isArray(S.repo.files)||!S.repo.files.l
 function bCtx(){const p=[];const tree=repoTreeCtx();if(tree)p.push(tree);for(const[k,v]of S.selFiles)p.push(`### \`${k}\`\n\`\`\`${fext(k)||'text'}\n${v.slice(0,15000)}\n\`\`\``);for(const[k,v]of S.localFiles)p.push(`### \`${k}\`\n\`\`\`${fext(k)||'text'}\n${v.slice(0,15000)}\n\`\`\``);return p.join('\n\n');}
 async function send(){
   const text=$('ti').value.trim();if(!text||S.streaming)return;
-  let _urlCtx='';
-  {const _rx=/\bhttps?:\/\/[^\s,'"<>\]]+/g;const _us=[...new Set((text.match(_rx)||[]))].slice(0,3);
-  for(const _u of _us){try{toast('Fetching '+new URL(_u).hostname+'…');const _r=await fetch('/api/browser/scrape',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:_u,timeout:12})});if(_r.ok){const _j=await _r.json();if(_j.text)_urlCtx+='\n\n---\n**Page: '+_u+'**\n'+_j.text.slice(0,5000);}}catch{}}}
   pushHistory(text);S.histIdx=-1;S._draftText='';
   if(S.prov==='anthropic'&&!$('ak').value.trim()){toast('Enter your Anthropic key in the sidebar',true);return;}
   // Auto-fetch any URLs mentioned in the message
