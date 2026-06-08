@@ -499,6 +499,46 @@ pre::-webkit-scrollbar{height:4px}
 .resize-handle{width:3px;background:transparent;cursor:col-resize;flex-shrink:0;transition:background .15s;position:relative;z-index:10}
 .resize-handle:hover,.resize-handle.dragging{background:var(--accent-border)}
 @media(max-width:768px){.resize-handle{display:none}}
+/* ── Control Panel ── */
+.cp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(6px);z-index:300;display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;box-sizing:border-box}
+.cp-panel{width:100%;max-width:1000px;max-height:calc(100vh - 56px);background:var(--bg);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.45);border:1px solid var(--border)}
+.cp-hdr{display:flex;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;gap:10px}
+.cp-title{font-size:15px;font-weight:700;color:var(--text);flex:1;display:flex;align-items:center;gap:8px}
+.cp-close{background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;padding:4px 8px;border-radius:6px;transition:background .15s;font-family:inherit}
+.cp-close:hover{background:var(--panel);color:var(--text)}
+.cp-body{display:flex;flex:1;overflow:hidden}
+.cp-nav{width:156px;flex-shrink:0;border-right:1px solid var(--border);padding:10px 6px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;background:var(--panel)}
+.cp-nb{background:none;border:none;cursor:pointer;padding:8px 10px;border-radius:8px;text-align:left;font-size:12px;color:var(--muted);transition:background .15s,color .15s;font-family:inherit;white-space:nowrap;display:flex;align-items:center;gap:7px}
+.cp-nb:hover{background:var(--panel2);color:var(--text)}
+.cp-nb.on{background:var(--accent-dim);color:var(--accent2);font-weight:600}
+.cp-content{flex:1;overflow-y:auto;padding:22px 26px}
+.cp-sec{display:none}
+.cp-sec.on{display:block}
+.cp-sh{font-size:14px;font-weight:700;color:var(--text);margin:0 0 18px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.cp-sub{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 10px}
+.cp-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:10px;margin-bottom:4px}
+.cp-card{background:var(--panel);border-radius:10px;padding:13px 15px;border:1px solid var(--border)}
+.cp-card-title{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.cp-card-val{font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px}
+.cp-ok{color:#4caf50}.cp-warn{color:#ff9800}.cp-err{color:#ef5350}
+.cp-row{margin-bottom:12px}
+.cp-lbl{font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500}
+.cp-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cp-provs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+.cp-prov{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;color:var(--muted);transition:all .15s;font-family:inherit}
+.cp-prov.on{background:var(--accent-dim);border-color:var(--accent2);color:var(--accent2);font-weight:600}
+.cp-models{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px}
+.cp-model{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 6px;cursor:pointer;text-align:center;font-size:12px;color:var(--muted);transition:all .15s;font-family:inherit;line-height:1.5}
+.cp-model:hover{border-color:var(--accent2);color:var(--text)}
+.cp-model.on{background:var(--accent-dim);border-color:var(--accent2);color:var(--accent2);font-weight:600}
+.cp-flag{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border-radius:8px;margin-bottom:6px;border:1px solid var(--border)}
+.cp-flag-name{font-size:13px;color:var(--text);font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cp-flag-pct{font-size:11px;color:var(--muted);min-width:42px;text-align:right}
+.cp-env-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)}
+.cp-env-key{font-size:12px;font-family:monospace;color:var(--text)}
+.cp-env-val{font-size:11px;font-weight:600}
+.cp-sidebar-btn{width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:12px;color:var(--muted);font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.cp-sidebar-btn:hover{border-color:var(--accent2);color:var(--accent2);background:var(--accent-dim)}
 </style>
 </head>
 <body>
@@ -757,6 +797,9 @@ pre::-webkit-scrollbar{height:4px}
       <button onclick="loadEvoHistory()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s">↺ Refresh History</button>
     </div>
   </div>
+  <div style="padding:10px;border-top:1px solid var(--border);flex-shrink:0">
+    <button class="cp-sidebar-btn" onclick="openCP()">⚙️ Control Panel</button>
+  </div>
 </aside>
 <div class="resize-handle" id="resize-handle"></div>
 <main class="workspace" aria-label="Chat workspace">
@@ -814,6 +857,7 @@ pre::-webkit-scrollbar{height:4px}
         <button class="attach-btn" title="Browse URL with headless browser" onclick="openBrowserPanel()" style="font-size:13px">🌐</button>
         <button class="attach-btn" title="Upload local files as context" onclick="$('ctx-upload').click()">📎</button>
         <input type="file" id="ctx-upload" multiple accept=".txt,.md,.ts,.tsx,.js,.jsx,.py,.go,.json,.yaml,.yml,.toml,.css,.html,.sh,.rs,.rb,.java,.cpp,.c,.h" style="display:none" onchange="uploadContext(this)">
+        <button class="attach-btn" title="Browse URL with headless browser" onclick="openBrowserPanel()" style="font-size:13px">🌐</button>
         <button class="attach-btn" id="suggest-btn" title="AI: suggest relevant files for your task" onclick="suggestFiles()" style="display:none;font-size:11px;gap:4px">🤔 Suggest</button>
         <span class="ihint" id="hint">Open sidebar to get started</span>
         <button class="send-btn" id="stop-btn" onclick="stopStream()" aria-label="Stop streaming" style="display:none;background:var(--red)">⏹ Stop</button>
@@ -1035,6 +1079,172 @@ pre::-webkit-scrollbar{height:4px}
 </div>
 
 <!-- Keyboard shortcuts help -->
+<!-- ── Browser Modal ─────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="browser-modal" style="display:none" onclick="if(event.target===this)closeBrowserModal()">
+  <div class="modal" style="max-width:900px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <input id="browser-url" class="finput" placeholder="https://example.com" style="flex:1;padding:5px 10px;font-size:13px" onkeydown="if(event.key==='Enter')browserGo()">
+      <button onclick="browserGo()" style="background:var(--accent2);border:none;border-radius:8px;padding:6px 16px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">Go</button>
+      <button onclick="closeBrowserModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:0 4px">✕</button>
+    </div>
+    <div id="browser-loading" style="display:none;padding:24px;text-align:center;color:var(--muted);font-size:13px">Loading<span style="animation:dots 1s steps(3,end) infinite">...</span></div>
+    <div id="browser-error" style="display:none;padding:14px 16px;color:#ef5350;font-size:13px"></div>
+    <div id="browser-result" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border2);background:var(--panel2);font-size:12px">
+        <span id="browser-title" style="flex:1;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
+        <button id="btab-screenshot" onclick="setBrowserTab('screenshot')" style="background:var(--accent-dim);color:var(--accent2);border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">Screenshot</button>
+        <button id="btab-text" onclick="setBrowserTab('text')" style="background:var(--panel);color:var(--muted);border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">Text</button>
+        <button id="browser-add-btn" style="display:none;background:var(--accent2);color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit" onclick="browserAddToContext()">+ Add to context</button>
+      </div>
+      <div style="padding:12px;max-height:60vh;overflow-y:auto">
+        <div id="browser-screenshot-pane"><img id="browser-img" src="" style="width:100%;border-radius:6px;border:1px solid var(--border)" alt="Screenshot"></div>
+        <div id="browser-text-pane" style="display:none;font-size:12px;line-height:1.6;color:var(--text);white-space:pre-wrap;word-break:break-word;font-family:monospace"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Control Panel ───────────────────────────────────────────────────────── -->
+<div class="cp-overlay" id="cp-overlay" style="display:none" onclick="if(event.target===this)closeCP()">
+  <div class="cp-panel" role="dialog" aria-modal="true" aria-label="DevForge Control Panel">
+    <div class="cp-hdr">
+      <span class="cp-title">⚙️ DevForge Control Panel</span>
+      <button class="cp-close" onclick="closeCP()" aria-label="Close">✕</button>
+    </div>
+    <div class="cp-body">
+      <nav class="cp-nav" aria-label="Control Panel sections">
+        <button class="cp-nb on" id="cpnav-overview" onclick="setCPTab('overview')">📊 Overview</button>
+        <button class="cp-nb" id="cpnav-ai" onclick="setCPTab('ai')">🤖 AI Config</button>
+        <button class="cp-nb" id="cpnav-flags" onclick="setCPTab('flags')">🚩 Flags</button>
+        <button class="cp-nb" id="cpnav-skills" onclick="setCPTab('skills')">🎯 Skills</button>
+        <button class="cp-nb" id="cpnav-browser" onclick="setCPTab('browser')">🌐 Browser</button>
+        <button class="cp-nb" id="cpnav-server" onclick="setCPTab('server')">🖥️ Server</button>
+      </nav>
+      <div class="cp-content">
+
+        <!-- ── Overview ── -->
+        <div id="cpsec-overview" class="cp-sec on">
+          <div class="cp-sh">📊 System Overview</div>
+          <div class="cp-cards" id="cp-status-cards"><div style="color:var(--muted);font-size:12px">Loading…</div></div>
+          <div class="cp-sub">HF Spaces Build</div>
+          <div id="cp-hf-badge" style="font-size:13px;color:var(--muted)">Checking…</div>
+        </div>
+
+        <!-- ── AI Config ── -->
+        <div id="cpsec-ai" class="cp-sec">
+          <div class="cp-sh">🤖 AI Provider & Model</div>
+          <div class="cp-sub">Provider</div>
+          <div class="cp-provs">
+            <button class="cp-prov on" id="cpp-anthropic" onclick="cpSetProv('anthropic')">🧠 Claude</button>
+            <button class="cp-prov" id="cpp-groq" onclick="cpSetProv('groq')">⚡ Groq</button>
+            <button class="cp-prov" id="cpp-hf" onclick="cpSetProv('hf')">🤗 HF</button>
+            <button class="cp-prov" id="cpp-openai_compat" onclick="cpSetProv('openai_compat')">🔌 Custom</button>
+            <button class="cp-prov" id="cpp-airllm" onclick="cpSetProv('airllm')">🏠 AirLLM</button>
+          </div>
+
+          <div id="cpf-anthropic">
+            <div class="cp-sub">Claude Model</div>
+            <div class="cp-models">
+              <button class="cp-model" id="cpm-haiku" onclick="cpSetModel('claude-haiku-4-5-20251001')">⚡<br><b>Haiku</b><br><small>Fastest</small></button>
+              <button class="cp-model on" id="cpm-sonnet" onclick="cpSetModel('claude-sonnet-4-6')">⚖️<br><b>Sonnet</b><br><small>Balanced</small></button>
+              <button class="cp-model" id="cpm-opus" onclick="cpSetModel('claude-opus-4-8')">🧠<br><b>Opus</b><br><small>Most powerful</small></button>
+            </div>
+            <div class="cp-row">
+              <div class="cp-lbl">Anthropic API Key</div>
+              <input class="finput" id="cp-ak" type="password" placeholder="sk-ant-…" autocomplete="off" oninput="cpSave()">
+            </div>
+            <div class="cp-sub">Extended Thinking</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0 10px">
+              <div><div style="font-size:13px;color:var(--text)">Enable Extended Thinking</div><div style="font-size:11px;color:var(--muted)">Opus reasons step-by-step before answering</div></div>
+              <input type="checkbox" id="cp-think-toggle" class="toggle-input" onchange="cpSave()"><label for="cp-think-toggle" class="toggle-label"></label>
+            </div>
+            <div class="cp-row">
+              <div class="cp-lbl">Thinking budget</div>
+              <select class="finput" id="cp-think-budget" onchange="cpSave()"><option value="2000">2K (fast)</option><option value="4000">4K</option><option value="8000">8K (deep)</option><option value="16000">16K (max)</option></select>
+            </div>
+          </div>
+
+          <div id="cpf-groq" style="display:none">
+            <div class="cp-row"><div class="cp-lbl">Groq API Key</div><input class="finput" id="cp-gk" type="password" placeholder="gsk_…" autocomplete="off" oninput="cpSave()"></div>
+            <div class="cp-row"><div class="cp-lbl">Model</div><input class="finput" id="cp-gm" placeholder="llama-3.3-70b-versatile" oninput="cpSave()"></div>
+          </div>
+
+          <div id="cpf-hf" style="display:none">
+            <div class="cp-row"><div class="cp-lbl">HuggingFace Model ID</div><input class="finput" id="cp-hf-model" placeholder="Qwen/Qwen2.5-Coder-32B-Instruct" oninput="cpSave()"></div>
+          </div>
+
+          <div id="cpf-openai_compat" style="display:none">
+            <div class="cp-row"><div class="cp-lbl">Base URL</div><input class="finput" id="cp-oci-url" placeholder="https://api.openai.com/v1" oninput="cpSave()"></div>
+            <div class="cp-grid2">
+              <div class="cp-row"><div class="cp-lbl">Model</div><input class="finput" id="cp-oci-model" placeholder="gpt-4o" oninput="cpSave()"></div>
+              <div class="cp-row"><div class="cp-lbl">API Key (optional)</div><input class="finput" id="cp-oci-key" type="password" placeholder="sk-…" oninput="cpSave()"></div>
+            </div>
+          </div>
+
+          <div id="cpf-airllm" style="display:none">
+            <div class="cp-row"><div class="cp-lbl">Model ID</div><input class="finput" id="cp-al-model" placeholder="meta-llama/Llama-2-7b-chat-hf" oninput="cpSave()"></div>
+            <div class="cp-row"><div class="cp-lbl">Max new tokens</div><input class="finput" id="cp-al-tokens" type="number" min="1" max="4096" value="512" oninput="cpSave()"></div>
+          </div>
+
+          <div class="cp-sub">Multi-Agent Pipeline</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0 12px">
+            <div><div style="font-size:13px;color:var(--text)">Enable Multi-Agent</div><div style="font-size:11px;color:var(--muted)">Plan → Code → Review stages</div></div>
+            <input type="checkbox" id="cp-multi-agent" class="toggle-input" onchange="cpSave()"><label for="cp-multi-agent" class="toggle-label"></label>
+          </div>
+
+          <div class="cp-sub">Agent Instructions</div>
+          <div class="cp-row"><div class="cp-lbl">Coding Rules</div><textarea class="finput" id="cp-rules" placeholder="e.g. Always use TypeScript. Never use var." rows="3" oninput="cpSave()" style="resize:vertical"></textarea></div>
+          <div class="cp-row"><div class="cp-lbl">System Instructions</div><textarea class="finput" id="cp-instr" placeholder="Override default agent behavior…" rows="3" oninput="cpSave()" style="resize:vertical"></textarea></div>
+        </div>
+
+        <!-- ── Feature Flags ── -->
+        <div id="cpsec-flags" class="cp-sec">
+          <div class="cp-sh">🚩 Feature Flags</div>
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <input class="finput" id="cp-flag-name" placeholder="my-feature-flag" style="flex:1" onkeydown="if(event.key==='Enter')cpCreateFlag()">
+            <button class="send-btn" style="padding:6px 14px;font-size:12px;flex-shrink:0" onclick="cpCreateFlag()">+ Create</button>
+          </div>
+          <div id="cp-flag-list"><div style="color:var(--muted);font-size:12px">Loading…</div></div>
+          <div class="cp-sub">Canary Analysis</div>
+          <button class="send-btn" style="padding:8px 18px;font-size:12px;margin-bottom:12px" onclick="cpRunCanary()">▶ Run Canary Analysis</button>
+          <div id="cp-canary-out" style="font-size:12px;color:var(--muted)"></div>
+          <div class="cp-sub">Evolution History</div>
+          <div id="cp-evo-hist" style="font-size:12px;color:var(--muted)">Loading…</div>
+        </div>
+
+        <!-- ── Skills ── -->
+        <div id="cpsec-skills" class="cp-sec">
+          <div class="cp-sh">🎯 Skills & Presets</div>
+          <div class="cp-sub">Active Skills</div>
+          <div id="cp-skills-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px"></div>
+          <div class="cp-sub">Load Preset</div>
+          <div id="cp-presets-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+        </div>
+
+        <!-- ── Browser ── -->
+        <div id="cpsec-browser" class="cp-sec">
+          <div class="cp-sh">🌐 Headless Browser</div>
+          <div class="cp-cards" id="cp-browser-cards"><div style="color:var(--muted);font-size:12px">Loading…</div></div>
+          <div class="cp-sub">Quick Screenshot Test</div>
+          <div style="display:flex;gap:8px;margin-bottom:14px">
+            <input class="finput" id="cp-test-url" value="http://localhost:7860" style="flex:1" onkeydown="if(event.key==='Enter')cpTestBrowser()">
+            <button class="send-btn" style="padding:6px 14px;font-size:12px;flex-shrink:0" onclick="cpTestBrowser()">📸 Screenshot</button>
+          </div>
+          <div id="cp-browser-out"></div>
+        </div>
+
+        <!-- ── Server ── -->
+        <div id="cpsec-server" class="cp-sec">
+          <div class="cp-sh">🖥️ Server Configuration</div>
+          <div class="cp-sub">Environment Variables</div>
+          <div id="cp-server-env"><div style="color:var(--muted);font-size:12px">Loading…</div></div>
+        </div>
+
+      </div><!-- cp-content -->
+    </div><!-- cp-body -->
+  </div><!-- cp-panel -->
+</div><!-- cp-overlay -->
+
 <div class="modal-overlay" id="shortcuts-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="max-width:540px">
     <div class="modal-head">⌨️ Keyboard Shortcuts</div>
@@ -2452,68 +2662,217 @@ function fetchHfBuildStatus(){
 }
 (function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!handleOAuthCallback()&&!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();fetchHfBuildStatus();})();
 
-// ── Headless Browser Panel ─────────────────────────────────────────────────
-let _browserPageData = null;
-
+// ── Headless Browser Panel ──────────────────────────────────────────────────
+let _browserPageData=null;
 function openBrowserPanel(){$('browser-modal').style.display='flex';}
 function closeBrowserModal(){$('browser-modal').style.display='none';}
-
 async function browserGo(){
-  const url = ($('browser-url').value||'').trim();
-  if(!url)return;
-  const norm = /^https?:\/\//.test(url)?url:'https://'+url;
+  const url=($('browser-url').value||'').trim();if(!url)return;
+  const norm=/^https?:\/\//.test(url)?url:'https://'+url;
   $('browser-url').value=norm;
-  $('browser-loading').style.display='block';
-  $('browser-result').style.display='none';
-  $('browser-error').style.display='none';
-  $('browser-add-btn').style.display='none';
-  _browserPageData=null;
+  $('browser-loading').style.display='block';$('browser-result').style.display='none';$('browser-error').style.display='none';$('browser-add-btn').style.display='none';_browserPageData=null;
   try{
-    const [scRes, txRes] = await Promise.all([
-      post('/api/browser/screenshot',{url:norm,width:1280,height:800,full_page:false}),
-      post('/api/browser/scrape',{url:norm})
-    ]);
+    const[scRes,txRes]=await Promise.all([post('/api/browser/screenshot',{url:norm,width:1280,height:800,full_page:false}),post('/api/browser/scrape',{url:norm})]);
     $('browser-loading').style.display='none';
-    if(scRes.error||txRes.error){
-      $('browser-error').style.display='block';
-      $('browser-error').textContent='Error: '+(scRes.error||txRes.error);
-      return;
-    }
-    _browserPageData={url:norm, title:txRes.title||norm, text:txRes.text||'', image:scRes.image};
-    $('browser-title').textContent=txRes.title||norm;
-    $('browser-img').src='data:image/png;base64,'+scRes.image;
-    $('browser-screenshot-pane').style.display='block';
-    $('browser-text-pane').style.display='none';
-    $('browser-text-pane').textContent=txRes.text||'';
-    setBrowserTab('screenshot');
-    $('browser-result').style.display='block';
-    $('browser-add-btn').style.display='inline-block';
-  }catch(e){
-    $('browser-loading').style.display='none';
-    $('browser-error').style.display='block';
-    $('browser-error').textContent='Request failed: '+e.message;
-  }
+    if(scRes.error||txRes.error){$('browser-error').style.display='block';$('browser-error').textContent='Error: '+(scRes.error||txRes.error);return;}
+    _browserPageData={url:norm,title:txRes.title||norm,text:txRes.text||'',image:scRes.image};
+    $('browser-title').textContent=txRes.title||norm;$('browser-img').src='data:image/png;base64,'+scRes.image;
+    $('browser-screenshot-pane').style.display='block';$('browser-text-pane').style.display='none';$('browser-text-pane').textContent=txRes.text||'';
+    setBrowserTab('screenshot');$('browser-result').style.display='block';$('browser-add-btn').style.display='inline-block';
+  }catch(e){$('browser-loading').style.display='none';$('browser-error').style.display='block';$('browser-error').textContent='Request failed: '+e.message;}
 }
-
 function setBrowserTab(tab){
   const isSc=tab==='screenshot';
-  $('browser-screenshot-pane').style.display=isSc?'block':'none';
-  $('browser-text-pane').style.display=isSc?'none':'block';
+  $('browser-screenshot-pane').style.display=isSc?'block':'none';$('browser-text-pane').style.display=isSc?'none':'block';
   const sc=$('btab-screenshot'),tx=$('btab-text');
-  if(sc)sc.style.background=isSc?'var(--accent-dim)':'var(--panel)';
-  if(sc)sc.style.color=isSc?'var(--accent2)':'var(--muted)';
-  if(tx)tx.style.background=isSc?'var(--panel)':'var(--accent-dim)';
-  if(tx)tx.style.color=isSc?'var(--muted)':'var(--accent2)';
+  if(sc){sc.style.background=isSc?'var(--accent-dim)':'var(--panel)';sc.style.color=isSc?'var(--accent2)':'var(--muted)';}
+  if(tx){tx.style.background=isSc?'var(--panel)':'var(--accent-dim)';tx.style.color=isSc?'var(--muted)':'var(--accent2)';}
 }
-
 function browserAddToContext(){
   if(!_browserPageData)return;
   const snippet=`[Browser: ${_browserPageData.url}]\nTitle: ${_browserPageData.title}\n\n${_browserPageData.text.slice(0,8000)}`;
-  S.localFiles.set(_browserPageData.url, snippet);
-  S.fileSizes.set(_browserPageData.url, snippet.length);
-  updCtx();
-  closeBrowserModal();
-  toast('Page added to context');
+  S.localFiles.set(_browserPageData.url,snippet);S.fileSizes.set(_browserPageData.url,snippet.length);updCtx();closeBrowserModal();toast('Page added to context');
+}
+
+// ── Control Panel ───────────────────────────────────────────────────────────
+const _cpProvs=['anthropic','groq','hf','openai_compat','airllm'];
+const _cpModels={'claude-haiku-4-5-20251001':'haiku','claude-sonnet-4-6':'sonnet','claude-opus-4-8':'opus'};
+
+function openCP(){
+  $('cp-overlay').style.display='flex';
+  cpLoadState();setCPTab('overview');
+  document.body.style.overflow='hidden';
+}
+function closeCP(){$('cp-overlay').style.display='none';document.body.style.overflow='';}
+
+function setCPTab(tab){
+  document.querySelectorAll('.cp-nb').forEach(b=>b.classList.remove('on'));
+  const nb=$('cpnav-'+tab);if(nb)nb.classList.add('on');
+  document.querySelectorAll('.cp-sec').forEach(s=>s.classList.remove('on'));
+  const sec=$('cpsec-'+tab);if(sec)sec.classList.add('on');
+  if(tab==='overview')cpLoadOverview();
+  else if(tab==='flags')cpLoadFlags();
+  else if(tab==='server')cpLoadServer();
+  else if(tab==='skills')cpLoadSkills();
+  else if(tab==='browser')cpLoadBrowserStatus();
+}
+
+function cpLoadState(){
+  try{
+    const raw=localStorage.getItem('df-enhance');if(!raw)return;
+    const d=JSON.parse(raw);
+    cpSetProvUI(d.prov||'anthropic');
+    const modelKey=_cpModels[d.anthropicModel]||'sonnet';
+    document.querySelectorAll('.cp-model').forEach(b=>b.classList.remove('on'));
+    const mb=$('cpm-'+modelKey);if(mb)mb.classList.add('on');
+    if($('cp-ak'))$('cp-ak').value=d.anthropicKey||'';
+    if($('cp-gk'))$('cp-gk').value=d.groqKey||'';
+    if($('cp-gm'))$('cp-gm').value=d.groqModel||'';
+    if($('cp-hf-model'))$('cp-hf-model').value=d.hfModel||'';
+    if($('cp-oci-url'))$('cp-oci-url').value=d.ociUrl||'';
+    if($('cp-oci-model'))$('cp-oci-model').value=d.ociModel||'';
+    if($('cp-oci-key'))$('cp-oci-key').value=d.ociKey||'';
+    if($('cp-al-model'))$('cp-al-model').value=d.alModel||'';
+    if($('cp-al-tokens'))$('cp-al-tokens').value=d.alTokens||'512';
+    const tt=$('cp-think-toggle');if(tt)tt.checked=!!d.thinkingMode;
+    const tb=$('cp-think-budget');if(tb)tb.value=d.thinkingBudget||'2000';
+    const ma=$('cp-multi-agent');if(ma)ma.checked=!!d.multiAgent;
+    if($('cp-rules'))$('cp-rules').value=d.rules||'';
+    if($('cp-instr'))$('cp-instr').value=d.instr||'';
+  }catch(e){}
+}
+
+function cpSave(){
+  // Sync CP inputs back to the hidden main elements, then save
+  const pairs=[['cp-ak','ak'],['cp-gk','gk'],['cp-gm','gm'],['cp-oci-url','oci-url'],['cp-oci-model','oci-model'],['cp-oci-key','oci-key'],['cp-al-model','al-model'],['cp-al-tokens','al-tokens'],['cp-think-budget','think-budget'],['cp-rules','rules-input'],['cp-instr','instr-input']];
+  pairs.forEach(([cpId,mainId])=>{const cpEl=$( cpId),mainEl=$(mainId);if(cpEl&&mainEl){if(cpEl.type==='checkbox')mainEl.checked=cpEl.checked;else mainEl.value=cpEl.value;}});
+  const cpTT=$('cp-think-toggle'),mainTT=$('think-toggle');if(cpTT&&mainTT)mainTT.checked=cpTT.checked;
+  const cpMA=$('cp-multi-agent'),mainMA=$('multi-agent');if(cpMA&&mainMA)mainMA.checked=cpMA.checked;
+  saveEnhance();
+}
+
+function cpSetProv(prov){cpSetProvUI(prov);setProv(prov);cpSave();}
+function cpSetProvUI(prov){
+  document.querySelectorAll('.cp-prov').forEach(b=>b.classList.remove('on'));
+  const pb=$('cpp-'+prov);if(pb)pb.classList.add('on');
+  _cpProvs.forEach(p=>{const f=$('cpf-'+p);if(f)f.style.display=p===prov?'block':'none';});
+}
+function cpSetModel(model){
+  setAnthModel(model);
+  document.querySelectorAll('.cp-model').forEach(b=>b.classList.remove('on'));
+  const key=_cpModels[model];const mb=$('cpm-'+key);if(mb)mb.classList.add('on');
+}
+
+async function cpLoadOverview(){
+  const cards=$('cp-status-cards');if(!cards)return;
+  cards.innerHTML='<div style="color:var(--muted);font-size:12px">Loading…</div>';
+  try{
+    const s=await fetch('/api/admin/status').then(r=>r.json());
+    const env=s.env||{},feat=s.features||{};
+    const mk=(title,ok,label)=>`<div class="cp-card"><div class="cp-card-title">${title}</div><div class="cp-card-val ${ok?'cp-ok':'cp-warn'}">${ok?'✅':'⚠️'} ${label}</div></div>`;
+    cards.innerHTML=[
+      mk('GitHub OAuth',env.GITHUB_CLIENT_ID,env.GITHUB_CLIENT_ID?'Configured':'Not set'),
+      mk('Headless Browser',feat.headless_browser,feat.headless_browser?'Chrome ready':'Not found'),
+      mk('Memory / Pinecone',feat.memory,feat.memory?'Connected':'Not configured'),
+      mk('HF Token',env.HF_TOKEN,env.HF_TOKEN?'Set':'Not set'),
+      mk('Sentry',env.SENTRY_DSN,env.SENTRY_DSN?'Active':'Not set'),
+      mk('Rollbar',env.ROLLBAR_ACCESS_TOKEN,env.ROLLBAR_ACCESS_TOKEN?'Active':'Not set'),
+      mk('PostHog',env.POSTHOG_API_KEY,env.POSTHOG_API_KEY?'Active':'Not set'),
+      mk('Go Data Plane',feat.go_data_plane,feat.go_data_plane?env.GO_DATA_PLANE_URL:'localhost (default)'),
+    ].join('');
+  }catch(e){cards.innerHTML=`<div style="color:#ef5350;font-size:12px">Error: ${e.message}</div>`;}
+  // HF Build badge
+  const hfEl=$('cp-hf-badge');if(!hfEl)return;
+  try{const r=await fetch('/api/hf-build/status').then(r=>r.json());const clr=r.stage==='RUNNING'?'#4caf50':r.stage==='BUILDING'?'#ff9800':'#ef5350';hfEl.innerHTML=`<span style="color:${clr};font-weight:700">${r.stage}</span>${r.error_message?' — '+r.error_message:''}`;}
+  catch(e){hfEl.textContent='Unable to fetch';}
+}
+
+async function cpLoadFlags(){
+  const el=$('cp-flag-list');if(!el)return;
+  el.innerHTML='<div style="color:var(--muted);font-size:12px">Loading…</div>';
+  try{
+    const flags=await fetch('/api/flags').then(r=>r.json());
+    if(!flags||!flags.length){el.innerHTML='<div style="color:var(--muted);font-size:12px">No flags yet.</div>';}
+    else{el.innerHTML=flags.map(f=>`<div class="cp-flag"><span class="cp-flag-name" title="${esc(f.name)}">${esc(f.name)}</span><span class="cp-flag-pct">${f.rollout_pct??0}%</span><input type="checkbox" id="cpft-${esc(f.name)}" class="toggle-input" ${f.enabled?'checked':''} onchange="cpToggleFlag('${esc(f.name)}',this.checked)"><label for="cpft-${esc(f.name)}" class="toggle-label"></label><button onclick="cpDeleteFlag('${esc(f.name)}')" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:2px 4px;font-size:13px" title="Delete">🗑️</button></div>`).join('');}
+  }catch(e){el.innerHTML=`<div style="color:#ef5350;font-size:12px">Error: ${e.message}</div>`;}
+  cpLoadEvoHist();
+}
+
+async function cpCreateFlag(){
+  const nameEl=$('cp-flag-name');const name=(nameEl?.value||'').trim();if(!name)return toast('Enter a flag name',true);
+  try{await fetch('/api/flags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,enabled:false,rollout_pct:0})});nameEl.value='';cpLoadFlags();toast('Flag created: '+name);}
+  catch(e){toast('Error: '+e.message,true);}
+}
+async function cpToggleFlag(name,enabled){
+  try{await fetch(`/api/flags/${encodeURIComponent(name)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});}
+  catch(e){toast('Error: '+e.message,true);}
+}
+async function cpDeleteFlag(name){
+  if(!confirm(`Delete flag "${name}"?`))return;
+  try{await fetch(`/api/flags/${encodeURIComponent(name)}`,{method:'DELETE'});cpLoadFlags();toast('Deleted: '+name);}
+  catch(e){toast('Error: '+e.message,true);}
+}
+async function cpRunCanary(){
+  const out=$('cp-canary-out');if(out)out.textContent='Running…';
+  try{const r=await fetch('/api/canary/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).then(r=>r.json());if(out)out.innerHTML=`<pre style="white-space:pre-wrap;font-size:11px;color:var(--text);background:var(--panel);padding:10px;border-radius:8px">${esc(JSON.stringify(r,null,2))}</pre>`;}
+  catch(e){if(out)out.textContent='Error: '+e.message;}
+}
+async function cpLoadEvoHist(){
+  const el=$('cp-evo-hist');if(!el)return;
+  try{const r=await fetch('/api/evolution/history').then(r=>r.json());const h=r.history||[];if(!h.length){el.textContent='No history yet.';}else{el.innerHTML=h.slice(-6).reverse().map(x=>`<div style="padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--accent2)">${esc(x.flag||'—')}</span><span style="color:var(--muted);margin:0 6px">→</span><span>${esc(x.action||'—')}</span><span style="float:right;font-size:10px;color:var(--muted)">${x.ts?new Date(x.ts*1000).toLocaleDateString():''}</span></div>`).join('');}}
+  catch(e){el.textContent='Unable to load.';}
+}
+
+function cpLoadSkills(){
+  const el=$('cp-skills-list');if(!el)return;
+  const rows=document.querySelectorAll('#spanel-skills .skill-row[data-skill]');
+  el.innerHTML='';
+  rows.forEach(r=>{
+    const skill=r.dataset.skill;const on=r.classList.contains('on');
+    const div=document.createElement('div');
+    div.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--panel);border-radius:8px;border:1px solid var(--border);cursor:pointer';
+    div.innerHTML=`<input type="checkbox" id="cpsk-${skill}" class="toggle-input" ${on?'checked':''}><label for="cpsk-${skill}" class="toggle-label" style="pointer-events:none"></label><span style="font-size:12px;color:var(--text)">${skill}</span>`;
+    div.querySelector('input').addEventListener('change',function(){const orig=document.querySelector(`.skill-row[data-skill="${skill}"]`);if(orig){if(this.checked)orig.classList.add('on');else orig.classList.remove('on');saveEnhance();updHint();}});
+    el.appendChild(div);
+  });
+  if(!el.children.length)el.innerHTML='<div style="color:var(--muted);font-size:12px">No skills defined.</div>';
+  // Presets
+  const presetsEl=$('cp-presets-list');if(!presetsEl)return;
+  presetsEl.innerHTML='';
+  const renderPreset=(key,label)=>{const b=document.createElement('button');b.className='cp-prov';b.textContent=label;b.onclick=()=>{loadPreset(key);toast('Preset: '+label);};presetsEl.appendChild(b);};
+  Object.keys(BUILTIN_PRESETS||{}).forEach(k=>renderPreset('__'+k,k.replace(/_/g,' ')));
+}
+
+async function cpLoadBrowserStatus(){
+  const el=$('cp-browser-cards');if(!el)return;
+  try{
+    const s=await fetch('/api/admin/status').then(r=>r.json());
+    const f=s.features||{},env=s.env||{};
+    el.innerHTML=`<div class="cp-card"><div class="cp-card-title">Chrome Binary</div><div class="cp-card-val ${f.headless_browser?'cp-ok':'cp-err'}">${f.headless_browser?'✅ Found':'❌ Missing'}</div></div><div class="cp-card" style="grid-column:1/-1"><div class="cp-card-title">Path</div><div style="font-size:12px;font-family:monospace;color:var(--text);word-break:break-all">${esc(env.CHROME_EXECUTABLE||'Not set')}</div></div>`;
+  }catch(e){el.innerHTML=`<div style="color:#ef5350;font-size:12px">Error: ${e.message}</div>`;}
+}
+
+async function cpTestBrowser(){
+  const url=($('cp-test-url')?.value||'').trim()||'http://localhost:7860';
+  const out=$('cp-browser-out');if(out)out.innerHTML='<div style="color:var(--muted);font-size:12px">Taking screenshot…</div>';
+  try{
+    const r=await post('/api/browser/screenshot',{url,width:1280,height:800,full_page:false});
+    if(r.error){if(out)out.innerHTML=`<div style="color:#ef5350;font-size:12px">Error: ${esc(r.error)}</div>`;return;}
+    if(out)out.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Screenshot of ${esc(r.url)}</div><img src="data:image/png;base64,${r.image}" style="width:100%;border-radius:8px;border:1px solid var(--border)" alt="Screenshot">`;
+  }catch(e){if(out)out.innerHTML=`<div style="color:#ef5350;font-size:12px">Error: ${esc(e.message)}</div>`;}
+}
+
+async function cpLoadServer(){
+  const el=$('cp-server-env');if(!el)return;
+  try{
+    const s=await fetch('/api/admin/status').then(r=>r.json());
+    const env=s.env||{};
+    el.innerHTML=Object.entries(env).map(([k,v])=>{
+      const isSet=v===true||(typeof v==='string'&&v.length>0);
+      const disp=v===true?'✅ Set':v===false?'⬜ Not set':String(v);
+      return `<div class="cp-env-row"><span class="cp-env-key">${esc(k)}</span><span class="cp-env-val ${isSet?'cp-ok':'cp-warn'}">${esc(disp)}</span></div>`;
+    }).join('');
+  }catch(e){el.innerHTML=`<div style="color:#ef5350;font-size:12px">Error: ${e.message}</div>`;}
 }
 </script>
 </body>
