@@ -507,13 +507,11 @@ pre::-webkit-scrollbar{height:4px}
 <aside class="sidebar" id="sidebar" aria-label="Navigation sidebar">
   <div class="s-head">
     <div class="s-logo"><div class="s-mark" aria-hidden="true">⚡</div><div class="s-name">DevForge</div></div>
-    <div class="s-tabs">
-      <button class="s-tab on" id="stab-files" onclick="setSideTab('files')" title="Files &amp; Repos">📁</button>
-      <button class="s-tab" id="stab-config" onclick="setSideTab('config')" title="AI Config">⚙️</button>
-      <button class="s-tab" id="stab-skills" onclick="setSideTab('skills')" title="Skills &amp; Presets">⚡</button>
-      <button class="s-tab" id="stab-tools" onclick="setSideTab('tools')" title="MCP &amp; Tools">🔌</button>
-    </div>
-    <button class="s-coll" onclick="collSidebar()" aria-label="Collapse sidebar">‹</button>
+    <button id="stab-files" style="display:none"></button>
+    <button id="stab-config" style="display:none"></button>
+    <button id="stab-skills" style="display:none"></button>
+    <button id="stab-tools" style="display:none"></button>
+    <button id="exp-btn" class="exp-btn" onclick="expSidebar()" aria-label="Expand sidebar" style="display:none"></button>
   </div>
   <!-- ── Panel: Files & Repos ──────────────────────────────────────────── -->
   <div id="spanel-files" class="s-panel">
@@ -565,9 +563,14 @@ pre::-webkit-scrollbar{height:4px}
       </div>
     </div>
     <div class="s-sec">
-      <div style="padding:0 10px 8px;display:flex;align-items:center;gap:6px">
-        <div class="model-pill" id="sidebar-model-pill" onclick="setSideTab('config')" title="Click to change model" style="flex:1;cursor:pointer;background:var(--input-bg);border:1px solid var(--border2)">claude-sonnet-4</div>
-        <button onclick="setSideTab('config')" title="AI Config" aria-label="Open AI config" style="background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;border-radius:6px;padding:6px 8px;font-size:14px;transition:all .15s">⚙️</button>
+      <div style="padding:6px 10px 10px">
+        <div class="flabel" style="margin-bottom:4px">Anthropic API Key</div>
+        <input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" data-rollbar-scrub="true" oninput="saveEnhance()">
+        <div class="model-selector" style="margin-top:8px" role="radiogroup" aria-label="Claude model">
+          <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest">⚡<br>Haiku</button>
+          <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most tasks">⚖️<br>Sonnet</button>
+          <button class="msel-btn" role="radio" aria-checked="false" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent">🧠<br>Opus</button>
+        </div>
       </div>
     </div>
   </div>
@@ -583,11 +586,11 @@ pre::-webkit-scrollbar{height:4px}
         <button class="prov-btn" role="radio" aria-checked="false" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
       </div>
       <div id="pf-a" style="flex-direction:column;margin-top:8px">
-        <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" data-rollbar-scrub="true" oninput="saveEnhance()"></div>
+        <div><div class="flabel">Anthropic Key</div><input class="finput" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key (config panel)" data-rollbar-scrub="true"></div>
         <div class="model-selector" role="radiogroup" aria-label="Claude model">
-          <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
-          <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
-          <button class="msel-btn" role="radio" aria-checked="false" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent — for complex architecture">🧠<br>Opus</button>
+          <button class="msel-btn" role="radio" aria-checked="false" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
+          <button class="msel-btn on" role="radio" aria-checked="true" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
+          <button class="msel-btn" role="radio" aria-checked="false" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent — for complex architecture">🧠<br>Opus</button>
         </div>
         <div class="think-opts" id="think-opts">
           <div class="ma-row"><div><div class="ma-label" style="font-size:12px">Extended Thinking</div><div class="ma-sub">Opus reasons before answering</div></div><div><input type="checkbox" id="think-toggle" class="toggle-input" onchange="saveEnhance()"><label for="think-toggle" class="toggle-label"></label></div></div>
@@ -759,21 +762,14 @@ pre::-webkit-scrollbar{height:4px}
 <div class="resize-handle" id="resize-handle"></div>
 <main class="workspace" aria-label="Chat workspace">
   <div class="topbar">
-    <button class="exp-btn" id="exp-btn" onclick="expSidebar()" aria-label="Expand sidebar">›</button>
-    <div class="atabs" role="tablist" aria-label="Agent mode">
-      <button class="atab on" role="tab" aria-selected="true" data-agent="code" onclick="setAgent(this)">⚙️ Code</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="review" onclick="setAgent(this)">🔍 Review</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="architect" onclick="setAgent(this)">🏗️ Arch</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="debug" onclick="setAgent(this)">🐛 Debug</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="docs" onclick="setAgent(this)">📝 Docs</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="refactor" onclick="setAgent(this)">🔀 Refactor</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="testgen" onclick="setAgent(this)">🧪 Tests</button>
+    <div style="flex:1;display:flex;align-items:center;padding:0 4px">
+      <div class="s-mark" style="margin-right:8px;flex-shrink:0">⚡</div>
+      <span style="font-size:13px;font-weight:600;color:var(--text)">DevForge</span>
     </div>
     <div class="tbr">
-      <button class="repo-pill" id="repo-pill" onclick="setSideTab('files');expSidebar()" title="Connected repository — click to browse files">
+      <button class="repo-pill" id="repo-pill" onclick="expSidebar()" title="Connected repository — click to browse files">
         <span id="repo-pill-name">—</span><span class="repo-branch" id="repo-pill-branch"></span>
       </button>
-      <button class="topbar-model" id="topbar-model-badge" onclick="setSideTab('config');expSidebar()" title="Click to switch AI model">claude-sonnet</button>
       <div class="ctx-pill" id="ctx-pill" style="display:none">0 files</div>
       <div class="ma-pill" id="ma-pill" style="display:none">🤖 Multi-Agent</div>
       <div class="mem-pill" id="mem-pill" onclick="clearMemory()" title="Session memory active — click to clear">🧠 Memory</div>
@@ -782,15 +778,12 @@ pre::-webkit-scrollbar{height:4px}
         <button class="export-btn" id="more-btn" onclick="toggleMoreMenu()" title="More actions" style="font-size:15px;letter-spacing:.05em;padding:4px 9px">⋯</button>
         <div class="more-menu" id="more-menu">
           <button id="export-btn" onclick="exportChat();closeMoreMenu()">⬇️ Export chat</button>
-          <button id="issue-btn" onclick="openIssueModal();closeMoreMenu()">📋 Create Issue</button>
-          <button id="relnotes-btn" onclick="openReleaseNotes();closeMoreMenu()">🏷️ Release Notes</button>
-          <button id="readme-btn" onclick="openReadmeModal();closeMoreMenu()">📝 Gen README</button>
-          <button id="deps-btn" onclick="openDepsModal();closeMoreMenu()">🔍 Scan Deps</button>
           <button id="search-chat-btn" onclick="toggleChatSearch();closeMoreMenu()">🔎 Search chat</button>
           <button id="shortcuts-btn" onclick="openShortcutsHelp();closeMoreMenu()">⌨️ Keyboard shortcuts</button>
           <button id="clear-btn" onclick="clearChat();closeMoreMenu()">🗑️ Clear chat</button>
         </div>
       </div>
+      <span id="topbar-model-badge" style="display:none"></span>
     </div>
   </div>
   <div id="chat-search-bar" style="display:none;padding:4px 12px;border-bottom:1px solid var(--border2);background:var(--panel2);align-items:center;gap:8px">
@@ -809,13 +802,7 @@ pre::-webkit-scrollbar{height:4px}
     <div class="empty" id="empty">
       <div class="empty-mark">⚡</div>
       <div class="empty-title">DevForge</div>
-      <div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div>
-      <div class="eg-grid">
-        <button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button>
-        <button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button>
-        <button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button>
-        <button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button>
-      </div>
+      <div class="empty-sub">Connect GitHub, select files, and describe your task</div>
     </div>
   </div>
   <div style="max-width:820px;margin:0 auto;width:100%"><div class="ctx-strip" id="ctx-strip"></div></div>
@@ -1383,8 +1370,8 @@ function toggleMoreMenu(){$('more-menu').classList.toggle('open');}
 function closeMoreMenu(){const m=$('more-menu');if(m)m.classList.remove('open');}
 document.addEventListener('click',e=>{if(!e.target.closest('#more-menu')&&!e.target.closest('#more-btn'))closeMoreMenu();});
 function isMob(){return window.innerWidth<=768;}
-function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
-function expSidebar(){$('sidebar').classList.remove('col');if(!isMob())$('exp-btn').classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
+function collSidebar(){$('sidebar').classList.add('col');const eb=$('exp-btn');if(eb)eb.classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
+function expSidebar(){$('sidebar').classList.remove('col');const eb=$('exp-btn');if(eb&&!isMob())eb.classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
 function setSideTab(tab){
   ['files','config','skills','tools'].forEach(t=>{
     const p=$('spanel-'+t);if(p)p.classList.toggle('hidden',t!==tab);
