@@ -91,8 +91,8 @@
 </script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root,[data-theme="dark"]{--bg:#1f1f1f;--sidebar:#161616;--panel:#2a2a2a;--panel2:#242424;--border:#333;--border2:#2c2c2c;--text:#e8e8e8;--muted:#888;--muted2:#555;--input-bg:#141414;--hover:#2a2a2a;--hover2:#333;--accent:#34d399;--accent2:#10b981;--accent-dim:#1a3a2e;--accent-border:#2a5a40;--blue:#60a5fa;--blue-dim:#1e3a5f;--blue-border:#2a5080;--purple:#a78bfa;--purple-dim:#2d1f4a;--purple-border:#4a3a7a;--red:#f87171;--code-bg:#141414;--shadow:0 1px 3px #0005}
-[data-theme="light"]{--bg:#ffffff;--sidebar:#f5f5f5;--panel:#eeeeee;--panel2:#f0f0f0;--border:#e0e0e0;--border2:#e8e8e8;--text:#111111;--muted:#666;--muted2:#999;--input-bg:#ffffff;--hover:#f0f0f0;--hover2:#e8e8e8;--accent:#059669;--accent2:#047857;--accent-dim:#d1fae5;--accent-border:#a7f3d0;--blue:#2563eb;--blue-dim:#dbeafe;--blue-border:#93c5fd;--purple:#7c3aed;--purple-dim:#ede9fe;--purple-border:#c4b5fd;--red:#dc2626;--code-bg:#f6f8fa;--shadow:0 1px 4px #0001}
+:root,[data-theme="dark"]{--bg:#0D1116;--bg-secondary:#131920;--sidebar:#131920;--panel:#131920;--panel2:#1A2228;--border:#1A2228;--border2:#1A2228;--text:#FFFFFF;--muted:#8A9BA3;--muted2:#4A5C66;--input-bg:#0D1116;--hover:#1A2228;--hover2:#1A2228;--accent:#76CD1D;--accent2:#76CD1D;--accent-dim:rgba(118,205,29,0.12);--accent-border:rgba(118,205,29,0.3);--frog:#E19200;--blue:#60a5fa;--blue-dim:#1e3a5f;--blue-border:#2a5080;--purple:#a78bfa;--purple-dim:#2d1f4a;--purple-border:#4a3a7a;--red:#f87171;--code-bg:#0D1116;--shadow:0 1px 3px #0005}
+[data-theme="light"]{--bg:#FFFFFF;--bg-secondary:#F4F7F6;--sidebar:#F4F7F6;--panel:#F4F7F6;--panel2:#F4F7F6;--border:#E8ECEB;--border2:#E8ECEB;--text:#0D1116;--muted:#5C6B74;--muted2:#8A9BA3;--input-bg:#FFFFFF;--hover:#F4F7F6;--hover2:#E8ECEB;--accent:#239A82;--accent2:#239A82;--accent-dim:rgba(35,154,130,0.12);--accent-border:rgba(35,154,130,0.3);--frog:#E19200;--blue:#2563eb;--blue-dim:#dbeafe;--blue-border:#93c5fd;--purple:#7c3aed;--purple-dim:#ede9fe;--purple-border:#c4b5fd;--red:#dc2626;--code-bg:#f6f8fa;--shadow:0 1px 4px #0001}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,sans-serif;font-size:14px;overflow:hidden;-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
 #app{display:flex;height:100vh}
@@ -542,18 +542,147 @@ pre::-webkit-scrollbar{height:4px}
 .cp-env-val{font-size:11px;font-weight:600}
 .cp-sidebar-btn{width:100%;background:none;border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:12px;color:var(--muted);font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
 .cp-sidebar-btn:hover{border-color:var(--accent2);color:var(--accent2);background:var(--accent-dim)}
+
+/* ── NEW LAYOUT: Top nav ─────────────────────────────────────────────── */
+.top-nav{height:52px;background:var(--bg-secondary);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:0;flex-shrink:0;z-index:100;position:sticky;top:0}
+.brand{display:flex;align-items:center;gap:4px;font-size:17px;font-weight:800;letter-spacing:-.03em;margin-right:20px;text-decoration:none}
+.brand-dev{color:var(--text)}
+.brand-frog{color:var(--frog)}
+.nav-tabs{display:flex;gap:2px;flex:1}
+.nav-tab{background:none;border:none;padding:6px 12px;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;border-radius:7px;transition:all .15s;font-family:inherit}
+.nav-tab:hover{color:var(--text);background:var(--border)}
+.nav-tab.on{color:var(--text);background:var(--bg);box-shadow:0 1px 3px #0002}
+[data-theme="dark"] .nav-tab.on{background:rgba(255,255,255,.08)}
+.nav-right{display:flex;align-items:center;gap:8px;margin-left:auto}
+.user-btn{background:none;border:1px solid var(--border);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--muted);transition:all .15s}
+.user-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+
+/* ── NEW LAYOUT: Repo bar ────────────────────────────────────────────── */
+.repo-bar{height:44px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0}
+.repo-bar-info{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.repo-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.repo-branch-pill{background:var(--accent-dim);border:1px solid var(--accent-border);border-radius:12px;padding:2px 8px;font-size:11px;color:var(--accent2);font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.repo-bar-actions{display:flex;gap:6px;flex-shrink:0}
+.rba-btn{background:none;border:1px solid var(--border);border-radius:7px;padding:4px 10px;color:var(--muted);font-size:11px;font-family:inherit;cursor:pointer;transition:all .15s;white-space:nowrap}
+.rba-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.model-badge{background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:3px 10px;font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;white-space:nowrap;margin-left:8px}
+.model-badge:hover{border-color:var(--accent2);color:var(--accent2)}
+
+/* ── NEW LAYOUT: Three-column ────────────────────────────────────────── */
+.app-layout{display:flex;flex:1;min-height:0;overflow:hidden}
+
+/* ── NEW LAYOUT: Left panel ──────────────────────────────────────────── */
+.left-panel{width:270px;min-width:270px;background:var(--bg-secondary);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .2s,min-width .2s}
+.left-panel.collapsed{width:0;min-width:0;border-right:none}
+
+/* ── NEW LAYOUT: Right sidebar ───────────────────────────────────────── */
+.right-sidebar{width:260px;min-width:260px;background:var(--bg-secondary);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .2s,min-width .2s}
+.right-sidebar.collapsed{width:0;min-width:0;border-left:none}
+.rs-section{border-bottom:1px solid var(--border);flex-shrink:0}
+.rs-hdr{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.rs-hdr-title{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.rs-add{background:none;border:1px solid var(--border);color:var(--muted2);cursor:pointer;border-radius:6px;padding:2px 8px;font-size:11px;font-family:inherit;transition:all .15s}
+.rs-add:hover{border-color:var(--accent2);color:var(--accent2)}
+.rs-body{padding:4px 0 8px}
+.skill-toggle{display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;transition:background .1s}
+.skill-toggle:hover{background:var(--border)}
+.skill-toggle .sk-chk{width:14px;height:14px;accent-color:var(--accent2);flex-shrink:0}
+.skill-toggle .sk-name{font-size:12px;font-weight:500;color:var(--text);flex:1}
+.skill-toggle .sk-desc{font-size:10px;color:var(--muted);line-height:1.3;display:none}
+.skill-toggle:hover .sk-desc{display:block}
+.mcp-server{display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;transition:background .1s}
+.mcp-server:hover{background:var(--border)}
+.mcp-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.mcp-dot.online{background:var(--accent2)}
+.mcp-dot.offline{background:var(--muted2)}
+.mcp-name{font-size:12px;font-weight:500;color:var(--text);flex:1}
+.mcp-host{font-size:10px;color:var(--muted)}
+
+/* ── Primary/secondary btn ───────────────────────────────────────────── */
+.btn-primary{background:var(--accent2);border:none;border-radius:8px;padding:8px 16px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:opacity .15s}
+[data-theme="dark"] .btn-primary{color:#0D1116}
+.btn-primary:hover{opacity:.9}
+.btn-secondary{background:transparent;border:1px solid var(--border);border-radius:8px;padding:7px 15px;color:var(--text);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-secondary:hover{border-color:var(--accent2);color:var(--accent2)}
+
+/* ── Responsive overrides for new layout ────────────────────────────── */
+@media(max-width:1200px){.right-sidebar{width:0;min-width:0;border-left:none}}
+@media(max-width:768px){.left-panel{position:absolute;z-index:50;height:100%;width:85%;max-width:310px;box-shadow:4px 0 20px #0006}.repo-bar-actions{display:none}.nav-tab:not(.on){display:none}}
 </style>
 </head>
 <body>
-<div id="app">
-<div class="mob-overlay" id="mob-overlay" onclick="collSidebar()" aria-hidden="true"></div>
-<aside class="sidebar" id="sidebar" aria-label="Navigation sidebar">
+<div id="app" style="display:flex;flex-direction:column;height:100vh;overflow:hidden">
+
+  <!-- TOP NAV -->
+  <nav class="top-nav">
+    <a class="brand" href="#" onclick="return false">
+      <span class="brand-dev">DEV</span><span class="brand-frog">FROG</span>
+    </a>
+    <div class="nav-tabs">
+      <button class="nav-tab on" onclick="setNavTab('chat',this)">Dashboard</button>
+      <button class="nav-tab" onclick="setNavTab('repos',this)">Repos ▼</button>
+      <button class="nav-tab" onclick="setSideTab('skills');expLeftPanel();setNavTab('skills',this)">Skills</button>
+      <button class="nav-tab" onclick="setSideTab('tools');expLeftPanel();setNavTab('tools',this)">MCP</button>
+      <button class="nav-tab" onclick="setSideTab('config');expLeftPanel();setNavTab('config',this)">Settings</button>
+    </div>
+    <div class="nav-right">
+      <div class="theme-sw" style="margin:0">
+        <button class="ts on" id="ts-dark" onclick="setTheme('dark')" title="Dark mode">🌙</button>
+        <button class="ts" id="ts-light" onclick="setTheme('light')" title="Light mode">☀️</button>
+      </div>
+      <div id="nav-gh-card" style="display:none;align-items:center;gap:6px">
+        <img id="nav-gh-av" class="gh-av" style="width:24px;height:24px" src="" alt="">
+        <span id="nav-gh-nm" style="font-size:12px;font-weight:500;color:var(--muted)"></span>
+        <button class="user-btn" onclick="signOut()" title="Sign out">✕</button>
+      </div>
+      <button id="nav-gh-login-btn" class="btn-secondary" style="padding:5px 12px;font-size:12px;display:none" onclick="setSideTab('files');expLeftPanel()">Sign in with GitHub</button>
+    </div>
+  </nav>
+
+  <!-- REPO BAR -->
+  <div class="repo-bar" id="repo-bar">
+    <div class="repo-bar-info">
+      <span style="font-size:14px">📁</span>
+      <span class="repo-name" id="rbar-name">No repository connected</span>
+      <span class="repo-branch-pill" id="rbar-branch" style="display:none"></span>
+    </div>
+    <div class="repo-bar-actions">
+      <button class="rba-btn" onclick="setSideTab('files');expLeftPanel()" title="Open file browser">📁 Files</button>
+      <button class="rba-btn" id="rbar-branch-btn" style="display:none" onclick="loadBranches()">🌿 Branch</button>
+    </div>
+    <button class="model-badge" id="topbar-model-badge" onclick="setSideTab('config');expLeftPanel()" title="Click to change model">claude-sonnet</button>
+    <div class="stat-pill" id="stat-pill" style="display:none">~0 tok</div>
+    <div style="position:relative;flex-shrink:0;margin-left:4px">
+      <button class="export-btn" id="more-btn" onclick="toggleMoreMenu()" title="More actions" style="font-size:15px;padding:4px 9px">⋯</button>
+      <div class="more-menu" id="more-menu">
+        <button onclick="exportChat();closeMoreMenu()">⬇️ Export chat</button>
+        <button onclick="openIssueModal();closeMoreMenu()">📋 Create Issue</button>
+        <button onclick="openReleaseNotes();closeMoreMenu()">🏷️ Release Notes</button>
+        <button onclick="openReadmeModal();closeMoreMenu()">📝 Gen README</button>
+        <button onclick="openDepsModal();closeMoreMenu()">🔍 Scan Deps</button>
+        <button onclick="toggleChatSearch();closeMoreMenu()">🔎 Search chat</button>
+        <button onclick="openShortcutsHelp();closeMoreMenu()">⌨️ Shortcuts</button>
+        <button onclick="clearChat();closeMoreMenu()">🗑️ Clear chat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- THREE-COLUMN LAYOUT -->
+  <div class="app-layout">
+
+  <!-- MOBILE OVERLAY -->
+  <div class="mob-overlay" id="mob-overlay" onclick="collLeftPanel()" aria-hidden="true"></div>
+
+  <!-- LEFT PANEL -->
+  <aside class="left-panel" id="sidebar" aria-label="Navigation sidebar">
   <div class="s-head">
-    <div class="s-logo"><div class="s-mark" aria-hidden="true">⚡</div><div class="s-name">DevForge</div></div>
-    <button id="stab-files" style="display:none"></button>
-    <button id="stab-config" style="display:none"></button>
-    <button id="stab-skills" style="display:none"></button>
-    <button id="stab-tools" style="display:none"></button>
+    <div class="s-tabs">
+      <button class="s-tab on" id="stab-files" onclick="setSideTab('files')" title="Files &amp; Repos">📁</button>
+      <button class="s-tab" id="stab-config" onclick="setSideTab('config')" title="AI Config">⚙️</button>
+      <button class="s-tab" id="stab-skills" onclick="setSideTab('skills')" title="Skills &amp; Presets">⚡</button>
+      <button class="s-tab" id="stab-tools" onclick="setSideTab('tools')" title="MCP &amp; Tools">🔌</button>
+    </div>
+    <button class="s-coll" id="s-coll-btn" onclick="collLeftPanel()" aria-label="Collapse panel">‹</button>
   </div>
   <!-- ── Panel: Files & Repos ──────────────────────────────────────────── -->
   <div id="spanel-files" class="s-panel">
@@ -784,38 +913,30 @@ pre::-webkit-scrollbar{height:4px}
   </div>
   <!-- Control Panel button at sidebar bottom -->
   <div style="padding:8px 10px;border-top:1px solid var(--border2);flex-shrink:0">
-    <button onclick="openCP()" style="width:100%;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--muted);font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:7px;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">⚙️ Control Panel</button>
-  </div>
-  <div style="padding:10px;border-top:1px solid var(--border);flex-shrink:0">
     <button class="cp-sidebar-btn" onclick="openCP()">⚙️ Control Panel</button>
   </div>
 </aside>
-<div class="resize-handle" id="resize-handle"></div>
-<main class="workspace" aria-label="Chat workspace">
-  <div class="topbar">
-    <button id="exp-btn" class="exp-btn" onclick="expSidebar()" aria-label="Expand sidebar" style="display:none">›</button>
-    <div style="flex:1;display:flex;align-items:center;padding:0 6px;min-width:0">
-      <div class="s-mark" style="margin-right:8px;flex-shrink:0" aria-hidden="true">⚡</div>
-      <span style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap">DevForge</span>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="workspace" aria-label="Chat workspace">
+  <div class="topbar" style="display:flex">
+    <button id="exp-btn" class="exp-btn show" onclick="expLeftPanel()" aria-label="Expand sidebar">›</button>
+    <div class="atabs" role="tablist" aria-label="Agent mode">
+      <button class="atab on" role="tab" aria-selected="true" data-agent="code" onclick="setAgent(this)">⚙️ Code</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="review" onclick="setAgent(this)">🔍 Review</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="architect" onclick="setAgent(this)">🏗️ Arch</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="debug" onclick="setAgent(this)">🐛 Debug</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="docs" onclick="setAgent(this)">📝 Docs</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="refactor" onclick="setAgent(this)">🔀 Refactor</button>
+      <button class="atab" role="tab" aria-selected="false" data-agent="testgen" onclick="setAgent(this)">🧪 Tests</button>
     </div>
     <div class="tbr">
-      <button class="repo-pill" id="repo-pill" onclick="expSidebar()" title="Connected repository — click to browse files">
+      <button class="repo-pill" id="repo-pill" onclick="setSideTab('files');expLeftPanel()" title="Connected repository — click to browse files">
         <span id="repo-pill-name">—</span><span class="repo-branch" id="repo-pill-branch"></span>
       </button>
-      <span id="topbar-model-badge" style="display:none"></span>
       <div class="ctx-pill" id="ctx-pill" style="display:none">0 files</div>
       <div class="ma-pill" id="ma-pill" style="display:none">🤖 Multi-Agent</div>
       <div class="mem-pill" id="mem-pill" onclick="clearMemory()" title="Session memory active — click to clear">🧠 Memory</div>
-      <div class="stat-pill" id="stat-pill">~0 tok</div>
-      <div style="position:relative;flex-shrink:0">
-        <button class="export-btn" id="more-btn" onclick="toggleMoreMenu()" title="More actions" style="font-size:15px;letter-spacing:.05em;padding:4px 9px">⋯</button>
-        <div class="more-menu" id="more-menu">
-          <button id="export-btn" onclick="exportChat();closeMoreMenu()">⬇️ Export chat</button>
-          <button id="search-chat-btn" onclick="toggleChatSearch();closeMoreMenu()">🔎 Search chat</button>
-          <button id="shortcuts-btn" onclick="openShortcutsHelp();closeMoreMenu()">⌨️ Keyboard shortcuts</button>
-          <button id="clear-btn" onclick="clearChat();closeMoreMenu()">🗑️ Clear chat</button>
-        </div>
-      </div>
     </div>
   </div>
   <div id="chat-search-bar" style="display:none;padding:4px 12px;border-bottom:1px solid var(--border2);background:var(--panel2);align-items:center;gap:8px">
@@ -871,7 +992,40 @@ pre::-webkit-scrollbar{height:4px}
     </div>
   </div>
 </main>
-</div>
+
+  <!-- RIGHT SIDEBAR -->
+  <aside class="right-sidebar" id="right-sidebar">
+    <div class="rs-section">
+      <div class="rs-hdr" onclick="toggleRS('skills-rs')">
+        <span class="rs-hdr-title">🎯 Skills</span>
+        <button class="rs-add" onclick="event.stopPropagation();setSideTab('skills');expLeftPanel()">+ Config</button>
+      </div>
+      <div class="rs-body" id="skills-rs">
+        <!-- Dynamically filled by renderRSSkills() -->
+      </div>
+    </div>
+    <div class="rs-section">
+      <div class="rs-hdr" onclick="toggleRS('mcp-rs')">
+        <span class="rs-hdr-title">🔌 MCP Servers</span>
+        <button class="rs-add" onclick="event.stopPropagation();setSideTab('tools');expLeftPanel()">+ Add</button>
+      </div>
+      <div class="rs-body" id="mcp-rs">
+        <!-- Dynamically filled by renderMCPServers() -->
+      </div>
+    </div>
+    <div class="rs-section">
+      <div class="rs-hdr" onclick="toggleRS('active-rs')">
+        <span class="rs-hdr-title">⚡ Active PRs</span>
+      </div>
+      <div class="rs-body" id="active-rs">
+        <div style="padding:8px 14px;font-size:11px;color:var(--muted)">Connect a repo to see open PRs</div>
+      </div>
+    </div>
+  </aside>
+
+  </div><!-- end .app-layout -->
+
+</div><!-- end #app -->
 
 <!-- Issue modal -->
 <div class="modal-overlay" id="issue-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
@@ -1588,19 +1742,19 @@ async function doBatchCommit(btn,blocks){const panel=btn.closest('.batch-panel')
 function addTokens(text,precise){const est=precise||(text.split(/\s+/).filter(Boolean).length*1.3|0);S.stats.tokens+=est;S.stats.messages++;const p=$('stat-pill');p.style.display='block';p.textContent=`~${S.stats.tokens>=1000?(S.stats.tokens/1000).toFixed(1)+'k':S.stats.tokens} tok`;}
 
 function toggleSec(lbl){lbl.closest('.s-sec').classList.toggle('closed');}
-function setTheme(t){document.documentElement.setAttribute('data-theme',t);$('ts-light').classList.toggle('on',t==='light');$('ts-dark').classList.toggle('on',t==='dark');$('hljs-theme').href=t==='dark'?'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css':'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';localStorage.setItem('df-theme',t);}
+function setTheme(t){document.documentElement.setAttribute('data-theme',t);const tsl=$('ts-light');const tsd=$('ts-dark');if(tsl)tsl.classList.toggle('on',t==='light');if(tsd)tsd.classList.toggle('on',t==='dark');$('hljs-theme').href=t==='dark'?'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css':'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';localStorage.setItem('df-theme',t);}
 (()=>{setTheme(localStorage.getItem('df-theme')||'dark');})();
 function saveSession(){if(S.ghToken&&S.ghUser){const d={ghToken:S.ghToken,ghUser:S.ghUser};if(S.repo)d.repo={owner:S.repo.owner,repo:S.repo.repo,branch:S.repo.branch};localStorage.setItem('df-session',JSON.stringify(d));}}
 function clearSession(){localStorage.removeItem('df-session');}
-function restoreSession(){try{const raw=localStorage.getItem('df-session');if(!raw)return false;const{ghToken,ghUser,repo}=JSON.parse(raw);if(!ghToken||!ghUser)return false;S.ghToken=ghToken;S.ghUser=ghUser;$('gh-av').src=ghUser.avatar_url||'';$('gh-nm').textContent=ghUser.name||ghUser.login;$('gh-lg').textContent='@'+ghUser.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();if(repo&&repo.owner&&repo.repo)setTimeout(()=>selectRepo(repo.owner+'/'+repo.repo),50);return true;}catch(e){return false;}}
+function restoreSession(){try{const raw=localStorage.getItem('df-session');if(!raw)return false;const{ghToken,ghUser,repo}=JSON.parse(raw);if(!ghToken||!ghUser)return false;S.ghToken=ghToken;S.ghUser=ghUser;const gav=$('gh-av');const gnm=$('gh-nm');const glg=$('gh-lg');const gco=$('gh-conn');const gu=$('gh-user');const rs=$('repo-sec');if(gav)gav.src=ghUser.avatar_url||'';if(gnm)gnm.textContent=ghUser.name||ghUser.login;if(glg)glg.textContent='@'+ghUser.login;if(gco)gco.style.display='none';if(gu)gu.style.display='block';if(rs)rs.style.display='block';// Update nav GH card
+const navAv=$('nav-gh-av');const navNm=$('nav-gh-nm');const navCard=$('nav-gh-card');const navLogin=$('nav-gh-login-btn');if(navAv)navAv.src=ghUser.avatar_url||'';if(navNm)navNm.textContent=ghUser.name||ghUser.login;if(navCard)navCard.style.display='flex';if(navLogin)navLogin.style.display='none';loadRepos();updHint();if(repo&&repo.owner&&repo.repo)setTimeout(()=>selectRepo(repo.owner+'/'+repo.repo),50);return true;}catch(e){return false;}}
 function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill);const ts=$('ma-test-stage');const tt=$('think-toggle');const tb=$('think-budget');const data={prov:S.prov,anthropicKey:$('ak').value||'',anthropicModel:S.anthropicModel||'claude-sonnet-4-6',thinkingMode:tt?tt.checked:false,thinkingBudget:tb?tb.value:'2000',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',alModel:$('al-model')?$('al-model').value||'':'',alTokens:$('al-tokens')?$('al-tokens').value||'512':'512',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||'',maTestStage:ts?ts.checked:false,maTestProv:$('ma-test-prov')?$('ma-test-prov').value||'':''};localStorage.setItem('df-enhance',JSON.stringify(data));}
 function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov){setProv(d.prov,true);setProvGroup(d.prov);}if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.alModel&&$('al-model'))$('al-model').value=d.alModel;if(d.alTokens&&$('al-tokens'))$('al-tokens').value=d.alTokens;if(d.skills)document.querySelectorAll('.skill-row[data-skill]').forEach(el=>{el.classList.toggle('on',d.skills.includes(el.dataset.skill));});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
 function toggleMoreMenu(){$('more-menu').classList.toggle('open');}
 function closeMoreMenu(){const m=$('more-menu');if(m)m.classList.remove('open');}
 document.addEventListener('click',e=>{if(!e.target.closest('#more-menu')&&!e.target.closest('#more-btn'))closeMoreMenu();});
 function isMob(){return window.innerWidth<=768;}
-function collSidebar(){$('sidebar').classList.add('col');const eb=$('exp-btn');if(eb)eb.classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
-function expSidebar(){$('sidebar').classList.remove('col');const eb=$('exp-btn');if(eb&&!isMob())eb.classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
+// collSidebar/expSidebar are aliased below to the new left-panel functions
 function setSideTab(tab){
   ['files','config','skills','tools'].forEach(t=>{
     const p=$('spanel-'+t);if(p)p.classList.toggle('hidden',t!==tab);
@@ -1717,13 +1871,15 @@ async function suggestCommitMsg(panel){
   try{const d=await post('/api/commit/suggest-message',body);if(d.message){panel.querySelector('.wp-msg').value=d.message;toast('✨ Commit message suggested!');}else{toast('Error: '+(d.error||'Failed'),true);}}catch(e){toast(e.message,true);}
   if(btn){btn.textContent='✨';btn.disabled=false;}
 }
-function handleOAuthCallback(){const hash=window.location.hash.slice(1);const hp=new URLSearchParams(hash);const token=hp.get('token');const authErr=new URLSearchParams(window.location.search).get('auth_error');if(authErr){window.history.replaceState({},'',window.location.pathname);setTimeout(()=>toast('GitHub auth failed: '+decodeURIComponent(authErr),true),100);return false;}if(!token)return false;window.history.replaceState({},'',window.location.pathname);S.ghToken=token;expSidebar();post('/api/github/user',{token}).then(u=>{if(u&&u.login){S.ghUser=u;saveSession();$('gh-av').src=u.avatar_url||'';$('gh-nm').textContent=u.name||u.login;$('gh-lg').textContent='@'+u.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();}else{S.ghToken='';toast('GitHub authentication failed — please try again',true);}});return true;}
+function handleOAuthCallback(){const hash=window.location.hash.slice(1);const hp=new URLSearchParams(hash);const token=hp.get('token');const authErr=new URLSearchParams(window.location.search).get('auth_error');if(authErr){window.history.replaceState({},'',window.location.pathname);setTimeout(()=>toast('GitHub auth failed: '+decodeURIComponent(authErr),true),100);return false;}if(!token)return false;window.history.replaceState({},'',window.location.pathname);S.ghToken=token;expLeftPanel();post('/api/github/user',{token}).then(u=>{if(u&&u.login){S.ghUser=u;saveSession();const gav=$('gh-av');const gnm=$('gh-nm');const glg=$('gh-lg');const gc=$('gh-conn');const gu=$('gh-user');const rs=$('repo-sec');if(gav)gav.src=u.avatar_url||'';if(gnm)gnm.textContent=u.name||u.login;if(glg)glg.textContent='@'+u.login;if(gc)gc.style.display='none';if(gu)gu.style.display='block';if(rs)rs.style.display='block';// Update nav GH card
+const navAv=$('nav-gh-av');const navNm=$('nav-gh-nm');const navCard=$('nav-gh-card');const navLogin=$('nav-gh-login-btn');if(navAv)navAv.src=u.avatar_url||'';if(navNm)navNm.textContent=u.name||u.login;if(navCard)navCard.style.display='flex';if(navLogin)navLogin.style.display='none';loadRepos();updHint();}else{S.ghToken='';toast('GitHub authentication failed — please try again',true);}});return true;}
 function startOAuth(){window.location.href='/api/github/auth/redirect';}
-function signOut(){S.ghToken='';S.ghUser=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.tabs=[];S.activeTabId=null;$('tab-bar').style.display='none';S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';closeMoreMenu();const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='none';$('commits-panel').style.display='none';$('search-results-panel').style.display='none';const wp=$('workflows-panel');if(wp)wp.style.display='none';updRepoPill();updCtx();updHint();}
+function signOut(){S.ghToken='';S.ghUser=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.tabs=[];S.activeTabId=null;const tb=$('tab-bar');if(tb)tb.style.display='none';S.msgs=[];S.stats={tokens:0,messages:0};clearSession();const gc=$('gh-conn');const gu=$('gh-user');const rs=$('repo-sec');if(gc)gc.style.display='block';if(gu)gu.style.display='none';if(rs)rs.style.display='none';const ft=$('file-tree');const rl=$('repo-list');const rst=$('repo-st');if(ft)ft.innerHTML='';if(rl)rl.innerHTML='';if(rst)rst.textContent='';const mp=$('mem-pill');const sp=$('stat-pill');if(mp)mp.style.display='none';if(sp)sp.style.display='none';closeMoreMenu();const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='none';const cp=$('commits-panel');if(cp)cp.style.display='none';const srp=$('search-results-panel');if(srp)srp.style.display='none';const wp=$('workflows-panel');if(wp)wp.style.display='none';// Reset nav GH card
+const navCard=$('nav-gh-card');const navLogin=$('nav-gh-login-btn');if(navCard)navCard.style.display='none';if(navLogin)navLogin.style.display='block';updRepoPill();updCtx();updHint();}
 async function loadRepos(){$('repo-list').innerHTML='<div class="list-msg">Loading…</div>';const repos=await post('/api/github/repos',{token:S.ghToken});if(!Array.isArray(repos)){$('repo-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';return;}S.allRepos=repos;renderRepoList(repos);}
 function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo(this.dataset.repo,this)" data-repo="${escA(r.full_name)}"><div class="li-name">${esc(r.name)}</div><div class="li-sub"><span>${esc(r.language||'—')}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
 function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerCase().includes(q.toLowerCase())));}
-function updRepoPill(){const pill=$('repo-pill');const nm=$('repo-pill-name');const br=$('repo-pill-branch');if(!pill)return;if(S.repo){nm.textContent=`${S.repo.owner}/${S.repo.repo}`;br.textContent=` · ${S.repo.branch||'main'}`;pill.classList.add('show');}else{pill.classList.remove('show');}}
+function updRepoPill(){const pill=$('repo-pill');const nm=$('repo-pill-name');const br=$('repo-pill-branch');if(!pill)return;if(S.repo){nm.textContent=`${S.repo.owner}/${S.repo.repo}`;br.textContent=` · ${S.repo.branch||'main'}`;pill.classList.add('show');}else{pill.classList.remove('show');}updateRepoBadge();renderMCPServers();}
 function autoDetectStack(files){const paths=files.map(f=>f.path);const has=re=>paths.some(p=>re.test(p));const suggest=[];if(has(/\.(tsx|jsx)$/))suggest.push('react');if(has(/next\.config\.(js|ts|mjs|cjs)$/))suggest.push('nextjs');if(has(/Dockerfile$/i))suggest.push('docker');if(has(/\.(spec|test)\.(ts|js|py)$|__tests__/))suggest.push('tests');if(has(/requirements\.txt$|pyproject\.toml$|setup\.py$/))suggest.push('errors');if(has(/go\.mod$/))suggest.push('go');if(has(/\.(sql)$/))suggest.push('sql');if(has(/zod/))suggest.push('zod');const current=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill);if(current.length>0||!suggest.length)return;const toEnable=[...new Set(suggest)];document.querySelectorAll('.skill-row[data-skill]').forEach(el=>{if(toEnable.includes(el.dataset.skill))el.classList.add('on');});saveEnhance();if(toEnable.length)toast(`🎯 Auto-enabled skills: ${toEnable.join(', ')}`);}
 async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};S.tabs=[];S.activeTabId=null;$('mem-pill').style.display='none';$('stat-pill').style.display='none';updCtx();$('file-tree').innerHTML='';const shortName=fullName.split('/').pop();$('msgs').innerHTML=`<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">${esc(shortName)}</div><div class="empty-sub">Select files from the tree · type @ to mention a file · or describe a task below</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>🔍</span>Review the codebase for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the most critical bugs</button><button class="eg" onclick="fill(this)"><span>🏗️</span>Explain the architecture and suggest improvements</button><button class="eg" onclick="fill(this)"><span>🧪</span>Write tests for the main business logic</button></div></div>`;const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;saveSession();st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadBranches();loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='block';updRepoPill();autoDetectStack(d.files);updHint();}
 function buildTree(files){const folders={};const root=[];for(const f of files){const p=f.path.split('/');if(p.length===1)root.push(f);else{if(!folders[p[0]])folders[p[0]]=[];folders[p[0]].push(f);}}let h='';for(const f of root)h+=tfn(f);for(const[k,v]of Object.entries(folders))h+=tfd(k,v);$('file-tree').innerHTML=h;}
@@ -2083,7 +2239,7 @@ async function submitAdminLogin(){
   btn.disabled=false;btn.textContent='Sign In';
 }
 function _doOpenCP(){toast('Control Panel — system info only in this build');}
-function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';let text='claude-sonnet';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';text=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';}else if(S.prov==='groq')text=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')text=($('oci-model')&&$('oci-model').value)||'custom';else if(S.prov==='airllm')text=(($('al-model')&&$('al-model').value)||'airllm').split('/').pop();else text=S.hfModel.split('/').pop();const p=$('model-pill');const sp=$('sidebar-model-pill');const tb=$('topbar-model-badge');if(p)p.textContent=text;if(sp)sp.textContent=text;if(tb)tb.textContent=text;}
+function updBadge(){const maEl=$('multi-agent');const ma=maEl?maEl.checked:false;const maPill=$('ma-pill');if(maPill)maPill.style.display=ma?'block':'none';let text='claude-sonnet';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';text=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';}else if(S.prov==='groq')text=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')text=($('oci-model')&&$('oci-model').value)||'custom';else if(S.prov==='airllm')text=(($('al-model')&&$('al-model').value)||'airllm').split('/').pop();else text=S.hfModel.split('/').pop();const p=$('model-pill');const sp=$('sidebar-model-pill');const tb=$('topbar-model-badge');if(p)p.textContent=text;if(sp)sp.textContent=text;if(tb)tb.textContent=text;}
 function fillAirLLM(model){$('al-model').value=model;updBadge();saveEnhance();toast('AirLLM model: '+model.split('/').pop());}
 let searchTimer=null;
 function debounceSearch(q){clearTimeout(searchTimer);searchTimer=setTimeout(()=>fetchModels(q),400);}
@@ -2684,7 +2840,44 @@ function fetchHfBuildStatus(){
     }
   }).catch(e=>{if(lbl)lbl.textContent='Error';if(dot)dot.style.background='var(--red)';});
 }
-(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!handleOAuthCallback()&&!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();fetchHfBuildStatus();})();
+// ── New nav layout functions ─────────────────────────────────────────────────
+function setNavTab(id,el){document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('on'));if(el)el.classList.add('on');}
+function expLeftPanel(){const p=$('sidebar');if(p)p.classList.remove('collapsed');const ob=$('mob-overlay');if(ob&&window.innerWidth<768)ob.style.display='block';}
+function collLeftPanel(){const p=$('sidebar');if(p)p.classList.add('collapsed');const ob=$('mob-overlay');if(ob)ob.style.display='none';}
+function toggleRS(id){const el=$(id);if(el)el.style.display=el.style.display==='none'?'block':'none';}
+function renderRSSkills(){
+  const el=$('skills-rs');if(!el)return;
+  const rows=document.querySelectorAll('#spanel-skills .skill-row[data-skill]');
+  if(!rows.length){el.innerHTML='<div style="padding:8px 14px;font-size:11px;color:var(--muted)">No skills defined.</div>';return;}
+  let html='';
+  rows.forEach(r=>{const s=r.dataset.skill;const on=r.classList.contains('on');html+=`<label class="skill-toggle"><input type="checkbox" ${on?'checked':''} onchange="syncSkillFromRS(this,'${s}')"><span class="st-track"><span class="st-thumb"></span></span><span class="st-label">${s}</span></label>`;});
+  el.innerHTML=html;
+}
+function syncSkillFromRS(chk,skill){const orig=document.querySelector(`.skill-row[data-skill="${skill}"]`);if(orig){if(chk.checked)orig.classList.add('on');else orig.classList.remove('on');saveEnhance();updHint();}}
+function renderMCPServers(){
+  const el=$('mcp-rs');if(!el)return;
+  const tools=window._customTools||[];
+  const defaults=[{name:'GitHub'},{name:'Browser'},{name:'File I/O'}];
+  const servers=defaults.map(d=>`<div class="mcp-server"><span class="mcp-dot active"></span><span class="mcp-name">${d.name}</span></div>`).join('');
+  const custom=tools.length?tools.map(t=>`<div class="mcp-server"><span class="mcp-dot active"></span><span class="mcp-name">${t.name||t.function?.name||'Tool'}</span></div>`).join(''):'';
+  el.innerHTML=servers+custom||(tools.length?'':'<div style="padding:4px 14px;font-size:11px;color:var(--muted)">No servers active</div>');
+}
+function updateRepoBadge(){
+  const nameEl=$('rbar-name');const branchEl=$('rbar-branch');const branchBtn=$('rbar-branch-btn');
+  if(S.repo){
+    if(nameEl)nameEl.textContent=`${S.repo.owner}/${S.repo.repo}`;
+    if(branchEl){branchEl.textContent=S.repo.branch||'main';branchEl.style.display='';}
+    if(branchBtn)branchBtn.style.display='';
+  }else{
+    if(nameEl)nameEl.textContent='No repository connected';
+    if(branchEl)branchEl.style.display='none';
+    if(branchBtn)branchBtn.style.display='none';
+  }
+}
+// Aliases for backward-compatibility
+function expSidebar(){expLeftPanel();}
+function collSidebar(){collLeftPanel();}
+(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!handleOAuthCallback()&&!restoreSession())expLeftPanel();if(isMob())collLeftPanel();initResizeHandle();fetchHfBuildStatus();renderRSSkills();renderMCPServers();updateRepoBadge();})();
 
 // ── Headless Browser Panel ──────────────────────────────────────────────────
 let _browserPageData=null;
