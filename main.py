@@ -1,11 +1,11 @@
-from fastapi import FastAPI, Query
-from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Callable, List, Optional
 import ast as _ast
-import json, os, requests, base64, re, asyncio, threading
+import json, os, requests, base64, re, asyncio, threading, secrets, time
 from urllib.parse import quote as _urlquote
 from concurrent.futures import ThreadPoolExecutor, as_completed as _futs_done
 
@@ -694,30 +694,54 @@ async def search_hf_models(q: str = Query(default="", max_length=200), limit: in
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-@app.post("/api/github/auth/start")
-async def github_auth_start():
-    if not GITHUB_CLIENT_ID: return JSONResponse({"error": "GITHUB_CLIENT_ID not set."}, status_code=500)
-    r = requests.post("https://github.com/login/device/code", headers={"Accept": "application/json"},
-        data={"client_id": GITHUB_CLIENT_ID, "scope": "repo read:user"}, timeout=10)
-    try:
-        return JSONResponse(r.json(), status_code=200 if r.ok else 500)
-    except Exception:
-        return JSONResponse({"error": "GitHub returned an unexpected response"}, status_code=500)
+_oauth_states: dict[str, float] = {}  # state token -> creation timestamp (TTL 10 min)
 
-class DeviceCodeBody(BaseModel):
-    device_code: str = Field(min_length=1, max_length=100)
+@app.get("/api/github/auth/redirect")
+async def github_auth_redirect(request: Request):
+    """Step 1: redirect the browser to GitHub's OAuth consent page."""
+    if not GITHUB_CLIENT_ID:
+        return JSONResponse({"error": "GITHUB_CLIENT_ID not configured"}, status_code=500)
+    state = secrets.token_urlsafe(32)
+    _oauth_states[state] = time.time()
+    # Prune states older than 10 minutes to prevent unbounded growth
+    now = time.time()
+    for k in [k for k, v in list(_oauth_states.items()) if now - v > 600]:
+        _oauth_states.pop(k, None)
+    callback = str(request.base_url).rstrip("/") + "/api/github/auth/callback"
+    url = (
+        "https://github.com/login/oauth/authorize"
+        f"?client_id={GITHUB_CLIENT_ID}"
+        "&scope=repo%20read%3Auser"
+        f"&state={state}"
+        f"&redirect_uri={_urlquote(callback, safe='')}"
+    )
+    return RedirectResponse(url)
 
-@app.post("/api/github/auth/poll")
-async def github_auth_poll(body: DeviceCodeBody):
-    if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
-        return JSONResponse({"error": "credentials_missing"}, status_code=500)
-    r = requests.post("https://github.com/login/oauth/access_token", headers={"Accept": "application/json"},
-        data={"client_id": GITHUB_CLIENT_ID, "client_secret": GITHUB_CLIENT_SECRET,
-              "device_code": body.device_code, "grant_type": "urn:ietf:params:oauth:grant-type:device_code"}, timeout=10)
+@app.get("/api/github/auth/callback")
+async def github_auth_callback(code: str = "", state: str = "", error: str = ""):
+    """Step 2: GitHub redirects here with a code; exchange it for an access token."""
+    if error:
+        return RedirectResponse("/?auth_error=" + _urlquote(error, safe=""))
+    if not code or state not in _oauth_states:
+        return RedirectResponse("/?auth_error=invalid_state")
+    _oauth_states.pop(state, None)
     try:
-        return JSONResponse(r.json(), status_code=200)
+        r = requests.post(
+            "https://github.com/login/oauth/access_token",
+            headers={"Accept": "application/json"},
+            data={"client_id": GITHUB_CLIENT_ID, "client_secret": GITHUB_CLIENT_SECRET, "code": code},
+            timeout=15,
+        )
+        data = r.json()
     except Exception:
-        return JSONResponse({"error": "GitHub returned an unexpected response"}, status_code=500)
+        return RedirectResponse("/?auth_error=github_unreachable")
+    token = data.get("access_token", "")
+    if not token:
+        err = _urlquote(data.get("error_description") or data.get("error") or "no_token", safe="")
+        return RedirectResponse(f"/?auth_error={err}")
+    # Pass token in the URL fragment — fragments are never sent to servers, so it
+    # won't appear in access logs.  The frontend reads and immediately clears it.
+    return RedirectResponse(f"/#token={token}")
 
 class TokenBody(BaseModel):
     token: str = Field(min_length=1, max_length=500)
@@ -2681,3 +2705,91 @@ async def hf_build_status():
         }
     except Exception as exc:
         return JSONResponse({"stage": "UNKNOWN", "error": str(exc)}, status_code=502)
+
+
+# ── Headless Browser endpoints ───────────────────────────────────────────────
+_CHROME_EXEC = os.environ.get(
+    "CHROME_EXECUTABLE",
+    "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+)
+_BROWSER_LAUNCH_ARGS = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+]
+
+
+class BrowserScreenshotBody(BaseModel):
+    url: str = Field(..., description="URL to screenshot")
+    width: int = Field(1280, ge=320, le=1920)
+    height: int = Field(800, ge=240, le=1080)
+    full_page: bool = False
+    wait_until: str = "networkidle"
+
+
+class BrowserScrapeBody(BaseModel):
+    url: str = Field(..., description="URL to scrape")
+    wait_until: str = "networkidle"
+
+
+def _check_chrome() -> str | None:
+    """Return error message if Chrome is not available."""
+    if not os.path.exists(_CHROME_EXEC):
+        return f"Chrome not found at {_CHROME_EXEC}. Set CHROME_EXECUTABLE env var."
+    return None
+
+
+@app.post("/api/browser/screenshot")
+async def browser_screenshot(body: BrowserScreenshotBody):
+    """Take a screenshot of a URL and return it as a base64-encoded PNG."""
+    if err := _check_chrome():
+        return JSONResponse({"error": err}, status_code=503)
+    try:
+        from playwright.async_api import async_playwright
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(
+                executable_path=_CHROME_EXEC,
+                headless=True,
+                args=_BROWSER_LAUNCH_ARGS,
+            )
+            try:
+                page = await browser.new_page(
+                    viewport={"width": body.width, "height": body.height}
+                )
+                await page.goto(body.url, wait_until=body.wait_until, timeout=30000)
+                png_bytes = await page.screenshot(full_page=body.full_page)
+            finally:
+                await browser.close()
+        return {
+            "url": body.url,
+            "image": base64.b64encode(png_bytes).decode(),
+            "mime": "image/png",
+        }
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.post("/api/browser/scrape")
+async def browser_scrape(body: BrowserScrapeBody):
+    """Load a URL with JS rendering and return the page title and text content."""
+    if err := _check_chrome():
+        return JSONResponse({"error": err}, status_code=503)
+    try:
+        from playwright.async_api import async_playwright
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(
+                executable_path=_CHROME_EXEC,
+                headless=True,
+                args=_BROWSER_LAUNCH_ARGS,
+            )
+            try:
+                page = await browser.new_page()
+                await page.goto(body.url, wait_until=body.wait_until, timeout=30000)
+                title = await page.title()
+                text = await page.evaluate("() => document.body.innerText")
+            finally:
+                await browser.close()
+        return {"url": body.url, "title": title, "text": text[:20000]}
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)

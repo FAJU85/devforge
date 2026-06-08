@@ -8,6 +8,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir "sentry-sdk[fastapi]>=2.0" "posthog>=7.0"
 # Optional: AirLLM for local model inference (pulls torch + transformers; skip if not needed)
 RUN pip install --no-cache-dir airllm || true
+# Headless browser support
+RUN pip install --no-cache-dir playwright==1.60.0 && python -m playwright install chromium || true
 
 COPY . .
 # Optional: control-plane dependencies (LangGraph, LangChain, Pinecone)

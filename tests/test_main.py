@@ -3,6 +3,7 @@ import asyncio
 import json
 import sys
 import threading
+import time
 import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -545,44 +546,89 @@ class TestSearchHfModels:
         assert resp.status_code == 422
 
 
-class TestGithubAuthStart:
-    def test_returns_error_when_client_id_missing(self):
+class TestGithubAuthRedirect:
+    def test_returns_500_when_client_id_missing(self):
         with patch.object(main, "GITHUB_CLIENT_ID", ""):
-            resp = client.post("/api/github/auth/start")
+            resp = client.get("/api/github/auth/redirect", follow_redirects=False)
         assert resp.status_code == 500
         assert "GITHUB_CLIENT_ID" in resp.json().get("error", "")
 
-    def test_returns_device_code_response(self):
-        mock_resp = MagicMock()
-        mock_resp.ok = True
-        mock_resp.json.return_value = {"device_code": "abc", "user_code": "XXXX-YYYY", "interval": 5}
-
+    def test_redirects_to_github_oauth_url(self):
         with patch.object(main, "GITHUB_CLIENT_ID", "test_client_id"):
-            with patch("main.requests.post", return_value=mock_resp):
-                resp = client.post("/api/github/auth/start")
+            resp = client.get("/api/github/auth/redirect", follow_redirects=False)
+        assert resp.status_code in (302, 307)
+        location = resp.headers["location"]
+        assert "github.com/login/oauth/authorize" in location
+        assert "client_id=test_client_id" in location
+        assert "state=" in location
 
-        assert resp.status_code == 200
-        assert resp.json()["device_code"] == "abc"
+    def test_state_stored_in_oauth_states(self):
+        main._oauth_states.clear()
+        with patch.object(main, "GITHUB_CLIENT_ID", "test_client_id"):
+            client.get("/api/github/auth/redirect", follow_redirects=False)
+        assert len(main._oauth_states) == 1
 
 
-class TestGithubAuthPoll:
-    def test_returns_error_when_credentials_missing(self):
-        with patch.object(main, "GITHUB_CLIENT_ID", ""), \
-             patch.object(main, "GITHUB_CLIENT_SECRET", ""):
-            resp = client.post("/api/github/auth/poll", json={"device_code": "abc"})
-        assert resp.status_code == 500
+class TestGithubAuthCallback:
+    def test_redirects_with_error_param_on_github_error(self):
+        resp = client.get(
+            "/api/github/auth/callback?error=access_denied",
+            follow_redirects=False,
+        )
+        assert resp.status_code in (302, 307)
+        assert "auth_error=access_denied" in resp.headers["location"]
 
-    def test_returns_access_token_on_success(self):
+    def test_redirects_with_invalid_state_when_state_missing(self):
+        resp = client.get(
+            "/api/github/auth/callback?code=abc&state=no_such_state",
+            follow_redirects=False,
+        )
+        assert resp.status_code in (302, 307)
+        assert "invalid_state" in resp.headers["location"]
+
+    def test_exchanges_code_for_token_and_redirects_with_fragment(self):
+        state = "validstate123"
+        main._oauth_states[state] = time.time()
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {"access_token": "gho_test123", "token_type": "bearer"}
+        mock_resp.json.return_value = {"access_token": "gho_test123"}
 
-        with patch.object(main, "GITHUB_CLIENT_ID", "id"), \
-             patch.object(main, "GITHUB_CLIENT_SECRET", "secret"), \
-             patch("main.requests.post", return_value=mock_resp):
-            resp = client.post("/api/github/auth/poll", json={"device_code": "abc"})
+        with patch("main.requests.post", return_value=mock_resp):
+            resp = client.get(
+                f"/api/github/auth/callback?code=mycode&state={state}",
+                follow_redirects=False,
+            )
 
-        assert resp.status_code == 200
-        assert resp.json()["access_token"] == "gho_test123"
+        assert resp.status_code in (302, 307)
+        assert "/#token=gho_test123" in resp.headers["location"]
+        assert state not in main._oauth_states
+
+    def test_redirects_with_error_when_token_missing(self):
+        state = "validstate456"
+        main._oauth_states[state] = time.time()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"error": "bad_verification_code"}
+
+        with patch("main.requests.post", return_value=mock_resp):
+            resp = client.get(
+                f"/api/github/auth/callback?code=badcode&state={state}",
+                follow_redirects=False,
+            )
+
+        assert resp.status_code in (302, 307)
+        assert "auth_error=" in resp.headers["location"]
+
+    def test_redirects_with_error_when_github_unreachable(self):
+        state = "validstate789"
+        main._oauth_states[state] = time.time()
+
+        with patch("main.requests.post", side_effect=Exception("timeout")):
+            resp = client.get(
+                f"/api/github/auth/callback?code=anycode&state={state}",
+                follow_redirects=False,
+            )
+
+        assert resp.status_code in (302, 307)
+        assert "github_unreachable" in resp.headers["location"]
 
 
 class TestGithubUser:

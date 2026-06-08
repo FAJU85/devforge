@@ -9,6 +9,7 @@ build/
 .env.*
 feature_flags.json
 evolution_audit.json
+*.tmp
 
 # Playwright
 node_modules/

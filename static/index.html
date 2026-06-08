@@ -507,13 +507,10 @@ pre::-webkit-scrollbar{height:4px}
 <aside class="sidebar" id="sidebar" aria-label="Navigation sidebar">
   <div class="s-head">
     <div class="s-logo"><div class="s-mark" aria-hidden="true">⚡</div><div class="s-name">DevForge</div></div>
-    <div class="s-tabs">
-      <button class="s-tab on" id="stab-files" onclick="setSideTab('files')" title="Files &amp; Repos">📁</button>
-      <button class="s-tab" id="stab-config" onclick="setSideTab('config')" title="AI Config">⚙️</button>
-      <button class="s-tab" id="stab-skills" onclick="setSideTab('skills')" title="Skills &amp; Presets">⚡</button>
-      <button class="s-tab" id="stab-tools" onclick="setSideTab('tools')" title="MCP &amp; Tools">🔌</button>
-    </div>
-    <button class="s-coll" onclick="collSidebar()" aria-label="Collapse sidebar">‹</button>
+    <button id="stab-files" style="display:none"></button>
+    <button id="stab-config" style="display:none"></button>
+    <button id="stab-skills" style="display:none"></button>
+    <button id="stab-tools" style="display:none"></button>
   </div>
   <!-- ── Panel: Files & Repos ──────────────────────────────────────────── -->
   <div id="spanel-files" class="s-panel">
@@ -523,8 +520,6 @@ pre::-webkit-scrollbar{height:4px}
       <div class="s-content">
         <div id="gh-conn">
           <button class="gh-btn" onclick="startOAuth()"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Connect GitHub</button>
-          <div id="oauth-box" style="display:none"></div>
-          <button id="oauth-check" class="oauth-check" style="display:none" onclick="pollOAuth()">✓ Check Authorization Status</button>
         </div>
         <div id="gh-user" style="display:none"><div class="gh-card"><img id="gh-av" class="gh-av" src="" alt="GitHub avatar"><div><div class="gh-nm" id="gh-nm">—</div><div class="gh-lg" id="gh-lg">—</div></div><button class="gh-out" onclick="signOut()" aria-label="Sign out of GitHub">✕</button></div></div>
       </div>
@@ -567,9 +562,14 @@ pre::-webkit-scrollbar{height:4px}
       </div>
     </div>
     <div class="s-sec">
-      <div style="padding:0 10px 8px;display:flex;align-items:center;gap:6px">
-        <div class="model-pill" id="sidebar-model-pill" onclick="setSideTab('config')" title="Click to change model" style="flex:1;cursor:pointer;background:var(--input-bg);border:1px solid var(--border2)">claude-sonnet-4</div>
-        <button onclick="setSideTab('config')" title="AI Config" aria-label="Open AI config" style="background:none;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;border-radius:6px;padding:6px 8px;font-size:14px;transition:all .15s">⚙️</button>
+      <div style="padding:6px 10px 10px">
+        <div class="flabel" style="margin-bottom:4px">Anthropic API Key</div>
+        <input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" data-rollbar-scrub="true" oninput="saveEnhance()">
+        <div class="model-selector" style="margin-top:8px" role="radiogroup" aria-label="Claude model">
+          <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest">⚡<br>Haiku</button>
+          <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most tasks">⚖️<br>Sonnet</button>
+          <button class="msel-btn" role="radio" aria-checked="false" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent">🧠<br>Opus</button>
+        </div>
       </div>
     </div>
   </div>
@@ -585,11 +585,11 @@ pre::-webkit-scrollbar{height:4px}
         <button class="prov-btn" role="radio" aria-checked="false" id="pal" onclick="setProv('airllm')">🏠 AirLLM</button>
       </div>
       <div id="pf-a" style="flex-direction:column;margin-top:8px">
-        <div><div class="flabel">Anthropic Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" data-rollbar-scrub="true" oninput="saveEnhance()"></div>
+        <div><div class="flabel">Anthropic Key</div><input class="finput" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key (config panel)" data-rollbar-scrub="true"></div>
         <div class="model-selector" role="radiogroup" aria-label="Claude model">
-          <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
-          <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
-          <button class="msel-btn" role="radio" aria-checked="false" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent — for complex architecture">🧠<br>Opus</button>
+          <button class="msel-btn" role="radio" aria-checked="false" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest — great for simple tasks">⚡<br>Haiku</button>
+          <button class="msel-btn on" role="radio" aria-checked="true" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced — best for most coding tasks">⚖️<br>Sonnet</button>
+          <button class="msel-btn" role="radio" aria-checked="false" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent — for complex architecture">🧠<br>Opus</button>
         </div>
         <div class="think-opts" id="think-opts">
           <div class="ma-row"><div><div class="ma-label" style="font-size:12px">Extended Thinking</div><div class="ma-sub">Opus reasons before answering</div></div><div><input type="checkbox" id="think-toggle" class="toggle-input" onchange="saveEnhance()"><label for="think-toggle" class="toggle-label"></label></div></div>
@@ -761,21 +761,16 @@ pre::-webkit-scrollbar{height:4px}
 <div class="resize-handle" id="resize-handle"></div>
 <main class="workspace" aria-label="Chat workspace">
   <div class="topbar">
-    <button class="exp-btn" id="exp-btn" onclick="expSidebar()" aria-label="Expand sidebar">›</button>
-    <div class="atabs" role="tablist" aria-label="Agent mode">
-      <button class="atab on" role="tab" aria-selected="true" data-agent="code" onclick="setAgent(this)">⚙️ Code</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="review" onclick="setAgent(this)">🔍 Review</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="architect" onclick="setAgent(this)">🏗️ Arch</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="debug" onclick="setAgent(this)">🐛 Debug</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="docs" onclick="setAgent(this)">📝 Docs</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="refactor" onclick="setAgent(this)">🔀 Refactor</button>
-      <button class="atab" role="tab" aria-selected="false" data-agent="testgen" onclick="setAgent(this)">🧪 Tests</button>
+    <button id="exp-btn" class="exp-btn" onclick="expSidebar()" aria-label="Expand sidebar" style="display:none">›</button>
+    <div style="flex:1;display:flex;align-items:center;padding:0 6px;min-width:0">
+      <div class="s-mark" style="margin-right:8px;flex-shrink:0" aria-hidden="true">⚡</div>
+      <span style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap">DevForge</span>
     </div>
     <div class="tbr">
-      <button class="repo-pill" id="repo-pill" onclick="setSideTab('files');expSidebar()" title="Connected repository — click to browse files">
+      <button class="repo-pill" id="repo-pill" onclick="expSidebar()" title="Connected repository — click to browse files">
         <span id="repo-pill-name">—</span><span class="repo-branch" id="repo-pill-branch"></span>
       </button>
-      <button class="topbar-model" id="topbar-model-badge" onclick="setSideTab('config');expSidebar()" title="Click to switch AI model">claude-sonnet</button>
+      <span id="topbar-model-badge" style="display:none"></span>
       <div class="ctx-pill" id="ctx-pill" style="display:none">0 files</div>
       <div class="ma-pill" id="ma-pill" style="display:none">🤖 Multi-Agent</div>
       <div class="mem-pill" id="mem-pill" onclick="clearMemory()" title="Session memory active — click to clear">🧠 Memory</div>
@@ -784,15 +779,12 @@ pre::-webkit-scrollbar{height:4px}
         <button class="export-btn" id="more-btn" onclick="toggleMoreMenu()" title="More actions" style="font-size:15px;letter-spacing:.05em;padding:4px 9px">⋯</button>
         <div class="more-menu" id="more-menu">
           <button id="export-btn" onclick="exportChat();closeMoreMenu()">⬇️ Export chat</button>
-          <button id="issue-btn" onclick="openIssueModal();closeMoreMenu()">📋 Create Issue</button>
-          <button id="relnotes-btn" onclick="openReleaseNotes();closeMoreMenu()">🏷️ Release Notes</button>
-          <button id="readme-btn" onclick="openReadmeModal();closeMoreMenu()">📝 Gen README</button>
-          <button id="deps-btn" onclick="openDepsModal();closeMoreMenu()">🔍 Scan Deps</button>
           <button id="search-chat-btn" onclick="toggleChatSearch();closeMoreMenu()">🔎 Search chat</button>
           <button id="shortcuts-btn" onclick="openShortcutsHelp();closeMoreMenu()">⌨️ Keyboard shortcuts</button>
           <button id="clear-btn" onclick="clearChat();closeMoreMenu()">🗑️ Clear chat</button>
         </div>
       </div>
+      <span id="topbar-model-badge" style="display:none"></span>
     </div>
   </div>
   <div id="chat-search-bar" style="display:none;padding:4px 12px;border-bottom:1px solid var(--border2);background:var(--panel2);align-items:center;gap:8px">
@@ -811,13 +803,7 @@ pre::-webkit-scrollbar{height:4px}
     <div class="empty" id="empty">
       <div class="empty-mark">⚡</div>
       <div class="empty-title">DevForge</div>
-      <div class="empty-sub">Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task</div>
-      <div class="eg-grid">
-        <button class="eg" onclick="fill(this)"><span>⚙️</span>Add input validation to the login function</button>
-        <button class="eg" onclick="fill(this)"><span>🔍</span>Review this file for security vulnerabilities</button>
-        <button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the bug causing tests to fail</button>
-        <button class="eg" onclick="fill(this)"><span>📝</span>Write documentation for all public functions</button>
-      </div>
+      <div class="empty-sub">Connect GitHub, select files, and describe your task</div>
     </div>
   </div>
   <div style="max-width:820px;margin:0 auto;width:100%"><div class="ctx-strip" id="ctx-strip"></div></div>
@@ -825,6 +811,7 @@ pre::-webkit-scrollbar{height:4px}
     <div class="ibox">
       <textarea class="ti" id="ti" placeholder="Describe your task… (type @ to mention a file)" onkeydown="hk(event)" oninput="onTiInput(event)" rows="1" aria-label="Message input" aria-multiline="true"></textarea>
       <div class="ifoot">
+        <button class="attach-btn" title="Browse URL with headless browser" onclick="openBrowserPanel()" style="font-size:13px">🌐</button>
         <button class="attach-btn" title="Upload local files as context" onclick="$('ctx-upload').click()">📎</button>
         <input type="file" id="ctx-upload" multiple accept=".txt,.md,.ts,.tsx,.js,.jsx,.py,.go,.json,.yaml,.yml,.toml,.css,.html,.sh,.rs,.rb,.java,.cpp,.c,.h" style="display:none" onchange="uploadContext(this)">
         <button class="attach-btn" id="suggest-btn" title="AI: suggest relevant files for your task" onclick="suggestFiles()" style="display:none;font-size:11px;gap:4px">🤔 Suggest</button>
@@ -1015,6 +1002,34 @@ pre::-webkit-scrollbar{height:4px}
       <button class="modal-cancel" id="deps-copy-btn" onclick="copyDepsAudit()" style="display:none">📋 Copy Report</button>
       <button class="modal-ok" id="deps-run-btn" onclick="runDepsAudit()">🔍 Audit</button>
       <button class="modal-cancel" onclick="$('deps-modal').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Browser panel -->
+<div class="modal-overlay" id="browser-modal" style="display:none" onclick="if(event.target===this)closeBrowserModal()">
+  <div class="modal" style="max-width:900px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <span style="font-size:15px">🌐</span>
+      <input id="browser-url" class="finput" placeholder="https://example.com" style="flex:1;padding:5px 10px;font-size:13px" onkeydown="if(event.key==='Enter')browserGo()">
+      <button onclick="browserGo()" style="background:var(--accent2);border:none;border-radius:8px;padding:6px 14px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0">Go</button>
+      <button onclick="browserAddToContext()" id="browser-add-btn" style="display:none;background:var(--blue-dim);border:1px solid var(--blue-border);border-radius:8px;padding:6px 12px;color:var(--blue);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0">+ Add to context</button>
+      <button onclick="closeBrowserModal()" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0 4px;flex-shrink:0">✕</button>
+    </div>
+    <div id="browser-loading" style="display:none;padding:24px;text-align:center;color:var(--muted)">
+      <div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span>Loading page…</span></div>
+    </div>
+    <div id="browser-error" style="display:none;padding:16px;color:var(--red);font-size:13px"></div>
+    <div id="browser-result" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--panel2);border-bottom:1px solid var(--border2);font-size:11px">
+        <span id="browser-title" style="font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+        <button onclick="setBrowserTab('screenshot')" id="btab-screenshot" style="background:var(--panel);border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 10px;font-size:11px;font-family:inherit;transition:all .15s">Screenshot</button>
+        <button onclick="setBrowserTab('text')" id="btab-text" style="background:var(--panel);border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 10px;font-size:11px;font-family:inherit;transition:all .15s">Text</button>
+      </div>
+      <div id="browser-screenshot-pane" style="text-align:center;padding:12px;background:var(--code-bg);max-height:65vh;overflow-y:auto">
+        <img id="browser-img" src="" alt="Page screenshot" style="max-width:100%;border-radius:6px;box-shadow:0 2px 12px #0006">
+      </div>
+      <div id="browser-text-pane" style="display:none;padding:16px;max-height:65vh;overflow-y:auto;font-size:13px;line-height:1.75;color:var(--text);white-space:pre-wrap;word-break:break-word;background:var(--bg)"></div>
     </div>
   </div>
 </div>
@@ -1376,17 +1391,17 @@ function addTokens(text,precise){const est=precise||(text.split(/\s+/).filter(Bo
 function toggleSec(lbl){lbl.closest('.s-sec').classList.toggle('closed');}
 function setTheme(t){document.documentElement.setAttribute('data-theme',t);$('ts-light').classList.toggle('on',t==='light');$('ts-dark').classList.toggle('on',t==='dark');$('hljs-theme').href=t==='dark'?'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css':'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';localStorage.setItem('df-theme',t);}
 (()=>{setTheme(localStorage.getItem('df-theme')||'dark');})();
-function saveSession(){if(S.ghToken&&S.ghUser)localStorage.setItem('df-session',JSON.stringify({ghToken:S.ghToken,ghUser:S.ghUser}));}
+function saveSession(){if(S.ghToken&&S.ghUser){const d={ghToken:S.ghToken,ghUser:S.ghUser};if(S.repo)d.repo={owner:S.repo.owner,repo:S.repo.repo,branch:S.repo.branch};localStorage.setItem('df-session',JSON.stringify(d));}}
 function clearSession(){localStorage.removeItem('df-session');}
-function restoreSession(){try{const raw=localStorage.getItem('df-session');if(!raw)return false;const{ghToken,ghUser}=JSON.parse(raw);if(!ghToken||!ghUser)return false;S.ghToken=ghToken;S.ghUser=ghUser;$('gh-av').src=ghUser.avatar_url||'';$('gh-nm').textContent=ghUser.name||ghUser.login;$('gh-lg').textContent='@'+ghUser.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();return true;}catch(e){return false;}}
+function restoreSession(){try{const raw=localStorage.getItem('df-session');if(!raw)return false;const{ghToken,ghUser,repo}=JSON.parse(raw);if(!ghToken||!ghUser)return false;S.ghToken=ghToken;S.ghUser=ghUser;$('gh-av').src=ghUser.avatar_url||'';$('gh-nm').textContent=ghUser.name||ghUser.login;$('gh-lg').textContent='@'+ghUser.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();if(repo&&repo.owner&&repo.repo)setTimeout(()=>selectRepo(repo.owner+'/'+repo.repo),50);return true;}catch(e){return false;}}
 function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill);const ts=$('ma-test-stage');const tt=$('think-toggle');const tb=$('think-budget');const data={prov:S.prov,anthropicKey:$('ak').value||'',anthropicModel:S.anthropicModel||'claude-sonnet-4-6',thinkingMode:tt?tt.checked:false,thinkingBudget:tb?tb.value:'2000',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',alModel:$('al-model')?$('al-model').value||'':'',alTokens:$('al-tokens')?$('al-tokens').value||'512':'512',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||'',maTestStage:ts?ts.checked:false,maTestProv:$('ma-test-prov')?$('ma-test-prov').value||'':''};localStorage.setItem('df-enhance',JSON.stringify(data));}
 function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.alModel&&$('al-model'))$('al-model').value=d.alModel;if(d.alTokens&&$('al-tokens'))$('al-tokens').value=d.alTokens;if(d.skills)document.querySelectorAll('.skill-row[data-skill]').forEach(el=>{el.classList.toggle('on',d.skills.includes(el.dataset.skill));});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
 function toggleMoreMenu(){$('more-menu').classList.toggle('open');}
 function closeMoreMenu(){const m=$('more-menu');if(m)m.classList.remove('open');}
 document.addEventListener('click',e=>{if(!e.target.closest('#more-menu')&&!e.target.closest('#more-btn'))closeMoreMenu();});
 function isMob(){return window.innerWidth<=768;}
-function collSidebar(){$('sidebar').classList.add('col');$('exp-btn').classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
-function expSidebar(){$('sidebar').classList.remove('col');if(!isMob())$('exp-btn').classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
+function collSidebar(){$('sidebar').classList.add('col');const eb=$('exp-btn');if(eb)eb.classList.add('show');const ov=$('mob-overlay');if(ov)ov.classList.remove('show');}
+function expSidebar(){$('sidebar').classList.remove('col');const eb=$('exp-btn');if(eb&&!isMob())eb.classList.remove('show');const ov=$('mob-overlay');if(ov&&isMob())ov.classList.add('show');}
 function setSideTab(tab){
   ['files','config','skills','tools'].forEach(t=>{
     const p=$('spanel-'+t);if(p)p.classList.toggle('hidden',t!==tab);
@@ -1503,15 +1518,15 @@ async function suggestCommitMsg(panel){
   try{const d=await post('/api/commit/suggest-message',body);if(d.message){panel.querySelector('.wp-msg').value=d.message;toast('✨ Commit message suggested!');}else{toast('Error: '+(d.error||'Failed'),true);}}catch(e){toast(e.message,true);}
   if(btn){btn.textContent='✨';btn.disabled=false;}
 }
-async function startOAuth(){const d=await post('/api/github/auth/start',{});if(d.error){toast(d.error,true);return;}S.devCode=d.device_code;const uri=d.verification_uri&&/^https:\/\/github\.com\//.test(d.verification_uri)?d.verification_uri:'https://github.com/login/device';$('oauth-box').style.display='block';$('oauth-box').innerHTML=`<div class="oauth-box"><div class="oauth-lbl">Enter this code at GitHub</div><div class="oauth-code">${esc(String(d.user_code||''))}</div><br><a href="${escA(uri)}" target="_blank" class="oauth-link"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Open github.com/login/device</a></div>`;$('oauth-check').style.display='block';}
-async function pollOAuth(){if(!S.devCode)return;const d=await post('/api/github/auth/poll',{device_code:S.devCode});if(d.access_token){S.ghToken=d.access_token;const u=await post('/api/github/user',{token:S.ghToken});S.ghUser=u;saveSession();$('gh-av').src=u.avatar_url||'';$('gh-nm').textContent=u.name||u.login;$('gh-lg').textContent='@'+u.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();}else if(d.error==='authorization_pending'){toast('Not authorized yet — approve on GitHub first');}else{toast('Error: '+(d.error_description||d.error||'Unknown'),true);}}
-function signOut(){S.ghToken='';S.ghUser=null;S.devCode=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.tabs=[];S.activeTabId=null;$('tab-bar').style.display='none';S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('oauth-box').style.display='none';$('oauth-check').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';closeMoreMenu();const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='none';$('commits-panel').style.display='none';$('search-results-panel').style.display='none';const wp=$('workflows-panel');if(wp)wp.style.display='none';updRepoPill();updCtx();updHint();}
+function handleOAuthCallback(){const hash=window.location.hash.slice(1);const hp=new URLSearchParams(hash);const token=hp.get('token');const authErr=new URLSearchParams(window.location.search).get('auth_error');if(authErr){window.history.replaceState({},'',window.location.pathname);setTimeout(()=>toast('GitHub auth failed: '+decodeURIComponent(authErr),true),100);return false;}if(!token)return false;window.history.replaceState({},'',window.location.pathname);S.ghToken=token;expSidebar();post('/api/github/user',{token}).then(u=>{if(u&&u.login){S.ghUser=u;saveSession();$('gh-av').src=u.avatar_url||'';$('gh-nm').textContent=u.name||u.login;$('gh-lg').textContent='@'+u.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();}else{S.ghToken='';toast('GitHub authentication failed — please try again',true);}});return true;}
+function startOAuth(){window.location.href='/api/github/auth/redirect';}
+function signOut(){S.ghToken='';S.ghUser=null;S.allRepos=[];S.repo=null;S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.tabs=[];S.activeTabId=null;$('tab-bar').style.display='none';S.msgs=[];S.stats={tokens:0,messages:0};clearSession();$('gh-conn').style.display='block';$('gh-user').style.display='none';$('repo-sec').style.display='none';$('file-tree').innerHTML='';$('repo-list').innerHTML='';$('repo-st').textContent='';$('mem-pill').style.display='none';$('stat-pill').style.display='none';closeMoreMenu();const sb=$('suggest-btn');if(sb)sb.style.display='none';const rsc=$('rs-card');if(rsc)rsc.style.display='none';const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='none';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='none';$('commits-panel').style.display='none';$('search-results-panel').style.display='none';const wp=$('workflows-panel');if(wp)wp.style.display='none';updRepoPill();updCtx();updHint();}
 async function loadRepos(){$('repo-list').innerHTML='<div class="list-msg">Loading…</div>';const repos=await post('/api/github/repos',{token:S.ghToken});if(!Array.isArray(repos)){$('repo-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';return;}S.allRepos=repos;renderRepoList(repos);}
 function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo(this.dataset.repo,this)" data-repo="${escA(r.full_name)}"><div class="li-name">${esc(r.name)}</div><div class="li-sub"><span>${esc(r.language||'—')}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
 function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerCase().includes(q.toLowerCase())));}
 function updRepoPill(){const pill=$('repo-pill');const nm=$('repo-pill-name');const br=$('repo-pill-branch');if(!pill)return;if(S.repo){nm.textContent=`${S.repo.owner}/${S.repo.repo}`;br.textContent=` · ${S.repo.branch||'main'}`;pill.classList.add('show');}else{pill.classList.remove('show');}}
 function autoDetectStack(files){const paths=files.map(f=>f.path);const has=re=>paths.some(p=>re.test(p));const suggest=[];if(has(/\.(tsx|jsx)$/))suggest.push('react');if(has(/next\.config\.(js|ts|mjs|cjs)$/))suggest.push('nextjs');if(has(/Dockerfile$/i))suggest.push('docker');if(has(/\.(spec|test)\.(ts|js|py)$|__tests__/))suggest.push('tests');if(has(/requirements\.txt$|pyproject\.toml$|setup\.py$/))suggest.push('errors');if(has(/go\.mod$/))suggest.push('go');if(has(/\.(sql)$/))suggest.push('sql');if(has(/zod/))suggest.push('zod');const current=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill);if(current.length>0||!suggest.length)return;const toEnable=[...new Set(suggest)];document.querySelectorAll('.skill-row[data-skill]').forEach(el=>{if(toEnable.includes(el.dataset.skill))el.classList.add('on');});saveEnhance();if(toEnable.length)toast(`🎯 Auto-enabled skills: ${toEnable.join(', ')}`);}
-async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};S.tabs=[];S.activeTabId=null;$('mem-pill').style.display='none';$('stat-pill').style.display='none';updCtx();$('file-tree').innerHTML='';const shortName=fullName.split('/').pop();$('msgs').innerHTML=`<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">${esc(shortName)}</div><div class="empty-sub">Select files from the tree · type @ to mention a file · or describe a task below</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>🔍</span>Review the codebase for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the most critical bugs</button><button class="eg" onclick="fill(this)"><span>🏗️</span>Explain the architecture and suggest improvements</button><button class="eg" onclick="fill(this)"><span>🧪</span>Write tests for the main business logic</button></div></div>`;const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadBranches();loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='block';updRepoPill();autoDetectStack(d.files);updHint();}
+async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};S.tabs=[];S.activeTabId=null;$('mem-pill').style.display='none';$('stat-pill').style.display='none';updCtx();$('file-tree').innerHTML='';const shortName=fullName.split('/').pop();$('msgs').innerHTML=`<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">${esc(shortName)}</div><div class="empty-sub">Select files from the tree · type @ to mention a file · or describe a task below</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>🔍</span>Review the codebase for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the most critical bugs</button><button class="eg" onclick="fill(this)"><span>🏗️</span>Explain the architecture and suggest improvements</button><button class="eg" onclick="fill(this)"><span>🧪</span>Write tests for the main business logic</button></div></div>`;const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;saveSession();st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadBranches();loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='block';updRepoPill();autoDetectStack(d.files);updHint();}
 function buildTree(files){const folders={};const root=[];for(const f of files){const p=f.path.split('/');if(p.length===1)root.push(f);else{if(!folders[p[0]])folders[p[0]]=[];folders[p[0]].push(f);}}let h='';for(const f of root)h+=tfn(f);for(const[k,v]of Object.entries(folders))h+=tfd(k,v);$('file-tree').innerHTML=h;}
 function tfd(name,files){const subs={};const direct=[];for(const f of files){const rest=f.path.split('/').slice(1).join('/');const p=rest.split('/');if(p.length===1)direct.push(f);else{const k=p[0];if(!subs[k])subs[k]=[];subs[k].push(f);}}let inner='';for(const[k,v]of Object.entries(subs))inner+=tfd(name+'/'+k,v);for(const f of direct)inner+=tfn(f);return`<div class="tfolder"><div class="tfolder-h" onclick="event.target.classList.contains('folder-add')||this.parentElement.classList.toggle('open')"><span class="tarr">▶</span><span>📁</span><span style="font-family:monospace;font-size:12px">${esc(name.split('/').pop())}</span><button class="folder-add" title="Add all files in this folder to context" onclick="event.stopPropagation();addFolderToCtx(this)">+all</button></div><div class="tfolder-c">${inner}</div></div>`;}
 async function addFolderToCtx(btn){if(!S.repo||!S.ghToken){toast('Connect a repo first',true);return;}const folder=btn.closest('.tfolder');const files=Array.from(folder.querySelectorAll('.tfile')).filter(el=>el.style.display!=='none');const toAdd=files.filter(el=>!S.selFiles.has(el.dataset.path));const slots=8-(S.selFiles.size+S.localFiles.size);if(!toAdd.length){toast('All files already in context');return;}const adding=toAdd.slice(0,slots);if(adding.length<toAdd.length)toast(`Adding ${adding.length} of ${toAdd.length} files (max 8 total)`);btn.textContent='⏳';btn.disabled=true;let added=0;for(const el of adding){const path=el.dataset.path;const size=+el.dataset.size||0;const d=await post('/api/repo/file',{token:S.ghToken,owner:S.repo.owner,repo:S.repo.repo,path,branch:S.repo.branch||''});if(!d.error){S.selFiles.set(path,d.content);S.fileSizes.set(path,size||d.content.length);updTF(path);added++;}}updCtx();btn.textContent='+all';btn.disabled=false;if(added)toast(`Added ${added} file${added!==1?'s':''} to context`);}
@@ -1833,7 +1848,7 @@ async function switchBranch(branch){
   S.selFiles.clear();S.fileSizes.clear();updCtx();$('file-tree').innerHTML='';
   const d=await post('/api/repo/connect',{token:S.ghToken,url:`https://github.com/${S.repo.owner}/${S.repo.repo}`,branch});
   if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}
-  S.repo=d;st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';
+  S.repo=d;saveSession();st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';
   buildTree(d.files);quickScanRepo(d.files);updRepoPill();
   toast(`Switched to ${branch}`);
 }
@@ -2435,7 +2450,71 @@ function fetchHfBuildStatus(){
     }
   }).catch(e=>{if(lbl)lbl.textContent='Error';if(dot)dot.style.background='var(--red)';});
 }
-(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();fetchHfBuildStatus();})();
+(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!handleOAuthCallback()&&!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();fetchHfBuildStatus();})();
+
+// ── Headless Browser Panel ─────────────────────────────────────────────────
+let _browserPageData = null;
+
+function openBrowserPanel(){$('browser-modal').style.display='flex';}
+function closeBrowserModal(){$('browser-modal').style.display='none';}
+
+async function browserGo(){
+  const url = ($('browser-url').value||'').trim();
+  if(!url)return;
+  const norm = /^https?:\/\//.test(url)?url:'https://'+url;
+  $('browser-url').value=norm;
+  $('browser-loading').style.display='block';
+  $('browser-result').style.display='none';
+  $('browser-error').style.display='none';
+  $('browser-add-btn').style.display='none';
+  _browserPageData=null;
+  try{
+    const [scRes, txRes] = await Promise.all([
+      post('/api/browser/screenshot',{url:norm,width:1280,height:800,full_page:false}),
+      post('/api/browser/scrape',{url:norm})
+    ]);
+    $('browser-loading').style.display='none';
+    if(scRes.error||txRes.error){
+      $('browser-error').style.display='block';
+      $('browser-error').textContent='Error: '+(scRes.error||txRes.error);
+      return;
+    }
+    _browserPageData={url:norm, title:txRes.title||norm, text:txRes.text||'', image:scRes.image};
+    $('browser-title').textContent=txRes.title||norm;
+    $('browser-img').src='data:image/png;base64,'+scRes.image;
+    $('browser-screenshot-pane').style.display='block';
+    $('browser-text-pane').style.display='none';
+    $('browser-text-pane').textContent=txRes.text||'';
+    setBrowserTab('screenshot');
+    $('browser-result').style.display='block';
+    $('browser-add-btn').style.display='inline-block';
+  }catch(e){
+    $('browser-loading').style.display='none';
+    $('browser-error').style.display='block';
+    $('browser-error').textContent='Request failed: '+e.message;
+  }
+}
+
+function setBrowserTab(tab){
+  const isSc=tab==='screenshot';
+  $('browser-screenshot-pane').style.display=isSc?'block':'none';
+  $('browser-text-pane').style.display=isSc?'none':'block';
+  const sc=$('btab-screenshot'),tx=$('btab-text');
+  if(sc)sc.style.background=isSc?'var(--accent-dim)':'var(--panel)';
+  if(sc)sc.style.color=isSc?'var(--accent2)':'var(--muted)';
+  if(tx)tx.style.background=isSc?'var(--panel)':'var(--accent-dim)';
+  if(tx)tx.style.color=isSc?'var(--muted)':'var(--accent2)';
+}
+
+function browserAddToContext(){
+  if(!_browserPageData)return;
+  const snippet=`[Browser: ${_browserPageData.url}]\nTitle: ${_browserPageData.title}\n\n${_browserPageData.text.slice(0,8000)}`;
+  S.localFiles.set(_browserPageData.url, snippet);
+  S.fileSizes.set(_browserPageData.url, snippet.length);
+  updCtx();
+  closeBrowserModal();
+  toast('Page added to context');
+}
 </script>
 </body>
 </html>
