@@ -2705,3 +2705,91 @@ async def hf_build_status():
         }
     except Exception as exc:
         return JSONResponse({"stage": "UNKNOWN", "error": str(exc)}, status_code=502)
+
+
+# ── Headless Browser endpoints ───────────────────────────────────────────────
+_CHROME_EXEC = os.environ.get(
+    "CHROME_EXECUTABLE",
+    "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+)
+_BROWSER_LAUNCH_ARGS = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+]
+
+
+class BrowserScreenshotBody(BaseModel):
+    url: str = Field(..., description="URL to screenshot")
+    width: int = Field(1280, ge=320, le=1920)
+    height: int = Field(800, ge=240, le=1080)
+    full_page: bool = False
+    wait_until: str = "networkidle"
+
+
+class BrowserScrapeBody(BaseModel):
+    url: str = Field(..., description="URL to scrape")
+    wait_until: str = "networkidle"
+
+
+def _check_chrome() -> str | None:
+    """Return error message if Chrome is not available."""
+    if not os.path.exists(_CHROME_EXEC):
+        return f"Chrome not found at {_CHROME_EXEC}. Set CHROME_EXECUTABLE env var."
+    return None
+
+
+@app.post("/api/browser/screenshot")
+async def browser_screenshot(body: BrowserScreenshotBody):
+    """Take a screenshot of a URL and return it as a base64-encoded PNG."""
+    if err := _check_chrome():
+        return JSONResponse({"error": err}, status_code=503)
+    try:
+        from playwright.async_api import async_playwright
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(
+                executable_path=_CHROME_EXEC,
+                headless=True,
+                args=_BROWSER_LAUNCH_ARGS,
+            )
+            try:
+                page = await browser.new_page(
+                    viewport={"width": body.width, "height": body.height}
+                )
+                await page.goto(body.url, wait_until=body.wait_until, timeout=30000)
+                png_bytes = await page.screenshot(full_page=body.full_page)
+            finally:
+                await browser.close()
+        return {
+            "url": body.url,
+            "image": base64.b64encode(png_bytes).decode(),
+            "mime": "image/png",
+        }
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.post("/api/browser/scrape")
+async def browser_scrape(body: BrowserScrapeBody):
+    """Load a URL with JS rendering and return the page title and text content."""
+    if err := _check_chrome():
+        return JSONResponse({"error": err}, status_code=503)
+    try:
+        from playwright.async_api import async_playwright
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(
+                executable_path=_CHROME_EXEC,
+                headless=True,
+                args=_BROWSER_LAUNCH_ARGS,
+            )
+            try:
+                page = await browser.new_page()
+                await page.goto(body.url, wait_until=body.wait_until, timeout=30000)
+                title = await page.title()
+                text = await page.evaluate("() => document.body.innerText")
+            finally:
+                await browser.close()
+        return {"url": body.url, "title": title, "text": text[:20000]}
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)

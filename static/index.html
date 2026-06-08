@@ -511,7 +511,6 @@ pre::-webkit-scrollbar{height:4px}
     <button id="stab-config" style="display:none"></button>
     <button id="stab-skills" style="display:none"></button>
     <button id="stab-tools" style="display:none"></button>
-    <button id="exp-btn" class="exp-btn" onclick="expSidebar()" aria-label="Expand sidebar" style="display:none"></button>
   </div>
   <!-- ── Panel: Files & Repos ──────────────────────────────────────────── -->
   <div id="spanel-files" class="s-panel">
@@ -762,14 +761,16 @@ pre::-webkit-scrollbar{height:4px}
 <div class="resize-handle" id="resize-handle"></div>
 <main class="workspace" aria-label="Chat workspace">
   <div class="topbar">
-    <div style="flex:1;display:flex;align-items:center;padding:0 4px">
-      <div class="s-mark" style="margin-right:8px;flex-shrink:0">⚡</div>
-      <span style="font-size:13px;font-weight:600;color:var(--text)">DevForge</span>
+    <button id="exp-btn" class="exp-btn" onclick="expSidebar()" aria-label="Expand sidebar" style="display:none">›</button>
+    <div style="flex:1;display:flex;align-items:center;padding:0 6px;min-width:0">
+      <div class="s-mark" style="margin-right:8px;flex-shrink:0" aria-hidden="true">⚡</div>
+      <span style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap">DevForge</span>
     </div>
     <div class="tbr">
       <button class="repo-pill" id="repo-pill" onclick="expSidebar()" title="Connected repository — click to browse files">
         <span id="repo-pill-name">—</span><span class="repo-branch" id="repo-pill-branch"></span>
       </button>
+      <span id="topbar-model-badge" style="display:none"></span>
       <div class="ctx-pill" id="ctx-pill" style="display:none">0 files</div>
       <div class="ma-pill" id="ma-pill" style="display:none">🤖 Multi-Agent</div>
       <div class="mem-pill" id="mem-pill" onclick="clearMemory()" title="Session memory active — click to clear">🧠 Memory</div>
@@ -810,6 +811,7 @@ pre::-webkit-scrollbar{height:4px}
     <div class="ibox">
       <textarea class="ti" id="ti" placeholder="Describe your task… (type @ to mention a file)" onkeydown="hk(event)" oninput="onTiInput(event)" rows="1" aria-label="Message input" aria-multiline="true"></textarea>
       <div class="ifoot">
+        <button class="attach-btn" title="Browse URL with headless browser" onclick="openBrowserPanel()" style="font-size:13px">🌐</button>
         <button class="attach-btn" title="Upload local files as context" onclick="$('ctx-upload').click()">📎</button>
         <input type="file" id="ctx-upload" multiple accept=".txt,.md,.ts,.tsx,.js,.jsx,.py,.go,.json,.yaml,.yml,.toml,.css,.html,.sh,.rs,.rb,.java,.cpp,.c,.h" style="display:none" onchange="uploadContext(this)">
         <button class="attach-btn" id="suggest-btn" title="AI: suggest relevant files for your task" onclick="suggestFiles()" style="display:none;font-size:11px;gap:4px">🤔 Suggest</button>
@@ -1000,6 +1002,34 @@ pre::-webkit-scrollbar{height:4px}
       <button class="modal-cancel" id="deps-copy-btn" onclick="copyDepsAudit()" style="display:none">📋 Copy Report</button>
       <button class="modal-ok" id="deps-run-btn" onclick="runDepsAudit()">🔍 Audit</button>
       <button class="modal-cancel" onclick="$('deps-modal').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Browser panel -->
+<div class="modal-overlay" id="browser-modal" style="display:none" onclick="if(event.target===this)closeBrowserModal()">
+  <div class="modal" style="max-width:900px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <span style="font-size:15px">🌐</span>
+      <input id="browser-url" class="finput" placeholder="https://example.com" style="flex:1;padding:5px 10px;font-size:13px" onkeydown="if(event.key==='Enter')browserGo()">
+      <button onclick="browserGo()" style="background:var(--accent2);border:none;border-radius:8px;padding:6px 14px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0">Go</button>
+      <button onclick="browserAddToContext()" id="browser-add-btn" style="display:none;background:var(--blue-dim);border:1px solid var(--blue-border);border-radius:8px;padding:6px 12px;color:var(--blue);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0">+ Add to context</button>
+      <button onclick="closeBrowserModal()" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;padding:0 4px;flex-shrink:0">✕</button>
+    </div>
+    <div id="browser-loading" style="display:none;padding:24px;text-align:center;color:var(--muted)">
+      <div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span>Loading page…</span></div>
+    </div>
+    <div id="browser-error" style="display:none;padding:16px;color:var(--red);font-size:13px"></div>
+    <div id="browser-result" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--panel2);border-bottom:1px solid var(--border2);font-size:11px">
+        <span id="browser-title" style="font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+        <button onclick="setBrowserTab('screenshot')" id="btab-screenshot" style="background:var(--panel);border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 10px;font-size:11px;font-family:inherit;transition:all .15s">Screenshot</button>
+        <button onclick="setBrowserTab('text')" id="btab-text" style="background:var(--panel);border:1px solid var(--border2);color:var(--muted);cursor:pointer;border-radius:6px;padding:3px 10px;font-size:11px;font-family:inherit;transition:all .15s">Text</button>
+      </div>
+      <div id="browser-screenshot-pane" style="text-align:center;padding:12px;background:var(--code-bg);max-height:65vh;overflow-y:auto">
+        <img id="browser-img" src="" alt="Page screenshot" style="max-width:100%;border-radius:6px;box-shadow:0 2px 12px #0006">
+      </div>
+      <div id="browser-text-pane" style="display:none;padding:16px;max-height:65vh;overflow-y:auto;font-size:13px;line-height:1.75;color:var(--text);white-space:pre-wrap;word-break:break-word;background:var(--bg)"></div>
     </div>
   </div>
 </div>
@@ -2421,6 +2451,70 @@ function fetchHfBuildStatus(){
   }).catch(e=>{if(lbl)lbl.textContent='Error';if(dot)dot.style.background='var(--red)';});
 }
 (function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!handleOAuthCallback()&&!restoreSession())expSidebar();if(isMob())collSidebar();initResizeHandle();fetchHfBuildStatus();})();
+
+// ── Headless Browser Panel ─────────────────────────────────────────────────
+let _browserPageData = null;
+
+function openBrowserPanel(){$('browser-modal').style.display='flex';}
+function closeBrowserModal(){$('browser-modal').style.display='none';}
+
+async function browserGo(){
+  const url = ($('browser-url').value||'').trim();
+  if(!url)return;
+  const norm = /^https?:\/\//.test(url)?url:'https://'+url;
+  $('browser-url').value=norm;
+  $('browser-loading').style.display='block';
+  $('browser-result').style.display='none';
+  $('browser-error').style.display='none';
+  $('browser-add-btn').style.display='none';
+  _browserPageData=null;
+  try{
+    const [scRes, txRes] = await Promise.all([
+      post('/api/browser/screenshot',{url:norm,width:1280,height:800,full_page:false}),
+      post('/api/browser/scrape',{url:norm})
+    ]);
+    $('browser-loading').style.display='none';
+    if(scRes.error||txRes.error){
+      $('browser-error').style.display='block';
+      $('browser-error').textContent='Error: '+(scRes.error||txRes.error);
+      return;
+    }
+    _browserPageData={url:norm, title:txRes.title||norm, text:txRes.text||'', image:scRes.image};
+    $('browser-title').textContent=txRes.title||norm;
+    $('browser-img').src='data:image/png;base64,'+scRes.image;
+    $('browser-screenshot-pane').style.display='block';
+    $('browser-text-pane').style.display='none';
+    $('browser-text-pane').textContent=txRes.text||'';
+    setBrowserTab('screenshot');
+    $('browser-result').style.display='block';
+    $('browser-add-btn').style.display='inline-block';
+  }catch(e){
+    $('browser-loading').style.display='none';
+    $('browser-error').style.display='block';
+    $('browser-error').textContent='Request failed: '+e.message;
+  }
+}
+
+function setBrowserTab(tab){
+  const isSc=tab==='screenshot';
+  $('browser-screenshot-pane').style.display=isSc?'block':'none';
+  $('browser-text-pane').style.display=isSc?'none':'block';
+  const sc=$('btab-screenshot'),tx=$('btab-text');
+  if(sc)sc.style.background=isSc?'var(--accent-dim)':'var(--panel)';
+  if(sc)sc.style.color=isSc?'var(--accent2)':'var(--muted)';
+  if(tx)tx.style.background=isSc?'var(--panel)':'var(--accent-dim)';
+  if(tx)tx.style.color=isSc?'var(--muted)':'var(--accent2)';
+}
+
+function browserAddToContext(){
+  if(!_browserPageData)return;
+  const snippet=`[Browser: ${_browserPageData.url}]\nTitle: ${_browserPageData.title}\n\n${_browserPageData.text.slice(0,8000)}`;
+  S.localFiles.set(_browserPageData.url, snippet);
+  S.fileSizes.set(_browserPageData.url, snippet.length);
+  updCtx();
+  closeBrowserModal();
+  toast('Page added to context');
+}
 </script>
 </body>
 </html>
