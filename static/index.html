@@ -605,6 +605,32 @@ pre::-webkit-scrollbar{height:4px}
 .btn-secondary{background:transparent;border:1px solid var(--border);border-radius:8px;padding:7px 15px;color:var(--text);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s}
 .btn-secondary:hover{border-color:var(--accent2);color:var(--accent2)}
 
+/* ── Dashboard ───────────────────────────────────────────────────────── */
+.dash-action-btn{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:12px;font-weight:500;cursor:pointer;text-align:left;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:8px}
+.dash-action-btn:hover{border-color:var(--accent2);color:var(--accent2);background:var(--accent-dim)}
+.dash-pr-item{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
+.dash-pr-item:last-child{border-bottom:none}
+.dash-pr-num{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted2);flex-shrink:0}
+.dash-pr-title{color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-pr-badge{font-size:10px;border-radius:4px;padding:2px 6px;flex-shrink:0}
+.dash-pr-badge.open{background:var(--accent-dim);color:var(--accent2);border:1px solid var(--accent-border)}
+.dash-pr-badge.draft{background:var(--panel2);color:var(--muted);border:1px solid var(--border2)}
+.dash-act-item{display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;align-items:flex-start}
+.dash-act-item:last-child{border-bottom:none}
+.dash-act-time{color:var(--muted2);font-size:11px;flex-shrink:0;min-width:60px}
+.dash-act-text{color:var(--text);flex:1}
+/* ── Skill library ────────────────────────────────────────────────────── */
+.skill-lib-card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px}
+.skill-lib-card.active-skill{border-color:var(--accent-border);background:var(--accent-dim)}
+.skill-lib-info{flex:1;min-width:0}
+.skill-lib-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px}
+.skill-lib-desc{font-size:11px;color:var(--muted);line-height:1.5}
+.skill-lib-meta{font-size:10px;color:var(--muted2);margin-top:4px}
+.skill-lib-btn{background:var(--accent2);border:none;border-radius:7px;padding:5px 12px;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;transition:opacity .15s}
+[data-theme="dark"] .skill-lib-btn{color:#0D1116}
+.skill-lib-btn:hover{opacity:.85}
+.skill-lib-btn.remove{background:transparent;border:1px solid var(--red);color:var(--red)}
+.skill-lib-btn.remove:hover{background:var(--red);color:#fff;opacity:1}
 /* ── Responsive overrides for new layout ────────────────────────────── */
 @media(max-width:1200px){.right-sidebar{width:0;min-width:0;border-left:none}}
 @media(max-width:768px){.left-panel{position:absolute;z-index:50;height:100%;width:85%;max-width:310px;box-shadow:4px 0 20px #0006}.repo-bar-actions{display:none}.nav-tab:not(.on){display:none}}
@@ -953,25 +979,46 @@ pre::-webkit-scrollbar{height:4px}
   </div>
   <div class="msgs" id="msgs" role="log" aria-live="polite" aria-label="Chat messages">
     <div class="empty" id="empty">
-      <div class="empty-mark">⚡</div>
-      <div class="empty-title">DevForge</div>
-      <div class="empty-sub">Your AI dev agent — works on any GitHub repo using Claude, HuggingFace, Groq, or any custom API</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:20px">
-        <button onclick="expSidebar()" style="background:var(--panel);border:1px solid var(--border);color:var(--muted);cursor:pointer;border-radius:8px;padding:8px 16px;font-size:12px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">Connect GitHub →</button>
-        <button onclick="expSidebar()" style="background:var(--panel);border:1px solid var(--border);color:var(--muted);cursor:pointer;border-radius:8px;padding:8px 16px;font-size:12px;font-family:inherit;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">Configure AI Provider →</button>
-      </div>
-      <div style="margin-top:24px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center;max-width:480px">
-        <div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:11px;color:var(--muted);text-align:left;flex:1;min-width:140px">
-          <div style="font-size:13px;margin-bottom:4px">🤗 HuggingFace</div>
-          Search &amp; use any HF model directly via the AI Provider panel
+      <!-- Dashboard home -->
+      <div id="dashboard-home" style="width:100%;max-width:680px;padding:24px 0 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div>
+            <h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em;margin:0 0 4px">👋 Welcome back<span id="dash-user-name"></span></h2>
+            <p style="font-size:13px;color:var(--muted);margin:0">Your AI dev agent — autonomous, fast, any model</p>
+          </div>
+          <button class="btn-primary" onclick="newTab();$('empty').style.display='none'" style="font-size:13px;padding:8px 18px">+ New Chat</button>
         </div>
-        <div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:11px;color:var(--muted);text-align:left;flex:1;min-width:140px">
-          <div style="font-size:13px;margin-bottom:4px">🔌 External APIs</div>
-          Connect OpenRouter, Ollama, LM Studio, or any OpenAI-compatible endpoint
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <!-- Quick Actions -->
+          <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:16px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Quick Actions</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button class="dash-action-btn" onclick="setSideTab('files');expLeftPanel()">📦 Connect Repo</button>
+              <button class="dash-action-btn" onclick="setSideTab('config');expLeftPanel()">🧠 Change AI Model</button>
+              <button class="dash-action-btn" onclick="setSideTab('skills');expLeftPanel()">📜 Add Instructions</button>
+              <button class="dash-action-btn" onclick="openSkillsLibrary()">🎯 Browse Skills</button>
+            </div>
+          </div>
+          <!-- Active PRs -->
+          <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:16px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Active PRs</div>
+            <div id="dash-prs" style="font-size:12px;color:var(--muted)">Connect a repository to see open pull requests</div>
+          </div>
         </div>
-        <div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:11px;color:var(--muted);text-align:left;flex:1;min-width:140px">
-          <div style="font-size:13px;margin-bottom:4px">🔗 Auto-browse</div>
-          Paste a URL in the chat and the AI will automatically fetch and read it
+        <!-- Recent activity -->
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Recent Agent Activity</div>
+          <div id="dash-activity" style="font-size:12px;color:var(--muted)">No recent activity — start a conversation to see history here</div>
+        </div>
+        <!-- Example prompts -->
+        <div style="margin-top:14px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Try it</div>
+          <div class="eg-grid">
+            <button class="eg" onclick="fill(this)"><span>🔍</span>Review the codebase for security vulnerabilities</button>
+            <button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the most critical bugs</button>
+            <button class="eg" onclick="fill(this)"><span>🏗️</span>Explain the architecture and suggest improvements</button>
+            <button class="eg" onclick="fill(this)"><span>🧪</span>Write tests for the main business logic</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1011,6 +1058,13 @@ pre::-webkit-scrollbar{height:4px}
       </div>
       <div class="rs-body" id="mcp-rs">
         <!-- Dynamically filled by renderMCPServers() -->
+      </div>
+      <div style="padding:6px 14px 10px">
+        <div style="font-size:10px;color:var(--muted2);margin-bottom:4px">⚙️ Custom MCP</div>
+        <div style="display:flex;gap:5px">
+          <input class="finput" id="mcp-cmd-input" placeholder="python3 mcp_server.py" style="flex:1;padding:5px 8px;font-size:11px">
+          <button onclick="connectCustomMCP()" style="background:var(--accent2);border:none;border-radius:7px;padding:5px 10px;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">Connect</button>
+        </div>
       </div>
     </div>
     <div class="rs-section">
@@ -1142,6 +1196,26 @@ pre::-webkit-scrollbar{height:4px}
     <div class="modal-row"><div class="flabel">Password</div><input class="finput" id="admin-pass" type="password" placeholder="password" autocomplete="current-password" style="margin-top:3px" onkeydown="if(event.key==='Enter')submitAdminLogin()"></div>
     <div id="admin-login-err" style="display:none;color:var(--red);font-size:12px;padding:0 4px 4px"></div>
     <div class="modal-foot"><button class="modal-cancel" onclick="$('admin-login-modal').style.display='none'">Cancel</button><button class="modal-ok" onclick="submitAdminLogin()">Sign In</button></div>
+  </div>
+</div>
+
+<!-- Skills Library modal -->
+<div class="modal-overlay" id="skills-library-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:680px;width:98%;padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border2);background:var(--panel)">
+      <span style="font-size:16px">🎯</span>
+      <span style="font-size:14px;font-weight:600;flex:1">Browse Agent Skills</span>
+      <button onclick="$('skills-library-modal').style.display='none'" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:18px;line-height:1;padding:0">✕</button>
+    </div>
+    <div style="padding:10px 16px;border-bottom:1px solid var(--border2);display:flex;gap:8px;align-items:center">
+      <div style="position:relative;flex:1"><span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--muted2);font-size:13px;pointer-events:none">🔍</span><input class="finput" id="skill-lib-search" placeholder="Search skills…" style="padding-left:28px;font-size:12px" oninput="filterSkillLibrary(this.value)"></div>
+      <select class="finput" id="skill-lib-filter" style="width:140px;font-size:12px" onchange="filterSkillLibrary($('skill-lib-search').value)">
+        <option value="">All Skills</option>
+        <option value="quality">Code Quality</option>
+        <option value="stack">Tech Stack</option>
+      </select>
+    </div>
+    <div id="skill-lib-list" style="max-height:420px;overflow-y:auto;padding:10px 16px;display:flex;flex-direction:column;gap:8px"></div>
   </div>
 </div>
 
@@ -1557,7 +1631,9 @@ function clearChatDOM(){
   const repoTitle=S.repo?esc(S.repo.repo):'DevForge';
   const repoSub=S.repo?'Select files from the tree · type @ to mention a file · or describe a task below':'Open sidebar → Connect GitHub → Pick repo → Select files → Enhance with skills → Describe your task';
   const egs=S.repo?[['🔍','Review the codebase for security vulnerabilities'],['🐛','Find and fix the most critical bugs'],['🏗️','Explain the architecture and suggest improvements'],['🧪','Write tests for the main business logic']]:[['⚙️','Add input validation to the login function'],['🔍','Review this file for security vulnerabilities'],['🐛','Find and fix the bug causing tests to fail'],['📝','Write documentation for all public functions']];
-  $('msgs').innerHTML=`<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">${repoTitle}</div><div class="empty-sub">${repoSub}</div><div class="eg-grid">${egs.map(([ico,txt])=>`<button class="eg" onclick="fill(this)"><span>${ico}</span>${esc(txt)}</button>`).join('')}</div></div>`;
+  const dashUserName=S.ghUser?.login?', '+S.ghUser.login:'';
+  $('msgs').innerHTML=`<div class="empty" id="empty"><div id="dashboard-home" style="width:100%;max-width:680px;padding:24px 0 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px"><div><h2 style="font-size:22px;font-weight:700;letter-spacing:-.02em;margin:0 0 4px">👋 Welcome back${esc(dashUserName)}</h2><p style="font-size:13px;color:var(--muted);margin:0">Your AI dev agent — autonomous, fast, any model</p></div><button class="btn-primary" onclick="newTab();this.closest('.empty').style.display='none'" style="font-size:13px;padding:8px 18px">+ New Chat</button></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px"><div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:16px"><div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Quick Actions</div><div style="display:flex;flex-direction:column;gap:6px"><button class="dash-action-btn" onclick="setSideTab('files');expLeftPanel()">📦 Connect Repo</button><button class="dash-action-btn" onclick="setSideTab('config');expLeftPanel()">🧠 Change AI Model</button><button class="dash-action-btn" onclick="setSideTab('skills');expLeftPanel()">📜 Add Instructions</button><button class="dash-action-btn" onclick="openSkillsLibrary()">🎯 Browse Skills</button></div></div><div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:16px"><div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Active PRs</div><div id="dash-prs" style="font-size:12px;color:var(--muted)">${S.repo?'Loading…':'Connect a repository to see open pull requests'}</div></div></div><div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px"><div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Recent Agent Activity</div><div id="dash-activity" style="font-size:12px;color:var(--muted)">No recent activity — start a conversation to see history here</div></div><div style="margin-top:4px"><div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Try it</div><div class="eg-grid">${egs.map(([ico,txt])=>`<button class="eg" onclick="fill(this)"><span>${ico}</span>${esc(txt)}</button>`).join('')}</div></div></div></div>`;
+  setTimeout(updateDashboard,0);
   $('stat-pill').style.display=S.stats.tokens>0?'flex':'none';
   if(S.stats.tokens>0)$('stat-pill').textContent=tokFmt(S.stats.tokens)+' tok · '+S.stats.messages+' msg';
 }
@@ -1879,7 +1955,7 @@ const navCard=$('nav-gh-card');const navLogin=$('nav-gh-login-btn');if(navCard)n
 async function loadRepos(){$('repo-list').innerHTML='<div class="list-msg">Loading…</div>';const repos=await post('/api/github/repos',{token:S.ghToken});if(!Array.isArray(repos)){$('repo-list').innerHTML='<div class="list-msg" style="color:var(--red)">Failed</div>';return;}S.allRepos=repos;renderRepoList(repos);}
 function renderRepoList(repos){if(!repos.length){$('repo-list').innerHTML='<div class="list-msg">No repos found</div>';return;}$('repo-list').innerHTML=repos.slice(0,80).map(r=>`<div class="list-item" onclick="selectRepo(this.dataset.repo,this)" data-repo="${escA(r.full_name)}"><div class="li-name">${esc(r.name)}</div><div class="li-sub"><span>${esc(r.language||'—')}</span>${r.private?'<span class="li-badge">private</span>':''}</div></div>`).join('');}
 function filterRepos(q){renderRepoList(S.allRepos.filter(r=>r.full_name.toLowerCase().includes(q.toLowerCase())));}
-function updRepoPill(){const pill=$('repo-pill');const nm=$('repo-pill-name');const br=$('repo-pill-branch');if(!pill)return;if(S.repo){nm.textContent=`${S.repo.owner}/${S.repo.repo}`;br.textContent=` · ${S.repo.branch||'main'}`;pill.classList.add('show');}else{pill.classList.remove('show');}updateRepoBadge();renderMCPServers();}
+function updRepoPill(){const pill=$('repo-pill');const nm=$('repo-pill-name');const br=$('repo-pill-branch');if(!pill)return;if(S.repo){nm.textContent=`${S.repo.owner}/${S.repo.repo}`;br.textContent=` · ${S.repo.branch||'main'}`;pill.classList.add('show');}else{pill.classList.remove('show');}updateRepoBadge();renderMCPServers();updateDashboard();}
 function autoDetectStack(files){const paths=files.map(f=>f.path);const has=re=>paths.some(p=>re.test(p));const suggest=[];if(has(/\.(tsx|jsx)$/))suggest.push('react');if(has(/next\.config\.(js|ts|mjs|cjs)$/))suggest.push('nextjs');if(has(/Dockerfile$/i))suggest.push('docker');if(has(/\.(spec|test)\.(ts|js|py)$|__tests__/))suggest.push('tests');if(has(/requirements\.txt$|pyproject\.toml$|setup\.py$/))suggest.push('errors');if(has(/go\.mod$/))suggest.push('go');if(has(/\.(sql)$/))suggest.push('sql');if(has(/zod/))suggest.push('zod');const current=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill);if(current.length>0||!suggest.length)return;const toEnable=[...new Set(suggest)];document.querySelectorAll('.skill-row[data-skill]').forEach(el=>{if(toEnable.includes(el.dataset.skill))el.classList.add('on');});saveEnhance();if(toEnable.length)toast(`🎯 Auto-enabled skills: ${toEnable.join(', ')}`);}
 async function selectRepo(fullName,el){document.querySelectorAll('#repo-list .list-item').forEach(e=>e.classList.remove('active'));if(el)el.classList.add('active');const st=$('repo-st');st.textContent='Loading files…';st.className='sec-st';S.selFiles.clear();S.fileSizes.clear();S.memory=null;S.msgs=[];S.stats={tokens:0,messages:0};S.tabs=[];S.activeTabId=null;$('mem-pill').style.display='none';$('stat-pill').style.display='none';updCtx();$('file-tree').innerHTML='';const shortName=fullName.split('/').pop();$('msgs').innerHTML=`<div class="empty" id="empty"><div class="empty-mark">⚡</div><div class="empty-title">${esc(shortName)}</div><div class="empty-sub">Select files from the tree · type @ to mention a file · or describe a task below</div><div class="eg-grid"><button class="eg" onclick="fill(this)"><span>🔍</span>Review the codebase for security vulnerabilities</button><button class="eg" onclick="fill(this)"><span>🐛</span>Find and fix the most critical bugs</button><button class="eg" onclick="fill(this)"><span>🏗️</span>Explain the architecture and suggest improvements</button><button class="eg" onclick="fill(this)"><span>🧪</span>Write tests for the main business logic</button></div></div>`;const d=await post('/api/repo/connect',{token:S.ghToken,url:'https://github.com/'+fullName});if(d.error){st.textContent='✕ '+d.error;st.className='sec-st err';return;}S.repo=d;saveSession();st.textContent=`✓ ${d.owner}/${d.repo} · ${d.branch} · ${d.files.length} files`;st.className='sec-st ok';buildTree(d.files);quickScanRepo(d.files);loadBranches();loadMemory();restoreChat();const tsw=$('tree-search-wrap');if(tsw)tsw.style.display='block';const sb=$('suggest-btn');if(sb)sb.style.display='flex';const rsw=$('repo-search-wrap');if(rsw)rsw.style.display='block';updRepoPill();autoDetectStack(d.files);updHint();}
 function buildTree(files){const folders={};const root=[];for(const f of files){const p=f.path.split('/');if(p.length===1)root.push(f);else{if(!folders[p[0]])folders[p[0]]=[];folders[p[0]].push(f);}}let h='';for(const f of root)h+=tfn(f);for(const[k,v]of Object.entries(folders))h+=tfd(k,v);$('file-tree').innerHTML=h;}
@@ -2877,7 +2953,7 @@ function updateRepoBadge(){
 // Aliases for backward-compatibility
 function expSidebar(){expLeftPanel();}
 function collSidebar(){collLeftPanel();}
-(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!handleOAuthCallback()&&!restoreSession())expLeftPanel();if(isMob())collLeftPanel();initResizeHandle();fetchHfBuildStatus();renderRSSkills();renderMCPServers();updateRepoBadge();})();
+(function init(){restoreEnhance();renderSavedPresets();loadTools();loadPromptHistory();renderSnippets();loadFlags();if(!handleOAuthCallback()&&!restoreSession())expLeftPanel();if(isMob())collLeftPanel();initResizeHandle();fetchHfBuildStatus();renderRSSkills();renderMCPServers();updateRepoBadge();updateDashboard();})();
 
 // ── Headless Browser Panel ──────────────────────────────────────────────────
 let _browserPageData=null;
@@ -3090,6 +3166,129 @@ async function cpLoadServer(){
       return `<div class="cp-env-row"><span class="cp-env-key">${esc(k)}</span><span class="cp-env-val ${isSet?'cp-ok':'cp-warn'}">${esc(disp)}</span></div>`;
     }).join('');
   }catch(e){el.innerHTML=`<div style="color:#ef5350;font-size:12px">Error: ${e.message}</div>`;}
+}
+
+// ── Dashboard helpers ──────────────────────────────────────────────────────
+function updateDashboard(){
+  // Username greeting
+  const dn=$('dash-user-name');
+  if(dn&&S.ghUser?.login)dn.textContent=', '+S.ghUser.login;
+
+  // Recent activity from message history
+  const act=$('dash-activity');
+  if(act){
+    const msgs=S.msgs.filter(m=>m.role==='user').slice(-5).reverse();
+    if(msgs.length){
+      act.innerHTML=msgs.map((m,i)=>{
+        const ago=i===0?'just now':i===1?'recently':'earlier';
+        return`<div class="dash-act-item"><span class="dash-act-time">${ago}</span><span class="dash-act-text">${esc(m.content.slice(0,80))}${m.content.length>80?'…':''}</span></div>`;
+      }).join('');
+    }else{
+      act.textContent='No recent activity — start a conversation to see history here';
+    }
+  }
+
+  // Active PRs (load from GitHub if connected)
+  const prs=$('dash-prs');
+  if(prs&&S.repo&&S.ghToken){
+    prs.textContent='Loading…';
+    fetch(`/api/github/prs?token=${encodeURIComponent(S.ghToken)}&owner=${S.repo.owner}&repo=${S.repo.repo}&state=open&per_page=5`)
+      .then(r=>r.json())
+      .then(data=>{
+        if(!prs)return;
+        if(!Array.isArray(data)||!data.length){prs.textContent='No open pull requests';return;}
+        prs.innerHTML=data.map(pr=>{
+          const badge=pr.draft?'draft':'open';
+          return`<div class="dash-pr-item"><span class="dash-pr-num">#${pr.number}</span><span class="dash-pr-title" title="${escA(pr.title)}">${esc(pr.title)}</span><span class="dash-pr-badge ${badge}">${badge}</span></div>`;
+        }).join('');
+      })
+      .catch(()=>{if(prs)prs.textContent='Unable to load PRs';});
+  }else if(prs&&!S.repo){
+    prs.textContent='Connect a repository to see open pull requests';
+  }
+
+  // Also refresh right sidebar active PRs
+  const ars=$('active-rs');
+  if(ars&&S.repo&&S.ghToken){
+    fetch(`/api/github/prs?token=${encodeURIComponent(S.ghToken)}&owner=${S.repo.owner}&repo=${S.repo.repo}&state=open&per_page=5`)
+      .then(r=>r.json())
+      .then(data=>{
+        if(!ars)return;
+        if(!Array.isArray(data)||!data.length){ars.innerHTML='<div style="padding:8px 14px;font-size:11px;color:var(--muted)">No open PRs</div>';return;}
+        ars.innerHTML=data.map(pr=>`<div class="mcp-server" onclick="$('pr-review-num').value=${pr.number};setSideTab('files');expLeftPanel();reviewPR()"><span class="mcp-dot ${pr.draft?'offline':'online'}"></span><div><div class="mcp-name">#${pr.number} ${esc(pr.title.slice(0,32))}${pr.title.length>32?'…':''}</div><div class="mcp-host">${pr.draft?'Draft':'Open'} · ${esc(pr.user?.login||'')}</div></div></div>`).join('');
+      })
+      .catch(()=>{});
+  }
+}
+
+// ── Skills Library ─────────────────────────────────────────────────────────
+const SKILL_LIBRARY=[
+  {key:'tests',name:'🧪 Tests',cat:'quality',desc:'Unit, integration and E2E test generation. Writes comprehensive test suites with edge cases.',meta:'Built-in · Code Quality'},
+  {key:'errors',name:'🛡️ Error handling',cat:'quality',desc:'Defensive code patterns, try/catch, typed errors, Result types.',meta:'Built-in · Code Quality'},
+  {key:'security',name:'🔒 Security',cat:'quality',desc:'OWASP best practices, input validation, SQL injection prevention, auth patterns.',meta:'Built-in · Code Quality'},
+  {key:'docs',name:'📝 Documentation',cat:'quality',desc:'Docstrings, README, JSDoc, Markdown — thorough inline and external docs.',meta:'Built-in · Code Quality'},
+  {key:'perf',name:'⚡ Performance',cat:'quality',desc:'Profiling, memoization, lazy loading, algorithmic complexity analysis.',meta:'Built-in · Code Quality'},
+  {key:'solid',name:'🎯 Clean Code',cat:'quality',desc:'SOLID principles, clean architecture, design patterns, DRY.',meta:'Built-in · Code Quality'},
+  {key:'react',name:'⚛️ React',cat:'stack',desc:'Component patterns, hooks, JSX best practices, state management.',meta:'Built-in · Tech Stack'},
+  {key:'nextjs',name:'🚀 Next.js',cat:'stack',desc:'App router, SSR, API routes, server components, Vercel deployment.',meta:'Built-in · Tech Stack'},
+  {key:'go',name:'🐹 Go',cat:'stack',desc:'Idiomatic Go, goroutines, error returns, stdlib conventions.',meta:'Built-in · Tech Stack'},
+  {key:'sql',name:'🗄️ SQL',cat:'stack',desc:'Queries, migrations, indexing, ORM patterns, transactions.',meta:'Built-in · Tech Stack'},
+  {key:'docker',name:'🐳 Docker',cat:'stack',desc:'Containerization, compose, multi-stage builds, healthchecks.',meta:'Built-in · Tech Stack'},
+  {key:'zod',name:'🔷 Zod',cat:'stack',desc:'Schema validation, z.infer types, strict TypeScript, runtime safety.',meta:'Built-in · Tech Stack'},
+];
+
+function openSkillsLibrary(){
+  renderSkillLibrary('','');
+  $('skills-library-modal').style.display='flex';
+  setTimeout(()=>$('skill-lib-search').focus(),50);
+}
+
+function filterSkillLibrary(q){renderSkillLibrary(q,$('skill-lib-filter').value);}
+
+function renderSkillLibrary(q,cat){
+  const list=$('skill-lib-list');if(!list)return;
+  const query=(q||'').toLowerCase();
+  const filtered=SKILL_LIBRARY.filter(s=>{
+    if(cat&&s.cat!==cat)return false;
+    if(query&&!s.name.toLowerCase().includes(query)&&!s.desc.toLowerCase().includes(query))return false;
+    return true;
+  });
+  if(!filtered.length){list.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No skills match your search</div>';return;}
+  list.innerHTML=filtered.map(s=>{
+    const active=document.querySelector(`.skill-row[data-skill="${s.key}"]`)?.classList.contains('on');
+    return`<div class="skill-lib-card ${active?'active-skill':''}">
+      <div class="skill-lib-info">
+        <div class="skill-lib-name">${s.name}${active?' <span style="font-size:10px;color:var(--accent2);font-weight:400">✓ Active</span>':''}</div>
+        <div class="skill-lib-desc">${esc(s.desc)}</div>
+        <div class="skill-lib-meta">${esc(s.meta)}</div>
+      </div>
+      <button class="skill-lib-btn ${active?'remove':''}" onclick="toggleSkillFromLibrary('${s.key}',this)">${active?'Remove':'Add to Project'}</button>
+    </div>`;
+  }).join('');
+}
+
+function toggleSkillFromLibrary(key,btn){
+  const row=document.querySelector(`.skill-row[data-skill="${key}"]`);
+  if(!row){toast('Skill not found',true);return;}
+  const isActive=row.classList.contains('on');
+  if(isActive){row.classList.remove('on');}else{row.classList.add('on');}
+  saveEnhance();renderRSSkills();updHint();
+  // Re-render the card
+  filterSkillLibrary($('skill-lib-search').value);
+  toast((isActive?'Removed: ':'Added: ')+key);
+}
+
+// ── Custom MCP ─────────────────────────────────────────────────────────────
+function connectCustomMCP(){
+  const cmd=$('mcp-cmd-input')?.value.trim();
+  if(!cmd){toast('Enter a command for the MCP server',true);return;}
+  // Store in S.tools as a named server entry
+  const name=cmd.split('/').pop().replace(/\.[a-z]+$/,'').replace(/_/g,' ');
+  if(!S.tools)S.tools=[];
+  S.tools.push({name,url:cmd,type:'mcp',command:cmd});
+  saveTools();renderMCPServers();
+  $('mcp-cmd-input').value='';
+  toast('MCP server added: '+name);
 }
 </script>
 </body>
