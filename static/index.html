@@ -162,6 +162,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
 .prov-row{display:flex;margin:0 10px 8px;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:3px}
 .prov-btn{flex:1;padding:5px;border:none;background:none;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;border-radius:6px;transition:all .15s;font-family:inherit}
 .prov-btn.on{background:var(--panel2);color:var(--text);box-shadow:var(--shadow)}
+.prov-choice{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 8px;cursor:pointer;text-align:center;font-family:inherit;color:var(--muted);transition:all .15s;line-height:1.4}
+.prov-choice:hover{border-color:var(--accent2);color:var(--accent2)}
+.prov-choice.on{background:var(--accent-dim);border-color:var(--accent2);color:var(--accent2);font-weight:600}
 .pfields{padding:0 10px 6px;display:flex;flex-direction:column;gap:6px}
 .flabel{font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.07em;text-transform:uppercase;margin-bottom:2px}
 .finput{background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px;font-family:'JetBrains Mono',monospace;outline:none;width:100%;transition:border-color .15s}
@@ -676,9 +679,87 @@ pre::-webkit-scrollbar{height:4px}
   </div>
   <!-- ── Panel: AI Config (multi-agent stored here, providers moved to spanel-files) ── -->
   <div id="spanel-config" class="s-panel hidden">
-    <div class="cfg-hdr">Multi-Agent</div>
-    <div style="padding:0 10px 8px">
-      <div class="ma-row"><div><div class="ma-label">Pipeline Stages</div><div class="ma-sub">Plan → Code → Review</div></div><div><input type="checkbox" id="multi-agent" class="toggle-input" onchange="updBadge();$('ma-stages').style.display=this.checked?'block':'none'"><label for="multi-agent" class="toggle-label"></label></div></div>
+    <div class="cfg-hdr">🤖 AI Model</div>
+    <div style="padding:0 10px 10px">
+      <!-- Hidden prov-btn elements so setProv() internals still work -->
+      <span id="pa" style="display:none"></span><span id="pg" style="display:none"></span><span id="ph" style="display:none"></span><span id="po" style="display:none"></span><span id="pal" style="display:none"></span>
+      <!-- Two top-level choices -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+        <button class="prov-choice provch on" id="provch-hf" onclick="setProvGroup('hf')"><div style="font-size:18px">🤗</div><div style="font-size:12px;font-weight:600;margin:2px 0">HuggingFace</div><div style="font-size:10px;opacity:.7">Any open model</div></button>
+        <button class="prov-choice provch" id="provch-ext" onclick="setProvGroup('ext')"><div style="font-size:18px">🔌</div><div style="font-size:12px;font-weight:600;margin:2px 0">External API</div><div style="font-size:10px;opacity:.7">OpenAI · Anthropic · Groq</div></button>
+      </div>
+      <!-- HuggingFace group -->
+      <div id="pf-hf-group">
+        <div class="prov-note green" style="margin-bottom:8px">🤗 Search and use any model from <a href="https://huggingface.co/models" target="_blank" style="color:inherit">HuggingFace Hub</a></div>
+        <div id="hf-selected" class="hf-selected" style="display:none"><span>🤗</span><span class="hf-sel-name" id="hf-sel-name">—</span><button class="hf-sel-clear" onclick="clearModel()">✕</button></div>
+        <div id="hf-browser"><div class="search-wrap" style="padding:0 0 6px"><span class="search-icon">⌕</span><input class="search-in" id="model-search" placeholder="Search HF models…" oninput="debounceSearch(this.value)"></div><div class="list-scroll" id="model-list"><div class="list-msg">Search to browse models</div></div></div>
+        <details style="margin-top:10px">
+          <summary style="font-size:11px;color:var(--muted);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--muted2)">▶</span>Advanced: Local inference (AirLLM)</summary>
+          <div style="margin-top:6px;padding:10px;background:var(--panel2);border:1px solid var(--border2);border-radius:8px">
+            <div class="prov-note" style="margin-bottom:8px">Run HF models locally with minimal GPU memory via <strong>AirLLM</strong>. Requires <code>pip install airllm</code>.</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
+              <button class="qfill-btn" onclick="fillAirLLM('meta-llama/Llama-2-7b-chat-hf');setProv('airllm')">🦙 Llama-2 7B</button>
+              <button class="qfill-btn" onclick="fillAirLLM('mistralai/Mistral-7B-Instruct-v0.2');setProv('airllm')">✨ Mistral 7B</button>
+              <button class="qfill-btn" onclick="fillAirLLM('Qwen/Qwen2.5-7B-Instruct');setProv('airllm')">🌟 Qwen2.5 7B</button>
+              <button class="qfill-btn" onclick="fillAirLLM('microsoft/Phi-3-mini-4k-instruct');setProv('airllm')">💡 Phi-3 Mini</button>
+            </div>
+            <div id="pf-al" class="pfields">
+              <div><div class="flabel">HuggingFace Model ID</div><input class="finput" id="al-model" placeholder="meta-llama/Llama-2-7b-chat-hf" autocomplete="off" oninput="updBadge();saveEnhance()"></div>
+              <div><div class="flabel">Max new tokens</div><input class="finput" id="al-tokens" type="number" min="1" max="4096" value="512" oninput="saveEnhance()"></div>
+            </div>
+          </div>
+        </details>
+      </div>
+      <!-- External API group -->
+      <div id="pf-ext-group" style="display:none">
+        <div class="flabel" style="margin-bottom:6px">Provider</div>
+        <select class="finput" id="ext-prov-sel" style="margin-bottom:10px" onchange="setExtProv(this.value)">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="groq">⚡ Groq — free tier</option>
+          <option value="openai_compat">OpenAI / Custom endpoint</option>
+        </select>
+        <div id="pf-a" style="flex-direction:column">
+          <div class="pfields"><div><div class="flabel">Anthropic API Key</div><input class="finput" id="ak" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key" data-rollbar-scrub="true" oninput="saveEnhance()"></div></div>
+          <div class="model-selector" style="margin-top:8px" role="radiogroup" aria-label="Claude model">
+            <button class="msel-btn" role="radio" aria-checked="false" id="msel-haiku" onclick="setAnthModel('claude-haiku-4-5-20251001')" title="Fastest, cheapest">⚡<br>Haiku</button>
+            <button class="msel-btn on" role="radio" aria-checked="true" id="msel-sonnet" onclick="setAnthModel('claude-sonnet-4-6')" title="Balanced">⚖️<br>Sonnet</button>
+            <button class="msel-btn" role="radio" aria-checked="false" id="msel-opus" onclick="setAnthModel('claude-opus-4-8')" title="Most intelligent">🧠<br>Opus</button>
+          </div>
+          <div class="think-opts" id="think-opts">
+            <div class="ma-row"><div><div class="ma-label" style="font-size:12px">Extended Thinking</div><div class="ma-sub">Opus reasons before answering</div></div><div><input type="checkbox" id="think-toggle" class="toggle-input" onchange="saveEnhance()"><label for="think-toggle" class="toggle-label"></label></div></div>
+            <div style="display:flex;align-items:center;gap:8px;padding:0 2px"><span class="flabel" style="flex:1;margin:0">Budget tokens</span><select class="finput" id="think-budget" style="width:110px;padding:3px 6px" onchange="saveEnhance()"><option value="2000">2K (fast)</option><option value="4000">4K</option><option value="8000">8K (deep)</option><option value="16000">16K (max)</option></select></div>
+          </div>
+        </div>
+        <div id="pf-g" style="display:none">
+          <div class="prov-note green" style="margin-bottom:8px">✓ <strong>Free tier</strong> — <a href="https://console.groq.com" target="_blank">console.groq.com</a></div>
+          <div class="pfields"><div><div class="flabel">Groq API Key</div><input class="finput" id="gk" type="password" placeholder="gsk_…" autocomplete="off" aria-label="Groq API key" data-rollbar-scrub="true"></div>
+          <div><div class="flabel">Model</div><select class="finput" id="gm" aria-label="Groq model" onchange="updBadge()"><option value="llama-3.3-70b-versatile">Llama 3.3 70B — Best</option><option value="llama-3.1-8b-instant">Llama 3.1 8B — Fast</option><option value="mixtral-8x7b-32768">Mixtral 8x7B</option><option value="gemma2-9b-it">Gemma 2 9B</option><option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B</option><option value="qwen-qwq-32b">Qwen QwQ 32B</option></select></div></div>
+        </div>
+        <div id="pf-o" style="display:none">
+          <div class="prov-note" style="margin-bottom:8px">OpenAI-compatible endpoint — quick-fill or enter manually:</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
+            <button class="qfill-btn" onclick="fillEndpoint('openrouter')">🔄 OpenRouter</button>
+            <button class="qfill-btn" onclick="fillEndpoint('ollama')">🦙 Ollama</button>
+            <button class="qfill-btn" onclick="fillEndpoint('lmstudio')">🖥 LM Studio</button>
+          </div>
+          <div class="pfields">
+            <div><div class="flabel">Base URL</div><input class="finput" id="oci-url" placeholder="http://localhost:11434/v1" autocomplete="off" oninput="updBadge()"></div>
+            <div><div class="flabel">Model name</div><input class="finput" id="oci-model" placeholder="gpt-4o-mini" autocomplete="off" oninput="updBadge()"></div>
+            <div><div class="flabel">API Key</div><input class="finput" id="oci-key" type="password" placeholder="sk-… (leave blank for Ollama)" autocomplete="off" data-rollbar-scrub="true"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🚀 Agent Mode</div>
+    <div style="padding:0 10px 12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+        <button class="prov-choice agent-mode-btn" data-mode="chat" onclick="setAgentMode('chat')"><div style="font-size:16px">💬</div><div style="font-size:12px;font-weight:600;margin:2px 0">Chat-assisted</div><div style="font-size:10px;opacity:.7">Approve each change</div></button>
+        <button class="prov-choice agent-mode-btn on" data-mode="auto" onclick="setAgentMode('auto')"><div style="font-size:16px">🤖</div><div style="font-size:12px;font-weight:600;margin:2px 0">Autonomous</div><div style="font-size:10px;opacity:.7">Plan → Code → PR</div></button>
+      </div>
+      <div id="auto-workflow" style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;color:var(--muted2);padding:4px 0">
+        <span>📋 Plan</span><span style="color:var(--border)">→</span><span>💻 Code</span><span style="color:var(--border)">→</span><span>✅ Create PR</span>
+      </div>
+      <input type="checkbox" id="multi-agent" class="toggle-input" style="display:none" onchange="updBadge()">
       <div id="ma-stages" style="display:none;padding:8px 0">
         <div style="padding:0 0 6px;font-size:10px;color:var(--muted2)">Per-stage provider (optional):</div>
         <div class="ma-stage-row"><div class="ma-stage-lbl">🗺️ Plan</div><select class="finput" id="ma-plan-prov" onchange="saveEnhance()"><option value="">Same as above</option><option value="anthropic">Claude</option><option value="groq">⚡ Groq</option><option value="hf">🤗 HF</option><option value="openai_compat">🔌 Custom</option><option value="airllm">🏠 AirLLM</option></select></div>
@@ -692,18 +773,22 @@ pre::-webkit-scrollbar{height:4px}
   <!-- ── Panel: Skills ────────────────────────────────────────────────── -->
   <div id="spanel-skills" class="s-panel hidden">
     <div class="cfg-hdr">⚡ Skills</div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--muted2);text-transform:uppercase;padding:6px 14px 2px">Code Quality</div>
     <div class="skill-list">
-      <div class="skill-row" data-skill="react" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">⚛️ React</div><div class="skill-row-desc">Component patterns, hooks, JSX best practices</div></div></div>
-      <div class="skill-row" data-skill="nextjs" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🚀 Next.js</div><div class="skill-row-desc">App router, SSR, API routes, Vercel deployment</div></div></div>
       <div class="skill-row" data-skill="tests" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🧪 Tests</div><div class="skill-row-desc">Unit, integration and E2E test generation</div></div></div>
       <div class="skill-row" data-skill="errors" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🛡️ Error handling</div><div class="skill-row-desc">Defensive code, try/catch, typed errors</div></div></div>
       <div class="skill-row" data-skill="security" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🔒 Security</div><div class="skill-row-desc">OWASP, input validation, SQL injection prevention</div></div></div>
-      <div class="skill-row" data-skill="docs" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">📝 Docs</div><div class="skill-row-desc">Docstrings, README, JSDoc, Markdown</div></div></div>
+      <div class="skill-row" data-skill="docs" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">📝 Documentation</div><div class="skill-row-desc">Docstrings, README, JSDoc, Markdown</div></div></div>
       <div class="skill-row" data-skill="perf" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">⚡ Performance</div><div class="skill-row-desc">Profiling, memoization, lazy loading</div></div></div>
-      <div class="skill-row" data-skill="solid" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🎯 SOLID</div><div class="skill-row-desc">Design patterns, clean architecture principles</div></div></div>
-      <div class="skill-row" data-skill="docker" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🐳 Docker</div><div class="skill-row-desc">Containerization, compose, multi-stage builds</div></div></div>
-      <div class="skill-row" data-skill="sql" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🗄️ SQL</div><div class="skill-row-desc">Queries, migrations, indexing, ORM patterns</div></div></div>
+      <div class="skill-row" data-skill="solid" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🎯 Clean Code</div><div class="skill-row-desc">SOLID principles, clean architecture, design patterns</div></div></div>
+    </div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--muted2);text-transform:uppercase;padding:6px 14px 2px;border-top:1px solid var(--border2);margin-top:4px">Tech Stack</div>
+    <div class="skill-list">
+      <div class="skill-row" data-skill="react" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">⚛️ React</div><div class="skill-row-desc">Component patterns, hooks, JSX best practices</div></div></div>
+      <div class="skill-row" data-skill="nextjs" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🚀 Next.js</div><div class="skill-row-desc">App router, SSR, API routes, Vercel deployment</div></div></div>
       <div class="skill-row" data-skill="go" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🐹 Go</div><div class="skill-row-desc">Idiomatic Go, goroutines, error returns, stdlib</div></div></div>
+      <div class="skill-row" data-skill="sql" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🗄️ SQL</div><div class="skill-row-desc">Queries, migrations, indexing, ORM patterns</div></div></div>
+      <div class="skill-row" data-skill="docker" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🐳 Docker</div><div class="skill-row-desc">Containerization, compose, multi-stage builds</div></div></div>
       <div class="skill-row" data-skill="zod" onclick="toggleSkillRow(this)"><div class="skill-row-info"><div class="skill-row-name">🔷 Zod</div><div class="skill-row-desc">Schema validation, z.infer types, strict TypeScript</div></div></div>
     </div>
     <div class="cfg-hdr" style="border-top:1px solid var(--border2)">Presets</div>
@@ -758,28 +843,8 @@ pre::-webkit-scrollbar{height:4px}
       <div id="flag-list" style="background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow-x:hidden;overflow-y:auto;display:none;margin-bottom:6px;max-height:200px"></div>
       <button onclick="openAddFlag()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s">+ New Flag</button>
     </div>
-    <!-- Canary Status section -->
-    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🐤 Canary Analysis</div>
-    <div style="padding:0 10px 8px">
-      <div id="canary-result" style="display:none;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;margin-bottom:6px"></div>
-      <button onclick="runCanaryAnalysis()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit">&#9654; Analyze Active Canary</button>
-    </div>
-    <!-- Live Metrics section -->
-    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">📊 Live Metrics</div>
-    <div style="padding:0 10px 8px">
-      <div id="live-metrics-panel" style="display:none;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:11px;margin-bottom:6px"></div>
-      <div style="display:flex;gap:6px;margin-bottom:6px">
-        <input class="finput" id="lm-flag" placeholder="flag name" style="flex:1;font-size:11px;padding:5px 8px">
-        <select class="finput" id="lm-hours" style="font-size:11px;padding:5px 6px;width:64px">
-          <option value="1">1h</option>
-          <option value="6">6h</option>
-          <option value="24">24h</option>
-        </select>
-      </div>
-      <button onclick="fetchLiveMetrics()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s">⬇ Fetch Live Metrics</button>
-    </div>
-    <!-- HF Build Status section -->
-    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🚀 HF Build Status</div>
+    <!-- Space Status section -->
+    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🚀 Space Status</div>
     <div style="padding:0 10px 8px">
       <div id="hf-build-badge" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:var(--panel2);border:1px solid var(--border2);font-size:11px;margin-bottom:6px">
         <span id="hf-build-dot" style="width:8px;height:8px;border-radius:50%;background:var(--muted2);flex-shrink:0"></span>
@@ -788,12 +853,10 @@ pre::-webkit-scrollbar{height:4px}
       <div id="hf-build-error" style="display:none;background:var(--panel2);border:1px solid var(--border2);border-radius:8px;padding:7px 10px;font-size:10px;color:var(--red);word-break:break-word;margin-bottom:6px"></div>
       <button onclick="fetchHfBuildStatus()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s">↺ Refresh Status</button>
     </div>
-    <!-- Evolution History section -->
-    <div class="cfg-hdr" style="border-top:1px solid var(--border2)">🔄 Evolution History</div>
-    <div style="padding:0 10px 8px">
-      <div id="evo-history" style="background:var(--panel2);border:1px solid var(--border2);border-radius:8px;overflow-x:hidden;overflow-y:auto;display:none;margin-bottom:6px;max-height:220px;font-size:10px"></div>
-      <button onclick="loadEvoHistory()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:7px;border-radius:8px;font-size:11px;font-family:inherit;transition:all .15s">↺ Refresh History</button>
-    </div>
+  </div>
+  <!-- Control Panel button at sidebar bottom -->
+  <div style="padding:8px 10px;border-top:1px solid var(--border2);flex-shrink:0">
+    <button onclick="openCP()" style="width:100%;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--muted);font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:7px;transition:all .15s" onmouseover="this.style.borderColor='var(--accent2)';this.style.color='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">⚙️ Control Panel</button>
   </div>
   <div style="padding:10px;border-top:1px solid var(--border);flex-shrink:0">
     <button class="cp-sidebar-btn" onclick="openCP()">⚙️ Control Panel</button>
@@ -986,6 +1049,17 @@ pre::-webkit-scrollbar{height:4px}
       <button class="modal-cancel" onclick="$('canary-modal').style.display='none'">Cancel</button>
       <button class="modal-ok" onclick="submitCanaryAnalysis()">Analyze</button>
     </div>
+  </div>
+</div>
+
+<!-- Admin login modal -->
+<div class="modal-overlay" id="admin-login-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-head">🔐 Admin Access</div>
+    <div class="modal-row"><div class="flabel">Username</div><input class="finput" id="admin-user" placeholder="username" autocomplete="username" style="margin-top:3px" onkeydown="if(event.key==='Enter')$('admin-pass').focus()"></div>
+    <div class="modal-row"><div class="flabel">Password</div><input class="finput" id="admin-pass" type="password" placeholder="password" autocomplete="current-password" style="margin-top:3px" onkeydown="if(event.key==='Enter')submitAdminLogin()"></div>
+    <div id="admin-login-err" style="display:none;color:var(--red);font-size:12px;padding:0 4px 4px"></div>
+    <div class="modal-foot"><button class="modal-cancel" onclick="$('admin-login-modal').style.display='none'">Cancel</button><button class="modal-ok" onclick="submitAdminLogin()">Sign In</button></div>
   </div>
 </div>
 
@@ -1592,7 +1666,7 @@ function saveSession(){if(S.ghToken&&S.ghUser){const d={ghToken:S.ghToken,ghUser
 function clearSession(){localStorage.removeItem('df-session');}
 function restoreSession(){try{const raw=localStorage.getItem('df-session');if(!raw)return false;const{ghToken,ghUser,repo}=JSON.parse(raw);if(!ghToken||!ghUser)return false;S.ghToken=ghToken;S.ghUser=ghUser;$('gh-av').src=ghUser.avatar_url||'';$('gh-nm').textContent=ghUser.name||ghUser.login;$('gh-lg').textContent='@'+ghUser.login;$('gh-conn').style.display='none';$('gh-user').style.display='block';$('repo-sec').style.display='block';loadRepos();updHint();if(repo&&repo.owner&&repo.repo)setTimeout(()=>selectRepo(repo.owner+'/'+repo.repo),50);return true;}catch(e){return false;}}
 function saveEnhance(){const skills=Array.from(document.querySelectorAll('.skill-row.on[data-skill]')).map(e=>e.dataset.skill);const ts=$('ma-test-stage');const tt=$('think-toggle');const tb=$('think-budget');const data={prov:S.prov,anthropicKey:$('ak').value||'',anthropicModel:S.anthropicModel||'claude-sonnet-4-6',thinkingMode:tt?tt.checked:false,thinkingBudget:tb?tb.value:'2000',groqKey:$('gk').value||'',groqModel:$('gm').value||'',hfModel:S.hfModel,ociKey:$('oci-key').value||'',ociUrl:$('oci-url').value||'',ociModel:$('oci-model').value||'',alModel:$('al-model')?$('al-model').value||'':'',alTokens:$('al-tokens')?$('al-tokens').value||'512':'512',skills,rules:$('rules-input').value||'',instr:$('instr-input').value||'',multiAgent:$('multi-agent').checked,maPlanProv:$('ma-plan-prov').value||'',maCodeProv:$('ma-code-prov').value||'',maRevProv:$('ma-rev-prov').value||'',maTestStage:ts?ts.checked:false,maTestProv:$('ma-test-prov')?$('ma-test-prov').value||'':''};localStorage.setItem('df-enhance',JSON.stringify(data));}
-function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov)setProv(d.prov,true);if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.alModel&&$('al-model'))$('al-model').value=d.alModel;if(d.alTokens&&$('al-tokens'))$('al-tokens').value=d.alTokens;if(d.skills)document.querySelectorAll('.skill-row[data-skill]').forEach(el=>{el.classList.toggle('on',d.skills.includes(el.dataset.skill));});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
+function restoreEnhance(){try{const raw=localStorage.getItem('df-enhance');if(!raw)return;const d=JSON.parse(raw);if(d.prov){setProv(d.prov,true);setProvGroup(d.prov);}if(d.anthropicKey)$('ak').value=d.anthropicKey;if(d.anthropicModel)setAnthModel(d.anthropicModel);if(d.thinkingMode){const tt=$('think-toggle');if(tt)tt.checked=true;}if(d.thinkingBudget){const tb=$('think-budget');if(tb)tb.value=d.thinkingBudget;}if(d.groqKey)$('gk').value=d.groqKey;if(d.groqModel)$('gm').value=d.groqModel;if(d.hfModel){S.hfModel=d.hfModel;$('hf-sel-name').textContent=d.hfModel;$('hf-selected').style.display='flex';$('hf-browser').style.display='none';}if(d.ociKey)$('oci-key').value=d.ociKey;if(d.ociUrl)$('oci-url').value=d.ociUrl;if(d.ociModel)$('oci-model').value=d.ociModel;if(d.alModel&&$('al-model'))$('al-model').value=d.alModel;if(d.alTokens&&$('al-tokens'))$('al-tokens').value=d.alTokens;if(d.skills)document.querySelectorAll('.skill-row[data-skill]').forEach(el=>{el.classList.toggle('on',d.skills.includes(el.dataset.skill));});if(d.rules)$('rules-input').value=d.rules;if(d.instr)$('instr-input').value=d.instr;if(d.multiAgent){$('multi-agent').checked=true;$('ma-stages').style.display='block';}if(d.maPlanProv)$('ma-plan-prov').value=d.maPlanProv;if(d.maCodeProv)$('ma-code-prov').value=d.maCodeProv;if(d.maRevProv)$('ma-rev-prov').value=d.maRevProv;if(d.maTestStage){const ts=$('ma-test-stage');if(ts){ts.checked=true;const tr=$('ma-test-row');if(tr)tr.style.display='flex';}}if(d.maTestProv){const tp=$('ma-test-prov');if(tp)tp.value=d.maTestProv;}updBadge();}catch(e){}}
 function toggleMoreMenu(){$('more-menu').classList.toggle('open');}
 function closeMoreMenu(){const m=$('more-menu');if(m)m.classList.remove('open');}
 document.addEventListener('click',e=>{if(!e.target.closest('#more-menu')&&!e.target.closest('#more-btn'))closeMoreMenu();});
@@ -2049,7 +2123,38 @@ async function switchBranch(branch){
   buildTree(d.files);quickScanRepo(d.files);updRepoPill();
   toast(`Switched to ${branch}`);
 }
-function setProv(p,silent=false){S.prov=p;const _pb=[['pa','anthropic'],['pg','groq'],['ph','hf'],['po','openai_compat'],['pal','airllm']];_pb.forEach(([id,pv])=>{const b=$(id);if(b){b.classList.toggle('on',p===pv);b.setAttribute('aria-checked',p===pv?'true':'false');}});$('pf-a').style.display=p==='anthropic'?'flex':'none';$('pf-g').style.display=p==='groq'?'block':'none';$('pf-h').style.display=p==='hf'?'block':'none';$('pf-o').style.display=p==='openai_compat'?'block':'none';$('pf-al').style.display=p==='airllm'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
+function setProv(p,silent=false){S.prov=p;const _pb=[['pa','anthropic'],['pg','groq'],['ph','hf'],['po','openai_compat'],['pal','airllm']];_pb.forEach(([id,pv])=>{const b=$(id);if(b){b.classList.toggle('on',p===pv);b.setAttribute('aria-checked',p===pv?'true':'false');}});const pfa=$('pf-a');if(pfa)pfa.style.display=p==='anthropic'?'flex':'none';const pfg=$('pf-g');if(pfg)pfg.style.display=p==='groq'?'block':'none';const pfh=$('pf-h');if(pfh)pfh.style.display=p==='hf'?'block':'none';const pfo=$('pf-o');if(pfo)pfo.style.display=p==='openai_compat'?'block':'none';const pfal=$('pf-al');if(pfal)pfal.style.display=p==='airllm'?'block':'none';if(p==='hf'&&!silent)fetchModels('');updBadge();if(!silent)saveEnhance();}
+function setProvGroup(g){
+  const isHf=g==='hf'||g==='airllm';
+  document.querySelectorAll('.provch').forEach(b=>b.classList.remove('on'));
+  const btn=$(isHf?'provch-hf':'provch-ext');if(btn)btn.classList.add('on');
+  const hfg=$('pf-hf-group');if(hfg)hfg.style.display=isHf?'block':'none';
+  const extg=$('pf-ext-group');if(extg)extg.style.display=isHf?'none':'block';
+  if(isHf){setProv(g==='airllm'?'airllm':'hf');}
+  else{const sel=$('ext-prov-sel');setProv(sel?sel.value:'anthropic');}
+}
+function setExtProv(prov){setProv(prov);const pfa=$('pf-a');if(pfa)pfa.style.display=prov==='anthropic'?'flex':'none';const pfg=$('pf-g');if(pfg)pfg.style.display=prov==='groq'?'block':'none';const pfo=$('pf-o');if(pfo)pfo.style.display=prov==='openai_compat'?'block':'none';}
+function setAgentMode(mode){const isAuto=mode==='auto';document.querySelectorAll('.agent-mode-btn').forEach(b=>b.classList.remove('on'));const btn=document.querySelector('.agent-mode-btn[data-mode="'+mode+'"]');if(btn)btn.classList.add('on');const ma=$('multi-agent');if(ma){ma.checked=isAuto;updBadge();saveEnhance();}const wf=$('auto-workflow');if(wf)wf.style.display=isAuto?'flex':'none';}
+let _adminAuthed=false;
+function openCP(){
+  if(_adminAuthed){_doOpenCP();return;}
+  $('admin-user').value='';$('admin-pass').value='';$('admin-login-err').style.display='none';
+  $('admin-login-modal').style.display='flex';
+  setTimeout(()=>$('admin-user').focus(),50);
+}
+async function submitAdminLogin(){
+  const u=$('admin-user').value.trim();const p=$('admin-pass').value;
+  if(!u||!p)return;
+  const btn=$('admin-login-modal').querySelector('.modal-ok');btn.disabled=true;btn.textContent='…';
+  try{
+    const r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    const j=await r.json();
+    if(j.ok){_adminAuthed=true;$('admin-login-modal').style.display='none';_doOpenCP();}
+    else{$('admin-login-err').textContent='Invalid credentials';$('admin-login-err').style.display='block';}
+  }catch{$('admin-login-err').textContent='Login failed';$('admin-login-err').style.display='block';}
+  btn.disabled=false;btn.textContent='Sign In';
+}
+function _doOpenCP(){toast('Control Panel — system info only in this build');}
 function updBadge(){const ma=$('multi-agent').checked;$('ma-pill').style.display=ma?'block':'none';let text='claude-sonnet';if(S.prov==='anthropic'){const m=S.anthropicModel||'claude-sonnet-4-6';text=m.includes('haiku')?'claude-haiku':m.includes('opus')?'claude-opus':'claude-sonnet';}else if(S.prov==='groq')text=$('gm').value.split('-').slice(0,3).join('-');else if(S.prov==='openai_compat')text=($('oci-model')&&$('oci-model').value)||'custom';else if(S.prov==='airllm')text=(($('al-model')&&$('al-model').value)||'airllm').split('/').pop();else text=S.hfModel.split('/').pop();const p=$('model-pill');const sp=$('sidebar-model-pill');const tb=$('topbar-model-badge');if(p)p.textContent=text;if(sp)sp.textContent=text;if(tb)tb.textContent=text;}
 function fillAirLLM(model){$('al-model').value=model;updBadge();saveEnhance();toast('AirLLM model: '+model.split('/').pop());}
 let searchTimer=null;
@@ -2075,6 +2180,9 @@ function repoTreeCtx(){if(!S.repo||!Array.isArray(S.repo.files)||!S.repo.files.l
 function bCtx(){const p=[];const tree=repoTreeCtx();if(tree)p.push(tree);for(const[k,v]of S.selFiles)p.push(`### \`${k}\`\n\`\`\`${fext(k)||'text'}\n${v.slice(0,15000)}\n\`\`\``);for(const[k,v]of S.localFiles)p.push(`### \`${k}\`\n\`\`\`${fext(k)||'text'}\n${v.slice(0,15000)}\n\`\`\``);return p.join('\n\n');}
 async function send(){
   const text=$('ti').value.trim();if(!text||S.streaming)return;
+  let _urlCtx='';
+  {const _rx=/\bhttps?:\/\/[^\s,'"<>\]]+/g;const _us=[...new Set((text.match(_rx)||[]))].slice(0,3);
+  for(const _u of _us){try{toast('Fetching '+new URL(_u).hostname+'…');const _r=await fetch('/api/browser/scrape',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:_u,timeout:12})});if(_r.ok){const _j=await _r.json();if(_j.text)_urlCtx+='\n\n---\n**Page: '+_u+'**\n'+_j.text.slice(0,5000);}}catch{}}}
   pushHistory(text);S.histIdx=-1;S._draftText='';
   if(S.prov==='anthropic'&&!$('ak').value.trim()){toast('Enter your Anthropic key in the sidebar',true);return;}
   // Auto-fetch any URLs mentioned in the message
