@@ -6996,3 +6996,39 @@ class TestBranchCreateJsonFailure:
 
         assert r.status_code == 400
         assert r.json()["error"] == "Failed to create branch"
+
+
+class TestAdminStatus:
+    """Tests for GET /api/admin/status."""
+
+    def test_returns_200_with_env_and_features(self):
+        r = client.get("/api/admin/status")
+        assert r.status_code == 200
+        data = r.json()
+        assert "env" in data
+        assert "features" in data
+
+    def test_env_contains_expected_keys(self):
+        r = client.get("/api/admin/status")
+        env = r.json()["env"]
+        for key in ("GITHUB_CLIENT_ID", "HF_TOKEN", "SENTRY_DSN", "ROLLBAR_ACCESS_TOKEN",
+                    "POSTHOG_API_KEY", "PINECONE", "GO_DATA_PLANE_URL", "CHROME_EXECUTABLE"):
+            assert key in env, f"Missing key: {key}"
+
+    def test_features_contains_expected_keys(self):
+        r = client.get("/api/admin/status")
+        features = r.json()["features"]
+        for key in ("headless_browser", "memory", "go_data_plane", "github_oauth"):
+            assert key in features, f"Missing key: {key}"
+
+    def test_boolean_flags_for_unset_env_vars(self):
+        import main as m
+        with patch.object(m, "GITHUB_CLIENT_ID", ""):
+            r = client.get("/api/admin/status")
+        assert r.json()["env"]["GITHUB_CLIENT_ID"] is False
+
+    def test_boolean_flags_for_set_env_vars(self):
+        import main as m
+        with patch.object(m, "GITHUB_CLIENT_ID", "test-client-id"):
+            r = client.get("/api/admin/status")
+        assert r.json()["env"]["GITHUB_CLIENT_ID"] is True

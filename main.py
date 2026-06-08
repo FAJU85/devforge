@@ -2793,3 +2793,29 @@ async def browser_scrape(body: BrowserScrapeBody):
         return {"url": body.url, "title": title, "text": text[:20000]}
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.get("/api/admin/status")
+async def admin_status():
+    """Return non-sensitive server configuration status for the control panel."""
+    pinecone_set = bool(os.environ.get("PINECONE_API_KEY") or os.environ.get("PINECONE_INDEX"))
+    go_url = os.environ.get("GO_DATA_PLANE_URL", "http://localhost:8080")
+    return {
+        "env": {
+            "GITHUB_CLIENT_ID": bool(GITHUB_CLIENT_ID),
+            "GITHUB_CLIENT_SECRET": bool(os.environ.get("GITHUB_CLIENT_SECRET")),
+            "HF_TOKEN": bool(os.environ.get("HF_TOKEN")),
+            "SENTRY_DSN": bool(os.environ.get("SENTRY_DSN")),
+            "ROLLBAR_ACCESS_TOKEN": bool(os.environ.get("ROLLBAR_ACCESS_TOKEN")),
+            "POSTHOG_API_KEY": bool(os.environ.get("POSTHOG_API_KEY")),
+            "PINECONE": pinecone_set,
+            "GO_DATA_PLANE_URL": go_url,
+            "CHROME_EXECUTABLE": _CHROME_EXEC,
+        },
+        "features": {
+            "headless_browser": os.path.exists(_CHROME_EXEC),
+            "memory": pinecone_set,
+            "go_data_plane": go_url != "http://localhost:8080",
+            "github_oauth": bool(GITHUB_CLIENT_ID),
+        },
+    }
