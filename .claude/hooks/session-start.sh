@@ -14,8 +14,28 @@ echo "[session-start] Installing Playwright Chromium browser…"
 if npx playwright install chromium 2>&1; then
   echo "[session-start] Playwright Chromium installed successfully."
 else
-  echo "[session-start] WARNING: Playwright browser download failed."
-  echo "[session-start] Add 'cdn.playwright.dev' to your environment's network allowlist at code.claude.com."
+  echo "[session-start] Playwright CDN blocked — falling back to Sparticuz/chromium from GitHub releases…"
+  # Full headless Chromium build (used by serverless platforms); GitHub releases
+  # are reachable even when cdn.playwright.dev is not on the network allowlist.
+  SPARTICUZ_DIR="/opt/sparticuz"
+  if [ ! -x "$SPARTICUZ_DIR/chromium" ]; then
+    mkdir -p "$SPARTICUZ_DIR"
+    TAG=$(curl -sI --max-time 10 "https://github.com/Sparticuz/chromium/releases/latest" | grep -i '^location' | grep -o 'v[0-9.]*' | head -1)
+    TAG="${TAG:-v149.0.0}"
+    echo "[session-start] Downloading Sparticuz/chromium $TAG…"
+    if curl -sL --max-time 300 -o "$SPARTICUZ_DIR/pack.tar" \
+        "https://github.com/Sparticuz/chromium/releases/download/$TAG/chromium-$TAG-pack.x64.tar"; then
+      command -v brotli >/dev/null || apt-get install -y brotli >/dev/null 2>&1
+      tar xf "$SPARTICUZ_DIR/pack.tar" -C "$SPARTICUZ_DIR"
+      brotli -d "$SPARTICUZ_DIR/chromium.br" -o "$SPARTICUZ_DIR/chromium" && chmod +x "$SPARTICUZ_DIR/chromium"
+    fi
+  fi
+  if [ -x "$SPARTICUZ_DIR/chromium" ] && "$SPARTICUZ_DIR/chromium" --version >/dev/null 2>&1; then
+    echo "[session-start] Chromium ready at $SPARTICUZ_DIR/chromium"
+    echo "[session-start] Run e2e with: CHROME_EXECUTABLE=$SPARTICUZ_DIR/chromium npx playwright test"
+  else
+    echo "[session-start] WARNING: No browser available. Add 'cdn.playwright.dev' to the network allowlist at code.claude.com."
+  fi
 fi
 
 echo "[session-start] Installing Python dependencies (best-effort)…"

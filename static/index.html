@@ -1507,6 +1507,12 @@ pre::-webkit-scrollbar{height:4px}
 <script>
 const S={ghToken:'',ghUser:null,devCode:null,allRepos:[],repo:null,selFiles:new Map(),localFiles:new Map(),fileSizes:new Map(),msgs:[],prov:'anthropic',hfModel:'Qwen/Qwen2.5-Coder-32B-Instruct',anthropicModel:'claude-sonnet-4-6',agent:'code',streaming:false,memory:null,stats:{tokens:0,messages:0},abortCtrl:null,tools:[],promptHistory:[],histIdx:-1,_draftText:'',_budgetWarned:false,tabs:[],activeTabId:null};
 const $=id=>document.getElementById(id);
+// CDN fallbacks — if vendor scripts fail to load (offline, blocked CDN), degrade to
+// escaped plain text instead of throwing. DOMPurify fallback escapes HTML so the
+// degraded path stays XSS-safe.
+window.marked=window.marked||{parse:t=>String(t),setOptions:()=>{}};
+window.DOMPurify=window.DOMPurify||{sanitize:t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))};
+window.hljs=window.hljs||{highlightElement:()=>{}};
 // Null-safe DOM accessors — missing elements degrade gracefully instead of throwing (see Sentry PYTHON-1D)
 const gv=(id,d='')=>{const e=$(id);return e&&e.value!=null?(e.value||d):d;};
 const gc=id=>{const e=$(id);return!!(e&&e.checked);};

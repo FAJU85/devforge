@@ -16,7 +16,14 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // Sandboxes that can't reach cdn.playwright.dev can point this at any
+        // system Chromium (e.g. a Sparticuz/chromium build from GitHub releases)
+        ...(process.env.CHROME_EXECUTABLE
+          ? { launchOptions: { executablePath: process.env.CHROME_EXECUTABLE, args: ['--no-sandbox', '--disable-gpu'] } }
+          : {}),
+      },
     },
   ],
 

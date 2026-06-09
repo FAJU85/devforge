@@ -23,9 +23,10 @@ test('HF build status widget is present', async ({ page }) => {
 
 test('Feature Flags section is in the sidebar', async ({ page }) => {
   await page.goto('/');
-  // Feature Flags lives in the Tools panel
+  // Feature Flags lives in the Tools panel; scope to the sidebar — the
+  // Control Panel modal contains the same heading text
   await page.locator('#stab-tools').click();
-  await expect(page.getByText('🚩 Feature Flags')).toBeVisible();
+  await expect(page.locator('#spanel-tools').getByText('🚩 Feature Flags')).toBeVisible();
 });
 
 test('provider choice buttons are in the AI Config panel', async ({ page }) => {
