@@ -7032,3 +7032,67 @@ class TestAdminStatus:
         with patch.object(m, "GITHUB_CLIENT_ID", "test-client-id"):
             r = client.get("/api/admin/status")
         assert r.json()["env"]["GITHUB_CLIENT_ID"] is True
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Admin login — auth + brute-force rate limiting
+# ──────────────────────────────────────────────────────────────────────────────
+class TestAdminLogin:
+    def setup_method(self):
+        import main as m
+        m._ADMIN_ATTEMPTS.clear()
+
+    def test_valid_credentials_ok(self):
+        import main as m
+        with patch.object(m, "ADMIN_USERNAME", "alice"), patch.object(m, "ADMIN_PASSWORD", "s3cret"):
+            r = client.post("/api/admin/login", json={"username": "alice", "password": "s3cret"})
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+
+    def test_invalid_credentials_rejected(self):
+        import main as m
+        with patch.object(m, "ADMIN_USERNAME", "alice"), patch.object(m, "ADMIN_PASSWORD", "s3cret"):
+            r = client.post("/api/admin/login", json={"username": "alice", "password": "wrong"})
+        assert r.status_code == 200
+        assert r.json()["ok"] is False
+
+    def test_rate_limited_after_five_failures(self):
+        import main as m
+        with patch.object(m, "ADMIN_USERNAME", "alice"), patch.object(m, "ADMIN_PASSWORD", "s3cret"):
+            for _ in range(5):
+                r = client.post("/api/admin/login", json={"username": "x", "password": "y"})
+                assert r.status_code == 200
+            r = client.post("/api/admin/login", json={"username": "x", "password": "y"})
+        assert r.status_code == 429
+        assert r.json()["ok"] is False
+
+    def test_rate_limit_blocks_even_valid_credentials(self):
+        import main as m
+        with patch.object(m, "ADMIN_USERNAME", "alice"), patch.object(m, "ADMIN_PASSWORD", "s3cret"):
+            for _ in range(5):
+                client.post("/api/admin/login", json={"username": "x", "password": "y"})
+            r = client.post("/api/admin/login", json={"username": "alice", "password": "s3cret"})
+        assert r.status_code == 429
+
+    def test_successful_login_resets_attempts(self):
+        import main as m
+        with patch.object(m, "ADMIN_USERNAME", "alice"), patch.object(m, "ADMIN_PASSWORD", "s3cret"):
+            for _ in range(3):
+                client.post("/api/admin/login", json={"username": "x", "password": "y"})
+            r = client.post("/api/admin/login", json={"username": "alice", "password": "s3cret"})
+            assert r.json()["ok"] is True
+            # window cleared — failures can start over without instant 429
+            r = client.post("/api/admin/login", json={"username": "x", "password": "y"})
+            assert r.status_code == 200
+
+    def test_old_attempts_expire_from_window(self):
+        import main as m
+        with patch.object(m, "ADMIN_USERNAME", "alice"), patch.object(m, "ADMIN_PASSWORD", "s3cret"):
+            for _ in range(5):
+                client.post("/api/admin/login", json={"username": "x", "password": "y"})
+            # age out the recorded attempts
+            for ip in list(m._ADMIN_ATTEMPTS):
+                m._ADMIN_ATTEMPTS[ip] = [t - (m._ADMIN_WINDOW_SECS + 1) for t in m._ADMIN_ATTEMPTS[ip]]
+            r = client.post("/api/admin/login", json={"username": "alice", "password": "s3cret"})
+        assert r.status_code == 200
+        assert r.json()["ok"] is True

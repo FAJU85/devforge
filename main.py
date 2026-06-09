@@ -184,11 +184,36 @@ class AdminLoginBody(BaseModel):
     password: str
 
 
+# Brute-force protection: sliding window of failed attempts per client IP
+_ADMIN_ATTEMPTS: dict = {}
+_ADMIN_MAX_ATTEMPTS = 5
+_ADMIN_WINDOW_SECS = 300
+
+
 @app.post("/api/admin/login")
-async def admin_login(body: AdminLoginBody):
-    """Simple admin auth — credentials configurable via ADMIN_USERNAME / ADMIN_PASSWORD env vars."""
-    if body.username == ADMIN_USERNAME and body.password == ADMIN_PASSWORD:
+async def admin_login(body: AdminLoginBody, request: Request):
+    """Simple admin auth — credentials configurable via ADMIN_USERNAME / ADMIN_PASSWORD env vars.
+
+    Rate-limited to 5 failed attempts per 5 minutes per client IP; credential
+    comparison is constant-time to avoid timing side channels.
+    """
+    import hmac as _hmac
+    ip = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    attempts = [t for t in _ADMIN_ATTEMPTS.get(ip, []) if now - t < _ADMIN_WINDOW_SECS]
+    if len(attempts) >= _ADMIN_MAX_ATTEMPTS:
+        _ADMIN_ATTEMPTS[ip] = attempts
+        return JSONResponse(
+            {"ok": False, "error": "Too many attempts — try again in a few minutes"},
+            status_code=429,
+        )
+    user_ok = _hmac.compare_digest(body.username.encode(), ADMIN_USERNAME.encode())
+    pass_ok = _hmac.compare_digest(body.password.encode(), ADMIN_PASSWORD.encode())
+    if user_ok and pass_ok:
+        _ADMIN_ATTEMPTS.pop(ip, None)
         return {"ok": True}
+    attempts.append(now)
+    _ADMIN_ATTEMPTS[ip] = attempts
     return {"ok": False}
 
 AGENT_PROMPTS = {
