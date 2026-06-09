@@ -28,11 +28,23 @@ test('Feature Flags section is in the sidebar', async ({ page }) => {
   await expect(page.getByText('🚩 Feature Flags')).toBeVisible();
 });
 
-test('Canary Analysis section is in the sidebar', async ({ page }) => {
+test('provider choice buttons are in the AI Config panel', async ({ page }) => {
   await page.goto('/');
-  // Canary Analysis lives in the Tools panel
-  await page.locator('#stab-tools').click();
-  await expect(page.getByText('🐤 Canary Analysis')).toBeVisible();
+  await page.locator('#stab-config').click();
+  await expect(page.locator('#provch-hf')).toBeVisible();
+  await expect(page.locator('#provch-ext')).toBeVisible();
+});
+
+// Regression: switching provider groups crashed saveEnhance() in production
+// (Sentry PYTHON-1D — TypeError reading .value of a missing element)
+test('switching provider group does not throw page errors', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/');
+  await page.locator('#stab-config').click();
+  await page.locator('#provch-ext').click();
+  await page.locator('#provch-hf').click();
+  expect(errors).toEqual([]);
 });
 
 // ── API endpoints ─────────────────────────────────────────────────────────────
@@ -80,4 +92,13 @@ test('POST /api/repo/tree validates required fields', async ({ request }) => {
     data: { owner: 'user' },
   });
   expect(res.status()).toBe(422);
+});
+
+test('POST /api/admin/login rejects bad credentials', async ({ request }) => {
+  const res = await request.post('/api/admin/login', {
+    data: { username: 'nobody', password: 'wrong' },
+  });
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(body.ok).toBe(false);
 });
