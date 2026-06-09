@@ -2,7 +2,7 @@ name: Autonomous Evolution Cycle
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes
+    - cron: "0 */3 * * *"   # every 3 hours — matches the cadence GitHub actually delivers; */30 only queued throttled runs
   workflow_dispatch:
     inputs:
       flag_name:
