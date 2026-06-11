@@ -27,6 +27,12 @@ export { RepoTree } from './components/repo/RepoTree';
 export { FileTreeNode } from './components/repo/FileTreeNode';
 export { SearchBox } from './components/repo/SearchBox';
 
+// Configuration Components
+export { ProviderSelector } from './components/config/ProviderSelector';
+export { ModelSelector } from './components/config/ModelSelector';
+export { ApiKeyInput } from './components/config/ApiKeyInput';
+export { SettingsForm } from './components/config/SettingsForm';
+
 // Stores
 export { useUIStore } from './stores/uiStore';
 
@@ -45,3 +51,7 @@ export type { RepoSelectorOptions, Repository } from './components/repo/RepoSele
 export type { RepoTreeOptions } from './components/repo/RepoTree';
 export type { FileTreeNodeOptions } from './components/repo/FileTreeNode';
 export type { SearchBoxOptions, SearchResult } from './components/repo/SearchBox';
+export type { ProviderSelectorOptions, Provider } from './components/config/ProviderSelector';
+export type { ModelSelectorOptions, Model } from './components/config/ModelSelector';
+export type { ApiKeyInputOptions } from './components/config/ApiKeyInput';
+export type { SettingsFormOptions, SettingValue } from './components/config/SettingsForm';
