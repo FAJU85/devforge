@@ -816,3 +816,24 @@ async def get_config():
             "db_persistence": db_enabled,
         }
     )
+
+
+@router.get("/metrics")
+async def get_metrics():
+    """Get current metrics for monitoring."""
+    from monitoring import metrics
+    return metrics.get_snapshot_dict()
+
+
+@router.get("/health/detailed")
+async def get_detailed_health():
+    """Get detailed health status."""
+    from monitoring import health
+    return health.overall_health()
+
+
+@router.get("/canary/status")
+async def get_canary_status():
+    """Get canary rollout status."""
+    from canary import get_canary_config
+    return get_canary_config()
