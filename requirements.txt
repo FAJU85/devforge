@@ -641,13 +641,3 @@ uvicorn==0.48.0 \
     --hash=sha256:48097851328b87ec36117d3d575234519eb58c2b22d79666e9bbc6c49a761dad \
     --hash=sha256:a5504207195d08c2511bf9125ede5ac4a4b71725d519e758d01dcf0bc2d31c37
     # via -r /tmp/requirements.in
-
-# Database & Migration (Phase 1)
-sqlalchemy>=2.0.0,<3.0.0
-psycopg2-binary>=2.9.0
-alembic>=1.13.0
-cryptography>=41.0.0
-sqlalchemy-utils>=0.41.0
-pytest>=8.0.0
-pytest-asyncio>=0.25.0
-httpx>=0.28.0
