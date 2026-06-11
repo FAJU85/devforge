@@ -268,7 +268,7 @@ async def list_messages(
     msgs = query.offset(offset).limit(limit).all()
 
     return MessagesListResponse(
-        data=[MessageResponse.from_attributes(m) for m in msgs],
+        data=[MessageResponse.model_validate(m) for m in msgs],
         pagination=PaginationResponse(
             limit=limit,
             offset=offset,
@@ -309,7 +309,7 @@ async def create_message(
     db.commit()
     db.refresh(msg)
 
-    return MessageResponse.from_attributes(msg)
+    return MessageResponse.model_validate(msg)
 
 
 @router.delete("/conversations/{conversation_id}/messages/{message_id}", status_code=204)
@@ -372,7 +372,7 @@ async def list_repositories(
     repos = query.offset(offset).limit(limit).all()
 
     return RepositoriesListResponse(
-        data=[RepositoryResponse.from_attributes(r) for r in repos],
+        data=[RepositoryResponse.model_validate(r) for r in repos],
         pagination=PaginationResponse(
             limit=limit,
             offset=offset,
@@ -408,7 +408,7 @@ async def create_repository(
     db.commit()
     db.refresh(repo)
 
-    return RepositoryResponse.from_attributes(repo)
+    return RepositoryResponse.model_validate(repo)
 
 
 @router.put("/repositories/{repo_id}", response_model=RepositoryResponse)
@@ -441,7 +441,7 @@ async def update_repository(
     db.commit()
     db.refresh(repo)
 
-    return RepositoryResponse.from_attributes(repo)
+    return RepositoryResponse.model_validate(repo)
 
 
 @router.delete("/repositories/{repo_id}", status_code=204)
@@ -497,7 +497,7 @@ async def list_snippets(
     snippets = query.offset(offset).limit(limit).all()
 
     return SnippetsListResponse(
-        data=[SnippetResponse.from_attributes(s) for s in snippets],
+        data=[SnippetResponse.model_validate(s) for s in snippets],
         pagination=PaginationResponse(
             limit=limit,
             offset=offset,
@@ -524,7 +524,7 @@ async def create_snippet(
     db.commit()
     db.refresh(snippet)
 
-    return SnippetResponse.from_attributes(snippet)
+    return SnippetResponse.model_validate(snippet)
 
 
 @router.put("/snippets/{snippet_id}", response_model=SnippetResponse)
@@ -559,7 +559,7 @@ async def update_snippet(
     db.commit()
     db.refresh(snippet)
 
-    return SnippetResponse.from_attributes(snippet)
+    return SnippetResponse.model_validate(snippet)
 
 
 @router.delete("/snippets/{snippet_id}", status_code=204)
@@ -603,7 +603,7 @@ async def list_presets(
     presets = query.offset(offset).limit(limit).all()
 
     return PresetsListResponse(
-        data=[PresetResponse.from_attributes(p) for p in presets],
+        data=[PresetResponse.model_validate(p) for p in presets],
         pagination=PaginationResponse(
             limit=limit,
             offset=offset,
@@ -641,7 +641,7 @@ async def create_preset(
     db.commit()
     db.refresh(preset)
 
-    return PresetResponse.from_attributes(preset)
+    return PresetResponse.model_validate(preset)
 
 
 @router.put("/presets/{preset_id}", response_model=PresetResponse)
@@ -682,7 +682,7 @@ async def update_preset(
     db.commit()
     db.refresh(preset)
 
-    return PresetResponse.from_attributes(preset)
+    return PresetResponse.model_validate(preset)
 
 
 @router.delete("/presets/{preset_id}", status_code=204)
@@ -728,7 +728,7 @@ async def get_secret(
     if not secret:
         raise HTTPException(status_code=404, detail="Secret not found")
 
-    return SecretResponse.from_attributes(secret)
+    return SecretResponse.model_validate(secret)
 
 
 @router.post("/secrets", response_model=SecretResponse, status_code=201)
@@ -760,7 +760,7 @@ async def create_or_update_secret(
     db.refresh(secret)
 
     status_code = 200 if secret.created_at < datetime.utcnow() - timedelta(seconds=1) else 201
-    return SecretResponse.from_attributes(secret)
+    return SecretResponse.model_validate(secret)
 
 
 @router.delete("/secrets/{secret_type}", status_code=204)
