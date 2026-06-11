@@ -83,9 +83,21 @@ except Exception:
     def _pinecone_query(q: str, top_k: int = 3) -> str: return ""  # noqa: E301
     def _pinecone_upsert(text: str, metadata=None) -> bool: return False  # noqa: E301
 
+# Optional: Database v2 API (PostgreSQL-backed endpoints)
+try:
+    from api_v2 import router as v2_router
+    _DB_API_AVAILABLE = True
+except Exception as e:
+    print(f"[WARN] Database API v2 unavailable: {e}")
+    _DB_API_AVAILABLE = False
+
 app = FastAPI(title="DevForge")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Include v2 API router (database-backed endpoints)
+if _DB_API_AVAILABLE:
+    app.include_router(v2_router)
 
 
 @app.middleware("http")
