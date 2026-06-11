@@ -10,6 +10,20 @@ jobs:
   test-python:
     name: Python tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: devforge_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +50,7 @@ jobs:
           GITHUB_CLIENT_SECRET: ""
           HF_TOKEN: ""
           SENTRY_DSN: ""
+          DATABASE_URL: "postgresql://test_user:test_password@localhost:5432/devforge_test"
         run: |
           pytest tests/ -v --tb=short \
             --cov=autonomous --cov=main \
