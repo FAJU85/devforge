@@ -131,6 +131,23 @@ async def _security_headers(request, call_next):
     return response
 
 
+@app.middleware("http")
+async def _feature_flag_middleware(request, call_next):
+    """Add feature flag status to response headers."""
+    from feature_flags import is_db_sync_enabled
+
+    response = await call_next(request)
+
+    # Extract user ID from request (GitHub login or IP)
+    user_id = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or "anonymous"
+
+    # Check if DB sync is enabled for this user/request
+    db_enabled = is_db_sync_enabled(user_id)
+    response.headers["X-DB-Enabled"] = "true" if db_enabled else "false"
+
+    return response
+
+
 def _emit_posthog_metrics(user_id: str, flag_buckets: dict, path: str, status_code: int, latency_ms: float) -> None:
     """Best-effort PostHog capture for each active flag bucket on API paths."""
     if not (flag_buckets and _posthog_sdk and path.startswith("/api/")):
