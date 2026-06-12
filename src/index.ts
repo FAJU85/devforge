@@ -52,13 +52,56 @@ export { ThemeToggle } from './components/integration/ThemeToggle';
 
 // Stores
 export { useUIStore } from './stores/uiStore';
+export { useChatStore } from './stores/chatStore';
+export { useRepoStore } from './stores/repoStore';
+export { useConfigStore } from './stores/configStore';
+export { useContextStore } from './stores/contextStore';
+export { useMemoryStore } from './stores/memoryStore';
+export { useStatsStore } from './stores/statsStore';
+
+// API Clients
+export { ApiClient } from './api/client';
+export { GitHubClient } from './api/github';
+export { RepositoryClient } from './api/repo';
+export { HuggingFaceClient } from './api/hf';
+export { ConfigClient } from './api/config';
+export { OptimizedApiClient } from './api/optimizedClient';
+export { WebSocketClient, getWebSocketClient } from './api/websocketClient';
+
+// Services
+export { ChatService, RepositoryService, ConfigService, ContextService, ServiceContainer } from './services';
+
+// Hooks
+export { useChat, useRepository, useConfig, useContextValue, useRealtimeUpdates, useOptimizedApi } from './hooks';
+
+// Utilities
+export { RequestCache, RequestDeduplicator, RequestBatcher, createCacheKey } from './utils';
 
 // Types
+export type { ApiResponse, ApiConfig } from './api/client';
+export type { GitHubUser, GitHubRepository, GitHubCommit, GitHubPullRequest, GitHubIssue } from './api/github';
+export type { FileInfo, DirectoryTree, SearchResult, RepositoryInfo, DiffResult } from './api/repo';
+export type { HFModel, HFDataset, HFSpace, HFModelInfo, HFSearchResult } from './api/hf';
+export type { AppConfig, UserPreferences, APIKey, Model, Provider, FeatureFlag } from './api/config';
+export type { OptimizedClientConfig } from './api/optimizedClient';
+export type { WebSocketConfig, WebSocketMessage, WebSocketEventType } from './api/websocketClient';
+export type { ChatMessage, ChatResponse } from './services/chatService';
+export type { ServiceConfig } from './services/serviceContainer';
+export type { UseChatReturn } from './hooks/useChat';
+export type { UseRepositoryReturn } from './hooks/useRepository';
+export type { UseConfigReturn } from './hooks/useConfig';
+export type { UseContextValue } from './hooks/useContext';
 export type { ButtonProps } from './types/ui';
 export type { InputProps } from './types/ui';
 export type { ToastMessage } from './types/ui';
 export type { DialogOptions } from './types/ui';
 export type { UIState } from './stores/uiStore';
+export type { ChatState, Conversation, ChatMessage } from './stores/chatStore';
+export type { RepoState, Repository, FileNode } from './stores/repoStore';
+export type { ConfigState, ProviderConfig, ModelConfig } from './stores/configStore';
+export type { ContextState, ContextFile, ContextReference } from './stores/contextStore';
+export type { MemoryState, MemoryItem, ConversationMemory } from './stores/memoryStore';
+export type { StatsState, UsageMetric, ModelStats } from './stores/statsStore';
 export type { CommandPaletteOptions } from './components/layout/CommandPalette';
 export type { ChatWindowOptions } from './components/chat/ChatWindow';
 export type { ChatMessageOptions } from './components/chat/ChatMessage';
