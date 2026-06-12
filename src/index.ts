@@ -44,6 +44,12 @@ export { WritePanel } from './components/modals/WritePanel';
 export { BatchPanel } from './components/modals/BatchPanel';
 export { DepsAudit } from './components/modals/DepsAudit';
 
+// Integration Components
+export { AppLayout } from './components/integration/AppLayout';
+export { StatusBar } from './components/integration/StatusBar';
+export { NotificationHub } from './components/integration/NotificationHub';
+export { ThemeToggle } from './components/integration/ThemeToggle';
+
 // Stores
 export { useUIStore } from './stores/uiStore';
 
@@ -73,3 +79,7 @@ export type { DiffViewerOptions } from './components/modals/DiffViewer';
 export type { WritePanelOptions } from './components/modals/WritePanel';
 export type { BatchPanelOptions, BatchOperation } from './components/modals/BatchPanel';
 export type { DepsAuditOptions, Vulnerability } from './components/modals/DepsAudit';
+export type { AppLayoutOptions } from './components/integration/AppLayout';
+export type { StatusBarOptions, StatusItem } from './components/integration/StatusBar';
+export type { NotificationHubOptions, Notification } from './components/integration/NotificationHub';
+export type { ThemeToggleOptions, Theme } from './components/integration/ThemeToggle';
