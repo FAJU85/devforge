@@ -52,6 +52,12 @@ export { ThemeToggle } from './components/integration/ThemeToggle';
 
 // Stores
 export { useUIStore } from './stores/uiStore';
+export { useChatStore } from './stores/chatStore';
+export { useRepoStore } from './stores/repoStore';
+export { useConfigStore } from './stores/configStore';
+export { useContextStore } from './stores/contextStore';
+export { useMemoryStore } from './stores/memoryStore';
+export { useStatsStore } from './stores/statsStore';
 
 // Types
 export type { ButtonProps } from './types/ui';
@@ -59,6 +65,12 @@ export type { InputProps } from './types/ui';
 export type { ToastMessage } from './types/ui';
 export type { DialogOptions } from './types/ui';
 export type { UIState } from './stores/uiStore';
+export type { ChatState, Conversation, ChatMessage } from './stores/chatStore';
+export type { RepoState, Repository, FileNode } from './stores/repoStore';
+export type { ConfigState, ProviderConfig, ModelConfig } from './stores/configStore';
+export type { ContextState, ContextFile, ContextReference } from './stores/contextStore';
+export type { MemoryState, MemoryItem, ConversationMemory } from './stores/memoryStore';
+export type { StatsState, UsageMetric, ModelStats } from './stores/statsStore';
 export type { CommandPaletteOptions } from './components/layout/CommandPalette';
 export type { ChatWindowOptions } from './components/chat/ChatWindow';
 export type { ChatMessageOptions } from './components/chat/ChatMessage';
