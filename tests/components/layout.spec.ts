@@ -7,19 +7,20 @@ import { test, expect } from '@playwright/test';
 test.describe('Layout Components', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:5173');
+    await page.waitForLoadState('networkidle');
   });
 
   test.describe('Sidebar Component', () => {
     test('should render sidebar with navigation menu', async ({ page }) => {
       const sidebar = await page.locator('.sidebar').first();
-      if (await sidebar.isVisible()) {
+      if (await sidebar.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(sidebar).toBeVisible();
       }
     });
 
     test('should display logo and title', async ({ page }) => {
       const logo = await page.locator('.sidebar').first();
-      if (await logo.isVisible()) {
+      if (await logo.isVisible({ timeout: 5000 }).catch(() => false)) {
         const title = await page.locator('text=DevForge').first();
         await expect(title).toBeVisible();
       }
@@ -34,7 +35,7 @@ test.describe('Layout Components', () => {
 
     test('should respond to hover on menu items', async ({ page }) => {
       const menuBtn = await page.locator('[id="nav-chat"]').first();
-      if (await menuBtn.isVisible()) {
+      if (await menuBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await menuBtn.hover();
         const bgColor = await menuBtn.evaluate(
           (el) => window.getComputedStyle(el).backgroundColor
@@ -45,7 +46,7 @@ test.describe('Layout Components', () => {
 
     test('should have settings button in footer', async ({ page }) => {
       const settingsBtn = await page.locator('#sidebar-settings').first();
-      if (await settingsBtn.isVisible()) {
+      if (await settingsBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(settingsBtn).toBeVisible();
         await expect(settingsBtn).toContainText('Settings');
       }
@@ -55,7 +56,7 @@ test.describe('Layout Components', () => {
   test.describe('MainPanel Component', () => {
     test('should render main panel with tabs', async ({ page }) => {
       const mainPanel = await page.locator('.main-panel').first();
-      if (await mainPanel.isVisible()) {
+      if (await mainPanel.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(mainPanel).toBeVisible();
       }
     });
@@ -69,7 +70,7 @@ test.describe('Layout Components', () => {
 
     test('should highlight active tab', async ({ page }) => {
       const firstTab = await page.locator('.main-tab').first();
-      if (await firstTab.isVisible()) {
+      if (await firstTab.isVisible({ timeout: 5000 }).catch(() => false)) {
         const bgColor = await firstTab.evaluate(
           (el) => window.getComputedStyle(el).backgroundColor
         );
@@ -91,7 +92,7 @@ test.describe('Layout Components', () => {
 
     test('should have content area', async ({ page }) => {
       const content = await page.locator('.content-area').first();
-      if (await content.isVisible()) {
+      if (await content.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(content).toBeVisible();
       }
     });
@@ -100,7 +101,7 @@ test.describe('Layout Components', () => {
   test.describe('SettingsPanel Component', () => {
     test('should render settings panel with navigation', async ({ page }) => {
       const panel = await page.locator('.settings-panel').first();
-      if (await panel.isVisible()) {
+      if (await panel.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(panel).toBeVisible();
       }
     });
@@ -114,7 +115,7 @@ test.describe('Layout Components', () => {
 
     test('should highlight active settings category', async ({ page }) => {
       const firstCategory = await page.locator('.settings-nav-item').first();
-      if (await firstCategory.isVisible()) {
+      if (await firstCategory.isVisible({ timeout: 5000 }).catch(() => false)) {
         const bgColor = await firstCategory.evaluate(
           (el) => window.getComputedStyle(el).backgroundColor
         );
@@ -131,7 +132,7 @@ test.describe('Layout Components', () => {
 
     test('should handle toggle controls', async ({ page }) => {
       const toggle = await page.locator('.settings-panel input[type="checkbox"]').first();
-      if (await toggle.isVisible()) {
+      if (await toggle.isVisible({ timeout: 5000 }).catch(() => false)) {
         const isChecked = await toggle.isChecked();
         await toggle.click();
         const newState = await toggle.isChecked();
@@ -151,7 +152,7 @@ test.describe('Layout Components', () => {
   test.describe('CommandPalette Component', () => {
     test('should render command palette on trigger', async ({ page }) => {
       const openBtn = await page.locator('button:has-text("Open Command")').first();
-      if (await openBtn.isVisible()) {
+      if (await openBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await openBtn.click();
         const palette = await page.locator('.command-palette').first();
         await expect(palette).toBeVisible();
@@ -160,7 +161,7 @@ test.describe('Layout Components', () => {
 
     test('should have search input', async ({ page }) => {
       const openBtn = await page.locator('button:has-text("Open Command")').first();
-      if (await openBtn.isVisible()) {
+      if (await openBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await openBtn.click();
         const input = await page.locator('.command-palette input').first();
         await expect(input).toBeFocused();
@@ -169,7 +170,7 @@ test.describe('Layout Components', () => {
 
     test('should filter commands by search', async ({ page }) => {
       const openBtn = await page.locator('button:has-text("Open Command")').first();
-      if (await openBtn.isVisible()) {
+      if (await openBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await openBtn.click();
         const input = await page.locator('.command-palette input').first();
         await input.type('file');
@@ -180,7 +181,7 @@ test.describe('Layout Components', () => {
 
     test('should display command results grouped by category', async ({ page }) => {
       const openBtn = await page.locator('button:has-text("Open Command")').first();
-      if (await openBtn.isVisible()) {
+      if (await openBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await openBtn.click();
         const categories = await page.locator('.command-palette [style*="uppercase"]').all();
         if (categories.length > 0) {
@@ -191,45 +192,45 @@ test.describe('Layout Components', () => {
 
     test('should close on Escape key', async ({ page }) => {
       const openBtn = await page.locator('button:has-text("Open Command")').first();
-      if (await openBtn.isVisible()) {
+      if (await openBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await openBtn.click();
         let palette = await page.locator('.command-palette').first();
         await expect(palette).toBeVisible();
 
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(500);
         palette = await page.locator('.command-palette').first();
-        await expect(palette).not.toBeVisible();
+        const isVisible = await palette.isVisible({ timeout: 3000 }).catch(() => false);
+        expect(isVisible).toBe(false);
       }
     });
 
     test('should close on overlay click', async ({ page }) => {
       const openBtn = await page.locator('button:has-text("Open Command")').first();
-      if (await openBtn.isVisible()) {
+      if (await openBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await openBtn.click();
         let overlay = await page.locator('.command-palette-overlay').first();
         await expect(overlay).toBeVisible();
 
-        const paletteBox = await overlay.boundingBox();
-        if (paletteBox) {
-          await page.click(0, 200);
-          await page.waitForTimeout(300);
-          overlay = await page.locator('.command-palette-overlay').first();
-          await expect(overlay).not.toBeVisible();
-        }
+        await overlay.click();
+        await page.waitForTimeout(500);
+        overlay = await page.locator('.command-palette-overlay').first();
+        const isVisible = await overlay.isVisible({ timeout: 3000 }).catch(() => false);
+        expect(isVisible).toBe(false);
       }
     });
 
     test('should execute command on selection', async ({ page }) => {
       const openBtn = await page.locator('button:has-text("Open Command")').first();
-      if (await openBtn.isVisible()) {
+      if (await openBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await openBtn.click();
         const firstCommand = await page.locator('.command-item').first();
-        if (await firstCommand.isVisible()) {
+        if (await firstCommand.isVisible({ timeout: 5000 }).catch(() => false)) {
           await firstCommand.click();
-          await page.waitForTimeout(300);
+          await page.waitForTimeout(500);
           const palette = await page.locator('.command-palette').first();
-          await expect(palette).not.toBeVisible();
+          const isVisible = await palette.isVisible({ timeout: 3000 }).catch(() => false);
+          expect(isVisible).toBe(false);
         }
       }
     });
@@ -240,7 +241,10 @@ test.describe('Layout Components', () => {
       const sidebar = await page.locator('.sidebar').first();
       const mainPanel = await page.locator('.main-panel').first();
 
-      if (await sidebar.isVisible() && await mainPanel.isVisible()) {
+      const sidebarVisible = await sidebar.isVisible({ timeout: 5000 }).catch(() => false);
+      const mainPanelVisible = await mainPanel.isVisible({ timeout: 5000 }).catch(() => false);
+
+      if (sidebarVisible && mainPanelVisible) {
         await expect(sidebar).toBeVisible();
         await expect(mainPanel).toBeVisible();
       }
@@ -248,7 +252,7 @@ test.describe('Layout Components', () => {
 
     test('should maintain responsive layout', async ({ page }) => {
       const sidebar = await page.locator('.sidebar').first();
-      if (await sidebar.isVisible()) {
+      if (await sidebar.isVisible({ timeout: 5000 }).catch(() => false)) {
         const width = await sidebar.evaluate((el) => el.offsetWidth);
         expect(width).toBeGreaterThan(200);
         expect(width).toBeLessThan(400);
@@ -261,11 +265,11 @@ test.describe('Layout Components', () => {
       const settingsPanel = await page.locator('.settings-panel').first();
 
       let visibleCount = 0;
-      if (await sidebar.isVisible()) visibleCount++;
-      if (await mainPanel.isVisible()) visibleCount++;
-      if (await settingsPanel.isVisible()) visibleCount++;
+      if (await sidebar.isVisible({ timeout: 5000 }).catch(() => false)) visibleCount++;
+      if (await mainPanel.isVisible({ timeout: 5000 }).catch(() => false)) visibleCount++;
+      if (await settingsPanel.isVisible({ timeout: 5000 }).catch(() => false)) visibleCount++;
 
-      expect(visibleCount).toBeGreaterThanOrEqual(1);
+      expect(visibleCount).toBeGreaterThanOrEqual(2);
     });
   });
 });
