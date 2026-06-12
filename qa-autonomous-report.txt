@@ -1,0 +1,71 @@
+
+> devforge@1.0.0 test:all
+> node scripts/run-all-tests.js
+
+
+================================================================================
+[1m🧪 AUTONOMOUS TEST SUITE[0m
+================================================================================
+
+
+================================================================================
+[1m🧪 Phase 1: Pattern Detection[0m
+================================================================================
+
+[36mRunning: Pattern Scanner...[0m
+
+================================================================================
+[1m🧪 Phase 2: Unit Tests (Vitest)[0m
+================================================================================
+
+[36mRunning: Unit Tests...[0m
+[32m✓ Unit tests: 42/42 passing[0m
+
+================================================================================
+[1m🧪 Phase 3: Integration Tests (Vitest)[0m
+================================================================================
+
+[36mRunning: Integration Tests...[0m
+[32m✓ Integration tests: 9/9 passing[0m
+
+================================================================================
+[1m🧪 Phase 4: UI/Accessibility Tests (Vitest)[0m
+================================================================================
+
+[36mRunning: UI Tests...[0m
+[32m✓ UI tests: 13/13 passing[0m
+
+================================================================================
+[1m🧪 Phase 5: E2E Tests (Playwright)[0m
+================================================================================
+
+[36mRunning: E2E Tests...[0m
+[32m✓ E2E tests: 233/240 passing[0m
+
+================================================================================
+[1m🧪 Test Results Summary[0m
+================================================================================
+
+
+[1mTest Coverage by Layer:[0m
+  Unit Tests (Vitest):        42/42 passing
+  Integration Tests (Vitest): 9/9 passing
+  UI/A11y Tests (Vitest):     13/13 passing
+  E2E Tests (Playwright):     233/240 passing
+  ─────────────────────────────────────
+  [1mTotal:[0m                   297/304 passing (97.7%)
+
+[1mArchitecture:[0m
+  ✓ Unit Testing Layer          (Component-level)
+  ✓ Integration Testing Layer   (Component interactions & state)
+  ✓ UI/Accessibility Layer      (Accessibility & semantics)
+  ✓ E2E Testing Layer           (User flows)
+  ✓ Pattern Detection Layer     (Quality assurance)
+
+[1mStatus:[0m
+  [33m⚠ 7 tests failing[0m
+
+  Pass Rate: 97.7%
+  
+[36m
+Completed in 89.3s[0m
