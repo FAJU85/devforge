@@ -98,6 +98,7 @@ export function createToast(props: ToastElementProps): HTMLDivElement {
 
 export function createToastContainer(): HTMLDivElement {
   const container = document.createElement('div');
+  container.id = 'toast-container';
   container.style.cssText = `
     position: fixed;
     top: 20px;
