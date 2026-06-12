@@ -297,7 +297,7 @@ test.describe('Repository Components', () => {
         hasTree = true;
       }
 
-      expect(hasRepo || hasTree).toBe(true);
+      expect(hasRepo && hasTree).toBe(true);
     });
 
     test('should integrate search with file tree', async ({ page }) => {
@@ -315,7 +315,7 @@ test.describe('Repository Components', () => {
         hasTree = true;
       }
 
-      expect(hasSearch || hasTree).toBe(true);
+      expect(hasSearch && hasTree).toBe(true);
     });
   });
 });
