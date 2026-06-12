@@ -11,6 +11,11 @@
     "build": "vite build",
     "test:e2e": "playwright test",
     "test:e2e:debug": "playwright test --debug",
+    "test:qa": "./qa/run_qa_suite.sh all",
+    "test:qa:smoke": "./qa/run_qa_suite.sh smoke",
+    "test:qa:selenium": "./qa/run_qa_suite.sh selenium",
+    "test:selenium": "cd qa && pytest selenium/ -v",
+    "test:allure": "allure serve allure-results",
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'"
   },
   "repository": {
