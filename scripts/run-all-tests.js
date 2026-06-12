@@ -39,7 +39,7 @@ function runCommand(command, label) {
     const output = execSync(command, { encoding: 'utf8' });
     return { success: true, output };
   } catch (error) {
-    return { success: false, output: error.message };
+    return { success: false, output: error.stdout || error.message };
   }
 }
 
