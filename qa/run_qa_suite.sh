@@ -57,14 +57,17 @@ case $TEST_TYPE in
     all)
         echo -e "${YELLOW}   Running all Selenium tests...${NC}"
         python -m pytest qa/ -v --alluredir="$ALLURE_RESULTS" 2>&1 | tee qa/qa-selenium-results.log
+        PYTEST_EXIT="${PIPESTATUS[0]}"
         ;;
     smoke)
         echo -e "${YELLOW}   Running smoke tests only...${NC}"
         python -m pytest qa/ -v -m smoke --alluredir="$ALLURE_RESULTS" 2>&1 | tee qa/qa-selenium-results.log
+        PYTEST_EXIT="${PIPESTATUS[0]}"
         ;;
     selenium)
         echo -e "${YELLOW}   Running Selenium tests only...${NC}"
         python -m pytest qa/selenium/ -v --alluredir="$ALLURE_RESULTS" 2>&1 | tee qa/qa-selenium-results.log
+        PYTEST_EXIT="${PIPESTATUS[0]}"
         ;;
     *)
         echo -e "${RED}Unknown test type: $TEST_TYPE${NC}"
@@ -73,7 +76,7 @@ case $TEST_TYPE in
         ;;
 esac
 
-if [ $? -eq 0 ]; then
+if [ "${PYTEST_EXIT}" -eq 0 ]; then
     echo -e "${GREEN}✓ Selenium Tests Passed${NC}\n"
 else
     echo -e "${YELLOW}⚠ Selenium Tests Completed (see qa-selenium-results.log)${NC}\n"
