@@ -18,3 +18,9 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# QA Suite
+allure-results/
+allure-report/
+*-results.log
+qa/**/*-results.log
