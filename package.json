@@ -11,7 +11,10 @@
     "build": "vite build",
     "test:e2e": "playwright test",
     "test:e2e:debug": "playwright test --debug",
-    "format": "prettier --write 'src/**/*.{ts,tsx,css}'"
+    "format": "prettier --write 'src/**/*.{ts,tsx,css}'",
+    "qa:scan": "node qa/pattern_detector.js scan ./src",
+    "qa:patterns": "node qa/pattern_detector.js list-patterns",
+    "qa:generate-test": "node qa/pattern_detector.js generate-test"
   },
   "repository": {
     "type": "git",
