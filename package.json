@@ -19,7 +19,7 @@
     "qa:scan": "node qa/pattern_detector.js scan ./src",
     "qa:patterns": "node qa/pattern_detector.js list-patterns",
     "qa:generate-test": "node qa/pattern_detector.js generate-test",
-    "test:all": "npm run test:unit:run && npm run test:e2e"
+    "test:all": "node scripts/run-all-tests.js"
   },
   "repository": {
     "type": "git",
