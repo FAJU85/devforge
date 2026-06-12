@@ -65,12 +65,17 @@ export { GitHubClient } from './api/github';
 export { RepositoryClient } from './api/repo';
 export { HuggingFaceClient } from './api/hf';
 export { ConfigClient } from './api/config';
+export { OptimizedApiClient } from './api/optimizedClient';
+export { WebSocketClient, getWebSocketClient } from './api/websocketClient';
 
 // Services
 export { ChatService, RepositoryService, ConfigService, ContextService, ServiceContainer } from './services';
 
 // Hooks
-export { useChat, useRepository, useConfig, useContextValue } from './hooks';
+export { useChat, useRepository, useConfig, useContextValue, useRealtimeUpdates, useOptimizedApi } from './hooks';
+
+// Utilities
+export { RequestCache, RequestDeduplicator, RequestBatcher, createCacheKey } from './utils';
 
 // Types
 export type { ApiResponse, ApiConfig } from './api/client';
@@ -78,6 +83,8 @@ export type { GitHubUser, GitHubRepository, GitHubCommit, GitHubPullRequest, Git
 export type { FileInfo, DirectoryTree, SearchResult, RepositoryInfo, DiffResult } from './api/repo';
 export type { HFModel, HFDataset, HFSpace, HFModelInfo, HFSearchResult } from './api/hf';
 export type { AppConfig, UserPreferences, APIKey, Model, Provider, FeatureFlag } from './api/config';
+export type { OptimizedClientConfig } from './api/optimizedClient';
+export type { WebSocketConfig, WebSocketMessage, WebSocketEventType } from './api/websocketClient';
 export type { ChatMessage, ChatResponse } from './services/chatService';
 export type { ServiceConfig } from './services/serviceContainer';
 export type { UseChatReturn } from './hooks/useChat';

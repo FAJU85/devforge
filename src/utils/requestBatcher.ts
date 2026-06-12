@@ -34,9 +34,9 @@ export class RequestBatcher {
   }
 
   /**
-   * Queue a request for batching
+   * Add a request to the batch queue
    */
-  async queue<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  async add<T>(key: string, fn: () => Promise<T>): Promise<T> {
     if (!this.config.enabled) {
       return fn();
     }
