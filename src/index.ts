@@ -33,6 +33,23 @@ export { ModelSelector } from './components/config/ModelSelector';
 export { ApiKeyInput } from './components/config/ApiKeyInput';
 export { SettingsForm } from './components/config/SettingsForm';
 
+// Context Components
+export { ContextDisplay } from './components/context/ContextDisplay';
+export { FileList } from './components/context/FileList';
+export { ContextInfo } from './components/context/ContextInfo';
+
+// Modal Components
+export { DiffViewer } from './components/modals/DiffViewer';
+export { WritePanel } from './components/modals/WritePanel';
+export { BatchPanel } from './components/modals/BatchPanel';
+export { DepsAudit } from './components/modals/DepsAudit';
+
+// Integration Components
+export { AppLayout } from './components/integration/AppLayout';
+export { StatusBar } from './components/integration/StatusBar';
+export { NotificationHub } from './components/integration/NotificationHub';
+export { ThemeToggle } from './components/integration/ThemeToggle';
+
 // Stores
 export { useUIStore } from './stores/uiStore';
 
@@ -55,3 +72,14 @@ export type { ProviderSelectorOptions, Provider } from './components/config/Prov
 export type { ModelSelectorOptions, Model } from './components/config/ModelSelector';
 export type { ApiKeyInputOptions } from './components/config/ApiKeyInput';
 export type { SettingsFormOptions, SettingValue } from './components/config/SettingsForm';
+export type { ContextDisplayOptions, ContextItem } from './components/context/ContextDisplay';
+export type { FileListOptions, FileItem } from './components/context/FileList';
+export type { ContextInfoOptions, ContextStats } from './components/context/ContextInfo';
+export type { DiffViewerOptions } from './components/modals/DiffViewer';
+export type { WritePanelOptions } from './components/modals/WritePanel';
+export type { BatchPanelOptions, BatchOperation } from './components/modals/BatchPanel';
+export type { DepsAuditOptions, Vulnerability } from './components/modals/DepsAudit';
+export type { AppLayoutOptions } from './components/integration/AppLayout';
+export type { StatusBarOptions, StatusItem } from './components/integration/StatusBar';
+export type { NotificationHubOptions, Notification } from './components/integration/NotificationHub';
+export type { ThemeToggleOptions, Theme } from './components/integration/ThemeToggle';
