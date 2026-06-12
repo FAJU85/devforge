@@ -176,6 +176,18 @@
         </div>
       </section>
 
+      <!-- NotificationHub Components -->
+      <section class="component-section">
+        <h2>Notification Hub</h2>
+        <div class="controls">
+          <button id="btn-success-notif" data-variant="primary">Show Success</button>
+          <button id="btn-error-notif" data-variant="primary">Show Error</button>
+          <button id="btn-info-notif" data-variant="primary">Show Info</button>
+          <button id="btn-warning-notif" data-variant="primary">Show Warning</button>
+        </div>
+        <div id="notification-hub-container"></div>
+      </section>
+
       <!-- Toast Components -->
       <section class="component-section">
         <h2>Toast Notifications</h2>
@@ -215,7 +227,7 @@
     </div>
 
     <script type="module">
-      import { Button, Input, Toast, Dialog, Sidebar, MainPanel, SettingsPanel, CommandPalette, useUIStore } from './index.ts';
+      import { Button, Input, Toast, Dialog, Sidebar, MainPanel, SettingsPanel, CommandPalette, NotificationHub, useUIStore } from './index.ts';
 
       // Window API for test assertions
       window.lastClickedButton = null;
@@ -229,6 +241,13 @@
         toastContainer.parentNode.replaceChild(toastContainerElement, toastContainer);
         toastContainerElement.id = 'toast-container';
         toastContainerElement.setAttribute('data-testid', 'toast-container');
+      }
+
+      // Initialize notification hub
+      const notificationHubContainer = document.getElementById('notification-hub-container');
+      const hub = NotificationHub.create();
+      if (notificationHubContainer) {
+        notificationHubContainer.appendChild(hub);
       }
 
       // Style applied inputs
@@ -368,6 +387,23 @@
           },
         });
         toastContainerElement.appendChild(toast);
+      });
+
+      // NotificationHub button handlers
+      document.getElementById('btn-success-notif')?.addEventListener('click', () => {
+        hub.success('Success', 'Operation completed successfully!');
+      });
+
+      document.getElementById('btn-error-notif')?.addEventListener('click', () => {
+        hub.error('Error', 'An error occurred. Please try again.');
+      });
+
+      document.getElementById('btn-info-notif')?.addEventListener('click', () => {
+        hub.info('Info', 'Here is some useful information.');
+      });
+
+      document.getElementById('btn-warning-notif')?.addEventListener('click', () => {
+        hub.warning('Warning', 'Warning: This action requires attention.');
       });
 
       // Dialog button handlers
