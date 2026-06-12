@@ -21,6 +21,8 @@ export function createDialog(options: DialogOptions): HTMLDivElement {
   `;
 
   const dialog = document.createElement('div');
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
   dialog.style.cssText = `
     background-color: var(--bg);
     border-radius: 8px;

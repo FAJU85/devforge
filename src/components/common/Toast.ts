@@ -10,6 +10,8 @@ interface ToastElementProps extends ToastMessage {
 
 export function createToast(props: ToastElementProps): HTMLDivElement {
   const toast = document.createElement('div');
+  toast.setAttribute('role', 'status');
+  toast.setAttribute('aria-live', 'polite');
 
   const colors = {
     success: { bg: 'var(--green)', icon: '✓' },
@@ -82,6 +84,14 @@ export function createToast(props: ToastElementProps): HTMLDivElement {
   toast.appendChild(icon);
   toast.appendChild(message);
   toast.appendChild(closeBtn);
+
+  // Auto-dismiss after duration
+  if (props.duration && props.duration > 0) {
+    setTimeout(() => {
+      toast.style.animation = 'slideOut 0.3s ease-in';
+      setTimeout(() => props.onRemove(props.id), 300);
+    }, props.duration);
+  }
 
   return toast;
 }

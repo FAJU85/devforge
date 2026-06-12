@@ -24,10 +24,10 @@ test.describe('Foundation Components', () => {
     });
 
     test('should trigger onClick handler', async ({ page }) => {
-      const button = await page.locator('button:has-text("Test Click")').first();
+      const button = await page.locator('button:has-text("Click me")').first();
       await button.click();
       const result = await page.evaluate(() => (window as any).lastClickedButton);
-      expect(result).toBe('Test Click');
+      expect(result).toBe('Click me');
     });
 
     test('should handle disabled state', async ({ page }) => {
@@ -38,7 +38,7 @@ test.describe('Foundation Components', () => {
     });
 
     test('should apply hover opacity', async ({ page }) => {
-      const button = await page.locator('button:has-text("Hover Test")').first();
+      const button = await page.locator('button:has-text("Secondary")').first();
       if (await button.isVisible()) {
         await button.hover();
         const opacity = await button.evaluate(
@@ -178,7 +178,7 @@ test.describe('Foundation Components', () => {
     });
 
     test('should auto-dismiss toast after duration', async ({ page }) => {
-      const toastBtn = await page.locator('button:has-text("Show Toast")').first();
+      const toastBtn = await page.locator('button:has-text("Show Success Toast")').first();
       if (await toastBtn.isVisible()) {
         await toastBtn.click();
         const toast = await page.locator('[role="status"]').first();
@@ -189,7 +189,7 @@ test.describe('Foundation Components', () => {
     });
 
     test('should dismiss toast on close button click', async ({ page }) => {
-      const toastBtn = await page.locator('button:has-text("Show Toast")').first();
+      const toastBtn = await page.locator('button:has-text("Show Success Toast")').first();
       if (await toastBtn.isVisible()) {
         await toastBtn.click();
         const closeBtn = await page.locator('[role="status"] button').first();
@@ -215,7 +215,7 @@ test.describe('Foundation Components', () => {
 
   test.describe('Dialog Component', () => {
     test('should render confirmation dialog', async ({ page }) => {
-      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm")').first();
+      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm Dialog")').first();
       if (await confirmDialogBtn.isVisible()) {
         await confirmDialogBtn.click();
         const dialog = await page.locator('[role="dialog"]').first();
@@ -224,7 +224,7 @@ test.describe('Foundation Components', () => {
     });
 
     test('should render alert dialog', async ({ page }) => {
-      const alertDialogBtn = await page.locator('button:has-text("Show Alert")').first();
+      const alertDialogBtn = await page.locator('button:has-text("Show Alert Dialog")').first();
       if (await alertDialogBtn.isVisible()) {
         await alertDialogBtn.click();
         const dialog = await page.locator('[role="dialog"]').first();
@@ -233,7 +233,7 @@ test.describe('Foundation Components', () => {
     });
 
     test('should display dialog title and message', async ({ page }) => {
-      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm")').first();
+      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm Dialog")').first();
       if (await confirmDialogBtn.isVisible()) {
         await confirmDialogBtn.click();
         const title = await page.locator('h2').first();
@@ -244,7 +244,7 @@ test.describe('Foundation Components', () => {
     });
 
     test('should have confirm and cancel buttons', async ({ page }) => {
-      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm")').first();
+      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm Dialog")').first();
       if (await confirmDialogBtn.isVisible()) {
         await confirmDialogBtn.click();
         const confirmBtn = await page.locator('button:has-text("Confirm")').first();
@@ -255,11 +255,11 @@ test.describe('Foundation Components', () => {
     });
 
     test('should close dialog on confirm', async ({ page }) => {
-      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm")').first();
+      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm Dialog")').first();
       if (await confirmDialogBtn.isVisible()) {
         await confirmDialogBtn.click();
         const dialog = await page.locator('[role="dialog"]').first();
-        const confirmBtn = await page.locator('button:has-text("Confirm")').first();
+        const confirmBtn = dialog.locator('button:has-text("Confirm")').first();
         await confirmBtn.click();
         await page.waitForTimeout(300);
         await expect(dialog).not.toBeVisible();
@@ -267,7 +267,7 @@ test.describe('Foundation Components', () => {
     });
 
     test('should close dialog on cancel', async ({ page }) => {
-      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm")').first();
+      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm Dialog")').first();
       if (await confirmDialogBtn.isVisible()) {
         await confirmDialogBtn.click();
         const dialog = await page.locator('[role="dialog"]').first();
@@ -279,7 +279,7 @@ test.describe('Foundation Components', () => {
     });
 
     test('should close dialog on overlay click', async ({ page }) => {
-      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm")').first();
+      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm Dialog")').first();
       if (await confirmDialogBtn.isVisible()) {
         await confirmDialogBtn.click();
         const overlay = await page.locator('[role="dialog"]').first();
@@ -298,7 +298,7 @@ test.describe('Foundation Components', () => {
     });
 
     test('alert dialog should have only OK button', async ({ page }) => {
-      const alertDialogBtn = await page.locator('button:has-text("Show Alert")').first();
+      const alertDialogBtn = await page.locator('button:has-text("Show Alert Dialog")').first();
       if (await alertDialogBtn.isVisible()) {
         await alertDialogBtn.click();
         const okBtn = await page.locator('button:has-text("OK")').first();
@@ -309,10 +309,11 @@ test.describe('Foundation Components', () => {
     });
 
     test('should trigger onConfirm callback', async ({ page }) => {
-      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm")').first();
+      const confirmDialogBtn = await page.locator('button:has-text("Show Confirm Dialog")').first();
       if (await confirmDialogBtn.isVisible()) {
         await confirmDialogBtn.click();
-        const confirmBtn = await page.locator('button:has-text("Confirm")').first();
+        const dialog = await page.locator('[role="dialog"]').first();
+        const confirmBtn = dialog.locator('button:has-text("Confirm")').first();
         await confirmBtn.click();
         const confirmed = await page.evaluate(() => (window as any).dialogConfirmed);
         expect(confirmed).toBe(true);
@@ -322,7 +323,7 @@ test.describe('Foundation Components', () => {
 
   test.describe('Integration', () => {
     test('should handle multiple toasts', async ({ page }) => {
-      const toastBtn = await page.locator('button:has-text("Show Toast")').first();
+      const toastBtn = await page.locator('button:has-text("Show Success Toast")').first();
       if (await toastBtn.isVisible()) {
         await toastBtn.click();
         await page.waitForTimeout(100);
@@ -333,8 +334,8 @@ test.describe('Foundation Components', () => {
     });
 
     test('should handle dialog and toast together', async ({ page }) => {
-      const dialogBtn = await page.locator('button:has-text("Show Confirm")').first();
-      const toastBtn = await page.locator('button:has-text("Show Toast")').first();
+      const dialogBtn = await page.locator('button:has-text("Show Confirm Dialog")').first();
+      const toastBtn = await page.locator('button:has-text("Show Success Toast")').first();
       if (await dialogBtn.isVisible() && await toastBtn.isVisible()) {
         await dialogBtn.click();
         await toastBtn.click();
