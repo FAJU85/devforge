@@ -18,7 +18,9 @@ export function createDialog(options: DialogOptions): HTMLDivElement {
     justify-content: center;
     z-index: 9998;
     animation: fadeIn 0.2s ease-out;
+    pointer-events: none;
   `;
+
 
   const dialog = document.createElement('div');
   dialog.setAttribute('role', 'dialog');
@@ -31,6 +33,9 @@ export function createDialog(options: DialogOptions): HTMLDivElement {
     max-width: 500px;
     width: 90%;
     animation: slideUp 0.3s ease-out;
+    pointer-events: auto;
+    position: relative;
+    z-index: 1;
   `;
 
   const title = document.createElement('h2');
@@ -95,7 +100,8 @@ export function createDialog(options: DialogOptions): HTMLDivElement {
     });
 
     cancelBtn.addEventListener('click', () => {
-      closeDialog(options.onCancel);
+      if (options.onCancel) options.onCancel();
+      closeDialog();
     });
 
     buttonContainer.appendChild(cancelBtn);
@@ -125,16 +131,20 @@ export function createDialog(options: DialogOptions): HTMLDivElement {
   });
 
   confirmBtn.addEventListener('click', () => {
-    closeDialog(options.onConfirm);
+    if (options.onConfirm) options.onConfirm();
+    closeDialog();
   });
 
   buttonContainer.appendChild(confirmBtn);
 
-  overlay.addEventListener('click', (e) => {
+  const handleOverlayClick = (e: Event) => {
     if (e.target === overlay) {
-      closeDialog(options.onCancel);
+      if (options.onCancel) options.onCancel();
+      closeDialog();
     }
-  });
+  };
+
+  overlay.addEventListener('click', handleOverlayClick);
 
   dialog.appendChild(title);
   dialog.appendChild(message);

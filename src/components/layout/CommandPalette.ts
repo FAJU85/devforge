@@ -33,6 +33,17 @@ export function createCommandPalette(options: CommandPaletteOptions): HTMLDivEle
     z-index: 9997;
     padding-top: 100px;
     animation: fadeIn 0.2s ease-out;
+    pointer-events: none;
+  `;
+
+  const background = document.createElement('div');
+  background.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: auto;
   `;
 
   const palette = document.createElement('div');
@@ -49,6 +60,9 @@ export function createCommandPalette(options: CommandPaletteOptions): HTMLDivEle
     display: flex;
     flex-direction: column;
     animation: slideDown 0.3s ease-out;
+    pointer-events: auto;
+    position: relative;
+    z-index: 1;
   `;
 
   // Search input
@@ -233,10 +247,8 @@ export function createCommandPalette(options: CommandPaletteOptions): HTMLDivEle
     }
   });
 
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) {
-      closeCommandPalette();
-    }
+  background.addEventListener('click', () => {
+    closeCommandPalette();
   });
 
   // Add animations
@@ -287,7 +299,10 @@ export function createCommandPalette(options: CommandPaletteOptions): HTMLDivEle
 
   palette.appendChild(inputContainer);
   palette.appendChild(resultsList);
+  overlay.appendChild(background);
   overlay.appendChild(palette);
+
+  setTimeout(() => input.focus(), 0);
 
   return overlay;
 }
