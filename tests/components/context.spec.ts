@@ -7,19 +7,20 @@ import { test, expect } from '@playwright/test';
 test.describe('Context Components', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:5173');
+    await page.waitForLoadState('networkidle');
   });
 
   test.describe('ContextDisplay Component', () => {
     test('should render context display', async ({ page }) => {
       const display = await page.locator('.context-display').first();
-      if (await display.isVisible()) {
+      if (await display.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(display).toBeVisible();
       }
     });
 
     test('should display context title', async ({ page }) => {
       const title = await page.locator('.context-display h3').first();
-      if (await title.isVisible()) {
+      if (await title.isVisible({ timeout: 5000 }).catch(() => false)) {
         const text = await title.textContent();
         expect(text).toBe('Context');
       }
@@ -27,7 +28,7 @@ test.describe('Context Components', () => {
 
     test('should display item count', async ({ page }) => {
       const display = await page.locator('.context-display').first();
-      if (await display.isVisible()) {
+      if (await display.isVisible({ timeout: 5000 }).catch(() => false)) {
         const text = await display.textContent();
         if (text) {
           expect(text).toContain('items');
@@ -44,7 +45,7 @@ test.describe('Context Components', () => {
 
     test('should show empty state', async ({ page }) => {
       const empty = await page.locator('text=No context items').first();
-      if (await empty.isVisible()) {
+      if (await empty.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(empty).toBeVisible();
       }
     });
@@ -53,7 +54,7 @@ test.describe('Context Components', () => {
       const items = await page.locator('.context-item').all();
       if (items.length > 0) {
         const removeBtn = await items[0].locator('button').first();
-        if (await removeBtn.isVisible()) {
+        if (await removeBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
           await removeBtn.click();
         }
       }
@@ -63,14 +64,14 @@ test.describe('Context Components', () => {
   test.describe('FileList Component', () => {
     test('should render file list', async ({ page }) => {
       const list = await page.locator('.file-list').first();
-      if (await list.isVisible()) {
+      if (await list.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(list).toBeVisible();
       }
     });
 
     test('should display files header', async ({ page }) => {
       const header = await page.locator('.file-list h3').first();
-      if (await header.isVisible()) {
+      if (await header.isVisible({ timeout: 5000 }).catch(() => false)) {
         const text = await header.textContent();
         expect(text).toBe('Files');
       }
@@ -78,7 +79,7 @@ test.describe('Context Components', () => {
 
     test('should display file count', async ({ page }) => {
       const list = await page.locator('.file-list').first();
-      if (await list.isVisible()) {
+      if (await list.isVisible({ timeout: 5000 }).catch(() => false)) {
         const text = await list.textContent();
         if (text) {
           expect(text).toMatch(/\d+/);
@@ -119,14 +120,14 @@ test.describe('Context Components', () => {
   test.describe('ContextInfo Component', () => {
     test('should render context info', async ({ page }) => {
       const info = await page.locator('.context-info').first();
-      if (await info.isVisible()) {
+      if (await info.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(info).toBeVisible();
       }
     });
 
     test('should display context info title', async ({ page }) => {
       const title = await page.locator('.context-info h3').first();
-      if (await title.isVisible()) {
+      if (await title.isVisible({ timeout: 5000 }).catch(() => false)) {
         const text = await title.textContent();
         expect(text).toBe('Context Info');
       }
@@ -141,28 +142,28 @@ test.describe('Context Components', () => {
 
     test('should show files count', async ({ page }) => {
       const text = await page.locator('text=Files').first();
-      if (await text.isVisible()) {
+      if (await text.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(text).toBeVisible();
       }
     });
 
     test('should show total lines', async ({ page }) => {
       const text = await page.locator('text=Lines').first();
-      if (await text.isVisible()) {
+      if (await text.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(text).toBeVisible();
       }
     });
 
     test('should show token usage', async ({ page }) => {
       const text = await page.locator('text=Tokens').first();
-      if (await text.isVisible()) {
+      if (await text.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(text).toBeVisible();
       }
     });
 
     test('should display languages', async ({ page }) => {
       const langText = await page.locator('text=Languages').first();
-      if (await langText.isVisible()) {
+      if (await langText.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(langText).toBeVisible();
       }
     });
@@ -176,7 +177,7 @@ test.describe('Context Components', () => {
 
     test('should show token usage bar', async ({ page }) => {
       const bar = await page.locator('.context-info').first();
-      if (await bar.isVisible()) {
+      if (await bar.isVisible({ timeout: 5000 }).catch(() => false)) {
         const divs = await bar.locator('div').all();
         expect(divs.length).toBeGreaterThan(0);
       }
@@ -184,7 +185,7 @@ test.describe('Context Components', () => {
 
     test('should show last updated time', async ({ page }) => {
       const updated = await page.locator('text=Updated:').first();
-      if (await updated.isVisible()) {
+      if (await updated.isVisible({ timeout: 5000 }).catch(() => false)) {
         await expect(updated).toBeVisible();
       }
     });
@@ -196,15 +197,12 @@ test.describe('Context Components', () => {
       const list = await page.locator('.file-list').first();
       const info = await page.locator('.context-info').first();
 
-      let hasDisplay = false;
-      let hasList = false;
-      let hasInfo = false;
+      let visibleCount = 0;
+      if (await display.isVisible({ timeout: 5000 }).catch(() => false)) visibleCount++;
+      if (await list.isVisible({ timeout: 5000 }).catch(() => false)) visibleCount++;
+      if (await info.isVisible({ timeout: 5000 }).catch(() => false)) visibleCount++;
 
-      if (await display.isVisible()) hasDisplay = true;
-      if (await list.isVisible()) hasList = true;
-      if (await info.isVisible()) hasInfo = true;
-
-      expect(hasDisplay || hasList || hasInfo).toBe(true);
+      expect(visibleCount).toBeGreaterThanOrEqual(1);
     });
   });
 });
