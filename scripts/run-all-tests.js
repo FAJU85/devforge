@@ -75,8 +75,26 @@ async function runTests() {
     log('red', '✗ Unit tests failed');
   }
 
-  // 3. E2E Tests
-  logSection('Phase 3: E2E Tests (Playwright)');
+  // 3. Integration Tests
+  logSection('Phase 3: Integration Tests (Vitest)');
+  const integrationResult = runCommand('npm run test:integration:run 2>&1', 'Integration Tests');
+  results.integration = integrationResult;
+
+  let integrationPassed = 0;
+  let integrationTotal = 0;
+  if (integrationResult.success) {
+    const match = integrationResult.output.match(/Tests\s+(\d+)\s+passed/);
+    if (match) {
+      integrationPassed = parseInt(match[1]);
+      integrationTotal = integrationPassed;
+    }
+    log('green', `✓ Integration tests: ${integrationPassed}/${integrationTotal} passing`);
+  } else {
+    log('red', '✗ Integration tests failed');
+  }
+
+  // 4. E2E Tests
+  logSection('Phase 4: E2E Tests (Playwright)');
   const e2eResult = runCommand('npm run test:e2e 2>&1', 'E2E Tests');
   results.e2e = e2eResult;
 
@@ -103,20 +121,22 @@ async function runTests() {
   // Generate report
   logSection('Test Results Summary');
 
-  const totalTests = unitTotal + e2eTotal;
-  const totalPassed = unitPassed + e2ePassed;
+  const totalTests = unitTotal + integrationTotal + e2eTotal;
+  const totalPassed = unitPassed + integrationPassed + e2ePassed;
   const passRate = totalTests > 0 ? ((totalPassed / totalTests) * 100).toFixed(1) : 0;
 
   console.log(`
 ${COLORS.bold}Test Coverage by Layer:${COLORS.reset}
   Unit Tests (Vitest):        ${unitPassed}/${unitTotal} passing
+  Integration Tests (Vitest): ${integrationPassed}/${integrationTotal} passing
   E2E Tests (Playwright):     ${e2ePassed}/${e2eTotal} passing
   ─────────────────────────────────────
   ${COLORS.bold}Total:${COLORS.reset}                   ${totalPassed}/${totalTests} passing (${passRate}%)
 
 ${COLORS.bold}Architecture:${COLORS.reset}
   ✓ Unit Testing Layer        (Component-level)
-  ✓ E2E Testing Layer         (Integration-level)
+  ✓ Integration Testing Layer (Component interactions & state)
+  ✓ E2E Testing Layer         (User flows)
   ✓ Pattern Detection Layer   (Quality assurance)
 
 ${COLORS.bold}Status:${COLORS.reset}

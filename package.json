@@ -15,6 +15,8 @@
     "test:unit:ui": "vitest --ui",
     "test:unit:run": "vitest --run",
     "test:unit:coverage": "vitest --run --coverage",
+    "test:integration": "vitest tests/integration",
+    "test:integration:run": "vitest --run tests/integration",
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'",
     "qa:scan": "node qa/pattern_detector.js scan ./src",
     "qa:patterns": "node qa/pattern_detector.js list-patterns",
