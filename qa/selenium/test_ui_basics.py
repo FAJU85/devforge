@@ -15,7 +15,7 @@ from contextlib import contextmanager
 def allure_step(description):
     """Context manager for allure steps that works with or without allure"""
     if allure:
-        with allure_step(description):
+        with allure.step(description):
             yield
     else:
         yield
@@ -100,8 +100,8 @@ class TestButtonComponent:
             assert opacity == "0.8", f"Hover opacity should be 0.8, got {opacity}"
 
 
-@allure.feature("UI Components")
-@allure.story("Input Component")
+@allure_feature("UI Components")
+@allure_story("Input Component")
 class TestInputComponent:
     """Input component tests"""
 
@@ -144,11 +144,11 @@ class TestInputComponent:
             assert input_type == "password", f"Expected type 'password', got '{input_type}'"
 
 
-@allure.feature("UI Interactions")
+@allure_feature("UI Interactions")
 class TestFormInteractions:
     """Form and input interaction tests"""
 
-    @pytest.mark.selenium
+
     def test_multiple_inputs_interaction(self, selenium_driver, base_url):
         """Test interaction with multiple inputs"""
         with allure_step("Navigate to app"):
