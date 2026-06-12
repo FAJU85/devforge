@@ -59,7 +59,19 @@ export { useContextStore } from './stores/contextStore';
 export { useMemoryStore } from './stores/memoryStore';
 export { useStatsStore } from './stores/statsStore';
 
+// API Clients
+export { ApiClient } from './api/client';
+export { GitHubClient } from './api/github';
+export { RepositoryClient } from './api/repo';
+export { HuggingFaceClient } from './api/hf';
+export { ConfigClient } from './api/config';
+
 // Types
+export type { ApiResponse, ApiConfig } from './api/client';
+export type { GitHubUser, GitHubRepository, GitHubCommit, GitHubPullRequest, GitHubIssue } from './api/github';
+export type { FileInfo, DirectoryTree, SearchResult, RepositoryInfo, DiffResult } from './api/repo';
+export type { HFModel, HFDataset, HFSpace, HFModelInfo, HFSearchResult } from './api/hf';
+export type { AppConfig, UserPreferences, APIKey, Model, Provider, FeatureFlag } from './api/config';
 export type { ButtonProps } from './types/ui';
 export type { InputProps } from './types/ui';
 export type { ToastMessage } from './types/ui';
