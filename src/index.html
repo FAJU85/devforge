@@ -197,13 +197,25 @@
         </div>
       </section>
 
+      <!-- Layout Components -->
+      <section class="component-section">
+        <h2>Layout Components</h2>
+        <div class="controls">
+          <button id="btn-sidebar" data-variant="primary">Show Sidebar</button>
+          <button id="btn-main-panel" data-variant="primary">Show Main Panel</button>
+          <button id="btn-settings-panel" data-variant="primary">Show Settings</button>
+          <button id="btn-command-palette" data-variant="primary">Open Command Palette</button>
+        </div>
+        <div id="layout-container" style="margin-top: 20px; border: 1px solid var(--border); border-radius: 6px; min-height: 300px;"></div>
+      </section>
+
       <div class="footer">
-        <p>Foundation components E2E testing environment. All components are interactive.</p>
+        <p>Foundation and layout components E2E testing environment. All components are interactive.</p>
       </div>
     </div>
 
     <script type="module">
-      import { Button, Input, Toast, Dialog, useUIStore } from '/index.ts';
+      import { Button, Input, Toast, Dialog, Sidebar, MainPanel, SettingsPanel, CommandPalette, useUIStore } from '/index.ts';
 
       // Window API for test assertions
       window.lastClickedButton = null;
@@ -414,6 +426,120 @@
           },
         });
         document.body.appendChild(dialog);
+      });
+
+      // Layout component handlers
+      const layoutContainer = document.getElementById('layout-container');
+
+      document.getElementById('btn-sidebar')?.addEventListener('click', () => {
+        if (layoutContainer) {
+          layoutContainer.innerHTML = '';
+          const sidebar = Sidebar.create();
+          layoutContainer.appendChild(sidebar);
+        }
+      });
+
+      document.getElementById('btn-main-panel')?.addEventListener('click', () => {
+        if (layoutContainer) {
+          layoutContainer.innerHTML = '';
+          const mainPanel = MainPanel.create();
+          layoutContainer.appendChild(mainPanel);
+        }
+      });
+
+      document.getElementById('btn-settings-panel')?.addEventListener('click', () => {
+        if (layoutContainer) {
+          layoutContainer.innerHTML = '';
+          const settingsPanel = SettingsPanel.create();
+          layoutContainer.appendChild(settingsPanel);
+        }
+      });
+
+      document.getElementById('btn-command-palette')?.addEventListener('click', () => {
+        const palette = CommandPalette.create({
+          commands: [
+            {
+              id: 'cmd-new-chat',
+              label: 'New Chat',
+              description: 'Start a new conversation',
+              category: 'Chat',
+              icon: '💬',
+              onSelect: () => {
+                const toast = Toast.create({
+                  id: 'cmd-' + Date.now(),
+                  text: 'New chat started!',
+                  type: 'success',
+                  duration: 3000,
+                  onRemove: (id) => {
+                    document.getElementById(id)?.remove();
+                  },
+                });
+                toastContainerElement.appendChild(toast);
+              },
+            },
+            {
+              id: 'cmd-open-file',
+              label: 'Open File',
+              description: 'Open a file from repository',
+              category: 'File',
+              icon: '📁',
+              onSelect: () => {
+                const toast = Toast.create({
+                  id: 'cmd-' + Date.now(),
+                  text: 'File dialog opened',
+                  type: 'info',
+                  duration: 3000,
+                  onRemove: (id) => {
+                    document.getElementById(id)?.remove();
+                  },
+                });
+                toastContainerElement.appendChild(toast);
+              },
+            },
+            {
+              id: 'cmd-settings',
+              label: 'Settings',
+              description: 'Open settings',
+              category: 'General',
+              icon: '⚙️',
+              onSelect: () => {
+                const toast = Toast.create({
+                  id: 'cmd-' + Date.now(),
+                  text: 'Settings opened',
+                  type: 'info',
+                  duration: 3000,
+                  onRemove: (id) => {
+                    document.getElementById(id)?.remove();
+                  },
+                });
+                toastContainerElement.appendChild(toast);
+              },
+            },
+            {
+              id: 'cmd-search',
+              label: 'Search',
+              description: 'Search in repository',
+              category: 'File',
+              icon: '🔍',
+              onSelect: () => {
+                const toast = Toast.create({
+                  id: 'cmd-' + Date.now(),
+                  text: 'Search initiated',
+                  type: 'info',
+                  duration: 3000,
+                  onRemove: (id) => {
+                    document.getElementById(id)?.remove();
+                  },
+                });
+                toastContainerElement.appendChild(toast);
+              },
+            },
+          ],
+          onClose: () => {
+            // Command palette closed
+          },
+        });
+        document.body.appendChild(palette);
       });
     </script>
   </body>
