@@ -69,6 +69,9 @@ export { ConfigClient } from './api/config';
 // Services
 export { ChatService, RepositoryService, ConfigService, ContextService, ServiceContainer } from './services';
 
+// Hooks
+export { useChat, useRepository, useConfig, useContextValue } from './hooks';
+
 // Types
 export type { ApiResponse, ApiConfig } from './api/client';
 export type { GitHubUser, GitHubRepository, GitHubCommit, GitHubPullRequest, GitHubIssue } from './api/github';
@@ -77,6 +80,10 @@ export type { HFModel, HFDataset, HFSpace, HFModelInfo, HFSearchResult } from '.
 export type { AppConfig, UserPreferences, APIKey, Model, Provider, FeatureFlag } from './api/config';
 export type { ChatMessage, ChatResponse } from './services/chatService';
 export type { ServiceConfig } from './services/serviceContainer';
+export type { UseChatReturn } from './hooks/useChat';
+export type { UseRepositoryReturn } from './hooks/useRepository';
+export type { UseConfigReturn } from './hooks/useConfig';
+export type { UseContextValue } from './hooks/useContext';
 export type { ButtonProps } from './types/ui';
 export type { InputProps } from './types/ui';
 export type { ToastMessage } from './types/ui';
