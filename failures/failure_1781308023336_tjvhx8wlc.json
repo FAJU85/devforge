@@ -1,0 +1,14 @@
+{
+  "id": "failure_1781308023336_tjvhx8wlc",
+  "timestamp": "2026-06-12T23:47:03.336Z",
+  "testName": "CommandPalette should focus input on open",
+  "testFile": "tests/components/CommandPalette.test.js",
+  "errorMessage": "Timeout waiting for focus to move to input element",
+  "stackTrace": "",
+  "testCode": "",
+  "context": {},
+  "severity": "high",
+  "category": "assertion",
+  "learned": false,
+  "patternId": null
+}

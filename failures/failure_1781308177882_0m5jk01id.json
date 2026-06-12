@@ -1,0 +1,14 @@
+{
+  "id": "failure_1781308177882_0m5jk01id",
+  "timestamp": "2026-06-12T23:49:37.882Z",
+  "testName": "Dialog component should close on overlay click",
+  "testFile": "tests/components/Dialog.test.js",
+  "errorMessage": "Expected element to be hidden, but it was visible after 5000ms",
+  "stackTrace": "",
+  "testCode": "",
+  "context": {},
+  "severity": "high",
+  "category": "timeout",
+  "learned": false,
+  "patternId": null
+}
