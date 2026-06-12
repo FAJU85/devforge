@@ -93,8 +93,26 @@ async function runTests() {
     log('red', '✗ Integration tests failed');
   }
 
-  // 4. E2E Tests
-  logSection('Phase 4: E2E Tests (Playwright)');
+  // 4. UI/Accessibility Tests
+  logSection('Phase 4: UI/Accessibility Tests (Vitest)');
+  const uiResult = runCommand('npm run test:ui:run 2>&1', 'UI Tests');
+  results.ui = uiResult;
+
+  let uiPassed = 0;
+  let uiTotal = 0;
+  if (uiResult.success) {
+    const match = uiResult.output.match(/Tests\s+(\d+)\s+passed/);
+    if (match) {
+      uiPassed = parseInt(match[1]);
+      uiTotal = uiPassed;
+    }
+    log('green', `✓ UI tests: ${uiPassed}/${uiTotal} passing`);
+  } else {
+    log('red', '✗ UI tests failed');
+  }
+
+  // 5. E2E Tests
+  logSection('Phase 5: E2E Tests (Playwright)');
   const e2eResult = runCommand('npm run test:e2e 2>&1', 'E2E Tests');
   results.e2e = e2eResult;
 
@@ -121,23 +139,25 @@ async function runTests() {
   // Generate report
   logSection('Test Results Summary');
 
-  const totalTests = unitTotal + integrationTotal + e2eTotal;
-  const totalPassed = unitPassed + integrationPassed + e2ePassed;
+  const totalTests = unitTotal + integrationTotal + uiTotal + e2eTotal;
+  const totalPassed = unitPassed + integrationPassed + uiPassed + e2ePassed;
   const passRate = totalTests > 0 ? ((totalPassed / totalTests) * 100).toFixed(1) : 0;
 
   console.log(`
 ${COLORS.bold}Test Coverage by Layer:${COLORS.reset}
   Unit Tests (Vitest):        ${unitPassed}/${unitTotal} passing
   Integration Tests (Vitest): ${integrationPassed}/${integrationTotal} passing
+  UI/A11y Tests (Vitest):     ${uiPassed}/${uiTotal} passing
   E2E Tests (Playwright):     ${e2ePassed}/${e2eTotal} passing
   ─────────────────────────────────────
   ${COLORS.bold}Total:${COLORS.reset}                   ${totalPassed}/${totalTests} passing (${passRate}%)
 
 ${COLORS.bold}Architecture:${COLORS.reset}
-  ✓ Unit Testing Layer        (Component-level)
-  ✓ Integration Testing Layer (Component interactions & state)
-  ✓ E2E Testing Layer         (User flows)
-  ✓ Pattern Detection Layer   (Quality assurance)
+  ✓ Unit Testing Layer          (Component-level)
+  ✓ Integration Testing Layer   (Component interactions & state)
+  ✓ UI/Accessibility Layer      (Accessibility & semantics)
+  ✓ E2E Testing Layer           (User flows)
+  ✓ Pattern Detection Layer     (Quality assurance)
 
 ${COLORS.bold}Status:${COLORS.reset}
   ${totalPassed === totalTests ? COLORS.green + '✓ ALL TESTS PASSING' + COLORS.reset :
