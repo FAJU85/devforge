@@ -1,0 +1,219 @@
+.PHONY: help phase1-setup phase1-status phase1-logs phase1-clean phase1-test
+
+# Colors
+RED := \033[0;31m
+GREEN := \033[0;32m
+YELLOW := \033[1;33m
+BLUE := \033[0;34m
+NC := \033[0m
+
+COMPOSE_FILE := docker-compose.phase1.yml
+PYTHON := python3
+SHELL := /bin/bash
+
+help:
+	@echo "$(BLUE)DevForge QA Suite - Phase 1 Commands$(NC)"
+	@echo ""
+	@echo "$(GREEN)Setup & Infrastructure:$(NC)"
+	@echo "  make phase1-setup          Run full Phase 1 setup"
+	@echo "  make phase1-start          Start Docker containers"
+	@echo "  make phase1-stop           Stop Docker containers"
+	@echo "  make phase1-restart        Restart Docker containers"
+	@echo "  make phase1-clean          Clean up all Phase 1 resources"
+	@echo ""
+	@echo "$(GREEN)Database:$(NC)"
+	@echo "  make phase1-db-init        Initialize database schema"
+	@echo "  make phase1-db-connect     Connect to PostgreSQL"
+	@echo "  make phase1-db-status      Check database status"
+	@echo "  make phase1-db-reset       Reset database (careful!)"
+	@echo ""
+	@echo "$(GREEN)Vector Database:$(NC)"
+	@echo "  make phase1-milvus-init    Initialize Milvus collections"
+	@echo "  make phase1-milvus-status  Check Milvus status"
+	@echo ""
+	@echo "$(GREEN)Object Storage:$(NC)"
+	@echo "  make phase1-s3-init        Initialize S3 buckets"
+	@echo "  make phase1-s3-status      Check S3 status"
+	@echo ""
+	@echo "$(GREEN)Monitoring:$(NC)"
+	@echo "  make phase1-status         Show all service status"
+	@echo "  make phase1-logs           Show service logs"
+	@echo "  make phase1-ps             List running containers"
+	@echo ""
+	@echo "$(GREEN)Testing:$(NC)"
+	@echo "  make phase1-test           Run all Phase 1 tests"
+	@echo "  make phase1-test-db        Test database connection"
+	@echo "  make phase1-test-milvus    Test Milvus connection"
+	@echo "  make phase1-test-s3        Test S3 connection"
+	@echo ""
+
+# Setup
+phase1-setup:
+	@echo "$(BLUE)Running Phase 1 full setup...$(NC)"
+	@bash scripts/phase1-setup.sh
+
+phase1-start:
+	@echo "$(BLUE)Starting Docker containers...$(NC)"
+	@docker-compose -f $(COMPOSE_FILE) up -d
+	@echo "$(GREEN)✓ Containers started$(NC)"
+	@echo "Waiting for services to be ready..."
+	@sleep 10
+
+phase1-stop:
+	@echo "$(BLUE)Stopping Docker containers...$(NC)"
+	@docker-compose -f $(COMPOSE_FILE) down
+	@echo "$(GREEN)✓ Containers stopped$(NC)"
+
+phase1-restart: phase1-stop phase1-start
+	@echo "$(GREEN)✓ Containers restarted$(NC)"
+
+phase1-clean:
+	@echo "$(RED)Cleaning Phase 1 resources...$(NC)"
+	@docker-compose -f $(COMPOSE_FILE) down -v
+	@echo "$(GREEN)✓ Phase 1 resources cleaned$(NC)"
+
+# Database
+phase1-db-init:
+	@echo "$(BLUE)Initializing database schema...$(NC)"
+	@docker exec -i devforge-postgres psql -U postgres -d devforge < db/schema_v3.sql
+	@echo "$(GREEN)✓ Database schema initialized$(NC)"
+
+phase1-db-connect:
+	@echo "$(BLUE)Connecting to PostgreSQL...$(NC)"
+	@psql -h localhost -U postgres -d devforge
+
+phase1-db-status:
+	@echo "$(BLUE)Checking database status...$(NC)"
+	@docker exec devforge-postgres pg_isready -U postgres
+	@echo ""
+	@docker exec devforge-postgres psql -U postgres -d devforge -c "SELECT datname, count(*) as tables FROM pg_tables WHERE table_schema='public' GROUP BY datname;"
+
+phase1-db-reset:
+	@echo "$(RED)WARNING: This will delete all database data$(NC)"
+	@read -p "Type 'yes' to confirm: " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		docker-compose -f $(COMPOSE_FILE) down -v; \
+		docker-compose -f $(COMPOSE_FILE) up -d; \
+		echo "$(YELLOW)Waiting for PostgreSQL...$(NC)"; \
+		sleep 10; \
+		$(MAKE) phase1-db-init; \
+		echo "$(GREEN)✓ Database reset complete$(NC)"; \
+	else \
+		echo "$(YELLOW)Cancelled$(NC)"; \
+	fi
+
+# Milvus
+phase1-milvus-init:
+	@echo "$(BLUE)Initializing Milvus collections...$(NC)"
+	@$(PYTHON) ml/vector_db/setup.py
+
+phase1-milvus-status:
+	@echo "$(BLUE)Checking Milvus status...$(NC)"
+	@docker logs devforge-milvus | tail -20
+
+# S3
+phase1-s3-init:
+	@echo "$(BLUE)Initializing S3 object storage...$(NC)"
+	@$(PYTHON) storage/setup_storage.py
+
+phase1-s3-status:
+	@echo "$(BLUE)Checking S3 status...$(NC)"
+	@curl -s http://localhost:9000/minio/health/live && echo " - MinIO (Datasets) OK" || echo " - MinIO (Datasets) FAILED"
+	@curl -s http://localhost:9002/minio/health/live && echo " - MinIO (Artifacts) OK" || echo " - MinIO (Artifacts) FAILED"
+
+# Monitoring
+phase1-status:
+	@echo "$(BLUE)Phase 1 Service Status:$(NC)"
+	@echo ""
+	@echo "$(BLUE)Docker Containers:$(NC)"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep devforge || echo "No containers running"
+	@echo ""
+	@echo "$(BLUE)PostgreSQL:$(NC)"
+	@docker exec devforge-postgres pg_isready -U postgres 2>/dev/null && echo "✓ Running" || echo "✗ Not running"
+	@echo ""
+	@echo "$(BLUE)Milvus:$(NC)"
+	@curl -s http://localhost:9091/healthz > /dev/null 2>&1 && echo "✓ Running" || echo "✗ Not running"
+	@echo ""
+	@echo "$(BLUE)MinIO (Datasets):$(NC)"
+	@curl -s http://localhost:9000/minio/health/live > /dev/null 2>&1 && echo "✓ Running" || echo "✗ Not running"
+	@echo ""
+	@echo "$(BLUE)MinIO (Artifacts):$(NC)"
+	@curl -s http://localhost:9002/minio/health/live > /dev/null 2>&1 && echo "✓ Running" || echo "✗ Not running"
+
+phase1-logs:
+	@docker-compose -f $(COMPOSE_FILE) logs -f
+
+phase1-ps:
+	@docker ps --filter "label=com.devforge.component" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Testing
+phase1-test: phase1-test-db phase1-test-milvus phase1-test-s3
+	@echo ""
+	@echo "$(GREEN)✓ All Phase 1 tests passed!$(NC)"
+
+phase1-test-db:
+	@echo "$(BLUE)Testing PostgreSQL connection...$(NC)"
+	@$(PYTHON) << 'EOF'
+import psycopg2
+try:
+    conn = psycopg2.connect(
+        host="localhost", port=5432, database="devforge",
+        user="postgres", password="postgres"
+    )
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';")
+    count = cursor.fetchone()[0]
+    cursor.close()
+    conn.close()
+    print(f"✓ PostgreSQL OK - {count} tables")
+except Exception as e:
+    print(f"✗ PostgreSQL Error: {e}")
+    exit(1)
+EOF
+
+phase1-test-milvus:
+	@echo "$(BLUE)Testing Milvus connection...$(NC)"
+	@$(PYTHON) << 'EOF'
+from pymilvus import connections, utility
+try:
+    connections.connect(alias="default", host="localhost", port=19530)
+    colls = utility.list_collections(using="default")
+    print(f"✓ Milvus OK - {len(colls)} collections")
+except Exception as e:
+    print(f"✗ Milvus Error: {e}")
+    exit(1)
+EOF
+
+phase1-test-s3:
+	@echo "$(BLUE)Testing S3 connection...$(NC)"
+	@$(PYTHON) << 'EOF'
+import boto3
+try:
+    client = boto3.client(
+        's3',
+        endpoint_url='http://localhost:9000',
+        aws_access_key_id='minioadmin',
+        aws_secret_access_key='minioadmin'
+    )
+    response = client.list_buckets()
+    buckets = len(response.get('Buckets', []))
+    print(f"✓ S3 OK - {buckets} buckets")
+except Exception as e:
+    print(f"✗ S3 Error: {e}")
+    exit(1)
+EOF
+
+# WebUI Access
+phase1-ui:
+	@echo "$(BLUE)Opening UI dashboards...$(NC)"
+	@echo "MinIO (Datasets):  http://localhost:9001"
+	@echo "MinIO (Artifacts): http://localhost:9003"
+	@echo "PgAdmin:           http://localhost:5050"
+	@command -v open >/dev/null && open http://localhost:9001 || echo "Open URLs manually above"
+
+.PHONY: help phase1-setup phase1-start phase1-stop phase1-restart phase1-clean \
+        phase1-db-init phase1-db-connect phase1-db-status phase1-db-reset \
+        phase1-milvus-init phase1-milvus-status \
+        phase1-s3-init phase1-s3-status \
+        phase1-status phase1-logs phase1-ps \
+        phase1-test phase1-test-db phase1-test-milvus phase1-test-s3 phase1-ui

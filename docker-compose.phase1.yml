@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: devforge-postgres
+    environment:
+      POSTGRES_DB: devforge
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema_v3.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - devforge-network
+    labels:
+      - "com.devforge.component=database"
+
+  # Milvus Vector Database
+  minio:
+    image: minio/minio:latest
+    container_name: devforge-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - devforge-network
+    labels:
+      - "com.devforge.component=storage"
+
+  milvus:
+    image: milvusdb/milvus:v0.4.0
+    container_name: devforge-milvus
+    depends_on:
+      - minio
+    environment:
+      COMMON_STORAGETYPE: minio
+      COMMON_MINIO_ENDPOINT: "minio:9000"
+      COMMON_MINIO_ACCESSKEYID: minioadmin
+      COMMON_MINIO_SECRETACCESSKEY: minioadmin
+      COMMON_MINIO_USESSL: "false"
+      COMMON_MINIO_BUCKETNAME: milvus-bucket
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - milvus_data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - devforge-network
+    labels:
+      - "com.devforge.component=vector_db"
+
+  # S3 Object Storage (MinIO - already included above, but can add separate instance for artifacts)
+  s3-storage:
+    image: minio/minio:latest
+    container_name: devforge-s3
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    volumes:
+      - s3_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - devforge-network
+    labels:
+      - "com.devforge.component=artifact_storage"
+
+  # Optional: PgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: devforge-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@devforge.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - devforge-network
+    labels:
+      - "com.devforge.component=admin"
+
+volumes:
+  postgres_data:
+    driver: local
+  minio_data:
+    driver: local
+  milvus_data:
+    driver: local
+  s3_data:
+    driver: local
+
+networks:
+  devforge-network:
+    driver: bridge
