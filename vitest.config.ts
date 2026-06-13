@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
+    reporters: ['default', './qa/learning/vitest-reporter.ts'],
     include: [
       'tests/unit/**/*.test.ts',
       'tests/integration/**/*.test.ts',

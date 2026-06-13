@@ -119,27 +119,39 @@ function displayFailure(failure) {
 function displayReport() {
   logSection('Learning System Report');
 
-  const stats = patternLearner.getStatistics();
-  
+  // Read from the persisted database (loaded by PatternMatcher on construction)
+  // so the report reflects what's actually on disk, not just this process.
+  const persisted = patternMatcher.patterns || [];
+  const stats = patternMatcher.getStatistics();
+
   console.log(`${COLORS.bold}Overview:${COLORS.reset}`);
   console.log(`  Total Patterns Learned: ${stats.totalPatterns}`);
   console.log(`  Total Failures: ${failureCollector.loadFailures().length}`);
+  console.log(`  Avg Confidence: ${(stats.avgConfidence * 100).toFixed(0)}%`);
 
-  console.log(`\n${COLORS.bold}Patterns by Type:${COLORS.reset}`);
-  for (const [type, data] of Object.entries(stats.byType)) {
-    console.log(`  ${type}: ${data.count} patterns (avg ${data.avgConfidence * 100}% confidence)`);
+  if (Object.keys(stats.byType).length > 0) {
+    console.log(`\n${COLORS.bold}Patterns by Type:${COLORS.reset}`);
+    for (const [type, count] of Object.entries(stats.byType)) {
+      console.log(`  ${type}: ${count} patterns`);
+    }
   }
 
-  if (stats.topPatterns && stats.topPatterns.length > 0) {
+  const topPatterns = [...persisted]
+    .sort((a, b) => (b.occurrences || 0) - (a.occurrences || 0))
+    .slice(0, 5);
+
+  if (topPatterns.length > 0) {
     console.log(`\n${COLORS.bold}Top Patterns:${COLORS.reset}`);
-    stats.topPatterns.slice(0, 5).forEach((p, idx) => {
+    topPatterns.forEach((p, idx) => {
       const confColor = p.confidence >= 0.8 ? 'green' : p.confidence >= 0.6 ? 'yellow' : 'red';
       const confPercent = Math.round(p.confidence * 100);
-      log(confColor, `  ${idx + 1}. ${p.pattern.substring(0, 50)} (${confPercent}% - ${p.occurrences}x)`);
+      log(confColor, `  ${idx + 1}. ${String(p.pattern).substring(0, 50)} (${confPercent}% - ${p.occurrences}x)`);
     });
+  } else {
+    console.log(`\n${COLORS.dim}No patterns learned yet. Run tests, then "npm run qa:learn".${COLORS.reset}`);
   }
 
-  console.log(`\n${COLORS.dim}Last Updated: ${new Date().toISOString()}${COLORS.reset}\n`);
+  console.log('');
 }
 
 /**
@@ -314,14 +326,32 @@ switch (command) {
     displayStats();
     break;
 
-  case 'learn':
+  case 'learn': {
     logSection('Learning from Failures');
     failureCollector.loadFailures();
-  const unlearned = failureCollector.getUnlearned();
+    const unlearned = failureCollector.getUnlearned();
     console.log(`Processing ${unlearned.length} unlearned failures...\n`);
-    patternLearner.learn(unlearned);
+
+    const learnedPatterns = patternLearner.learn(unlearned);
     const learnedStats = patternLearner.getStatistics();
-    console.log(`✓ Learned ${learnedStats.totalPatterns} patterns\n`);
+
+    // Persist learned patterns to learned_patterns.json so the matcher and
+    // future runs can use them. Without this, learning is thrown away each run.
+    patternMatcher.updatePatterns(learnedPatterns);
+
+    // Mark each failure as learned and link it to the pattern it produced, so
+    // subsequent `learn` runs only process new failures.
+    let markedCount = 0;
+    for (const failure of unlearned) {
+      const owningPattern = learnedPatterns.find(p => p.failures.includes(failure.id));
+      failureCollector.markLearned(failure.id, owningPattern ? owningPattern.id : null);
+      markedCount++;
+    }
+
+    console.log(`✓ Learned ${learnedStats.totalPatterns} patterns`);
+    console.log(`✓ Persisted to qa/learning/learned_patterns.json`);
+    console.log(`✓ Marked ${markedCount} failures as learned\n`);
+
     if (learnedStats.topPatterns && learnedStats.topPatterns.length > 0) {
       learnedStats.topPatterns.slice(0, 5).forEach((p, idx) => {
         console.log(`${idx + 1}. Pattern (${p.occurrences}x)`);
@@ -330,6 +360,7 @@ switch (command) {
       });
     }
     break;
+  }
 
   case 'report':
     displayReport();

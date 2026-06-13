@@ -207,54 +207,52 @@ npm run qa:failures:clear
 
 ## Integration with Test Runners
 
-### Vitest Integration
+Both reporters below are **already wired in** — no setup needed. They capture
+real failures automatically on every test run and are designed to never break a
+run if the learning system errors (all calls are wrapped in try/catch).
 
-Add to `vitest.config.js`:
+### Playwright (wired)
 
-```javascript
-import { defineConfig } from 'vitest/config';
-import FailureCollector from './qa/learning/failure_collector';
+`playwright.config.ts` registers the reporter alongside the HTML reporter:
 
-const collector = new FailureCollector();
-
-export default defineConfig({
-  test: {
-    onTestFailure: (failure) => {
-      collector.collect({
-        testName: failure.name,
-        testFile: failure.file,
-        errorMessage: failure.error?.message,
-        errorStack: failure.error?.stack,
-        category: failure.category,
-        severity: failure.severity || 'medium',
-      });
-    },
-  },
-});
+```typescript
+reporter: [
+  ['html'],
+  ['./qa/learning/playwright-reporter.cjs'],
+],
 ```
 
-### Playwright Integration
+On any `failed` or `timedOut` test, `playwright-reporter.cjs` records the test
+name, file, error message, stack, and status into the `failures/` store.
 
-Add to reporter or test setup:
+### Vitest (wired)
 
-```javascript
-import FailureCollector from './qa/learning/failure_collector';
+`vitest.config.ts` registers the reporter alongside the default reporter:
 
-const collector = new FailureCollector();
-
-test.afterEach(async ({ page }, testInfo) => {
-  if (testInfo.status !== 'passed') {
-    collector.collect({
-      testName: testInfo.title,
-      testFile: testInfo.file,
-      errorMessage: testInfo.error?.message || 'Test failed',
-      errorStack: testInfo.error?.stack,
-      duration: testInfo.duration,
-      framework: 'playwright',
-    });
-  }
-});
+```typescript
+reporters: ['default', './qa/learning/vitest-reporter.ts'],
 ```
+
+`vitest-reporter.ts` uses the Vitest 4 `onTestCaseResult` hook to record every
+failed unit/integration/UI test into the same `failures/` store.
+
+### The full loop
+
+```
+npm run test:e2e   (or test:unit:run / test:integration:run / test:ui:run)
+        │  failing tests are captured into  failures/   (gitignored runtime data)
+        ▼
+npm run qa:learn
+        │  extracts patterns, writes them to  qa/learning/learned_patterns.json,
+        │  and marks each failure as learned so re-runs only process new ones
+        ▼
+npm run qa:failures:stats   /   qa:report      (inspect what was learned)
+```
+
+> Note: pattern generation requires recurrence — a pattern needs at least
+> `minOccurrences` (default 2) matching failures before it is persisted, so a
+> single one-off failure is recorded but won't produce a high-confidence
+> pattern until it happens again.
 
 ## Failure Categories
 
