@@ -2,803 +2,19 @@
   "patterns": [
     {
       "type": "message",
-      "pattern": "expect",
-      "failures": [
-        "failure_1781310833059_u842ce2ys",
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310847796_tdzhdkkqo",
-        "failure_1781310878317_3ztelpuhb",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310967989_n8qex49pj",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781310983700_nj7qk5398",
-        "failure_1781311015800_y7qezucj7",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311485323_x99kj4u5b",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311499546_pfp7fgjk3",
-        "failure_1781311529850_zhyjee57l",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312272497_cr09g9yv5",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312287826_8vojxl8ee",
-        "failure_1781312319178_br3xouuo3",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
-      ],
-      "confidence": 1,
-      "occurrences": 24,
-      "severity": "medium",
-      "id": "pattern_7820063b"
-    },
-    {
-      "type": "message",
-      "pattern": "received",
-      "failures": [
-        "failure_1781310833059_u842ce2ys",
-        "failure_1781310833059_u842ce2ys",
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310847796_tdzhdkkqo",
-        "failure_1781310847796_tdzhdkkqo",
-        "failure_1781310878317_3ztelpuhb",
-        "failure_1781310878317_3ztelpuhb",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310967989_n8qex49pj",
-        "failure_1781310967989_n8qex49pj",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781310983700_nj7qk5398",
-        "failure_1781310983700_nj7qk5398",
-        "failure_1781311015800_y7qezucj7",
-        "failure_1781311015800_y7qezucj7",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311485323_x99kj4u5b",
-        "failure_1781311485323_x99kj4u5b",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311499546_pfp7fgjk3",
-        "failure_1781311499546_pfp7fgjk3",
-        "failure_1781311529850_zhyjee57l",
-        "failure_1781311529850_zhyjee57l",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312272497_cr09g9yv5",
-        "failure_1781312272497_cr09g9yv5",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312287826_8vojxl8ee",
-        "failure_1781312287826_8vojxl8ee",
-        "failure_1781312319178_br3xouuo3",
-        "failure_1781312319178_br3xouuo3",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8",
-        "failure_1781312336592_bo25x15c8"
-      ],
-      "confidence": 1,
-      "occurrences": 48,
-      "severity": "medium",
-      "id": "pattern_4f7d11d8"
-    },
-    {
-      "type": "message",
-      "pattern": "tobegreaterthan",
-      "failures": [
-        "failure_1781310833059_u842ce2ys",
-        "failure_1781310967989_n8qex49pj",
-        "failure_1781311485323_x99kj4u5b",
-        "failure_1781312272497_cr09g9yv5"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_c056d658"
-    },
-    {
-      "type": "message",
-      "pattern": "expect:received",
-      "failures": [
-        "failure_1781310833059_u842ce2ys",
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310847796_tdzhdkkqo",
-        "failure_1781310878317_3ztelpuhb",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310967989_n8qex49pj",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781310983700_nj7qk5398",
-        "failure_1781311015800_y7qezucj7",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311485323_x99kj4u5b",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311499546_pfp7fgjk3",
-        "failure_1781311529850_zhyjee57l",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312272497_cr09g9yv5",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312287826_8vojxl8ee",
-        "failure_1781312319178_br3xouuo3",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
-      ],
-      "confidence": 1,
-      "occurrences": 24,
-      "severity": "medium",
-      "id": "pattern_2ddf1eb5"
-    },
-    {
-      "type": "message",
-      "pattern": "received:tobegreaterthan",
-      "failures": [
-        "failure_1781310833059_u842ce2ys",
-        "failure_1781310967989_n8qex49pj",
-        "failure_1781311485323_x99kj4u5b",
-        "failure_1781312272497_cr09g9yv5"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_722525c4"
-    },
-    {
-      "type": "message",
-      "pattern": "tobegreaterthan:received",
-      "failures": [
-        "failure_1781310833059_u842ce2ys",
-        "failure_1781310967989_n8qex49pj",
-        "failure_1781311485323_x99kj4u5b",
-        "failure_1781312272497_cr09g9yv5"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_5db57119"
-    },
-    {
-      "type": "message",
-      "pattern": "locator",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_2f3b6183"
-    },
-    {
-      "type": "message",
-      "pattern": "isvisible",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_2002fce9"
-    },
-    {
-      "type": "message",
-      "pattern": "unexpected",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_1dc4ae22"
-    },
-    {
-      "type": "message",
-      "pattern": "token",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_a7f476f4"
-    },
-    {
-      "type": "message",
-      "pattern": "while",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_156a55dd"
-    },
-    {
-      "type": "message",
-      "pattern": "parsing",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_fe1d9515"
-    },
-    {
-      "type": "message",
-      "pattern": "css",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 1,
-      "occurrences": 8,
-      "severity": "medium",
-      "id": "pattern_bf90dde6"
-    },
-    {
-      "type": "message",
-      "pattern": "selector",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_d6feb5ac"
-    },
-    {
-      "type": "message",
-      "pattern": "api-key-input",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 1,
-      "occurrences": 8,
-      "severity": "medium",
-      "id": "pattern_7b3d125c"
-    },
-    {
-      "type": "message",
-      "pattern": "text=configured",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 1,
-      "occurrences": 8,
-      "severity": "medium",
-      "id": "pattern_709f2d8f"
-    },
-    {
-      "type": "message",
-      "pattern": "did",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_bd3a1222"
-    },
-    {
-      "type": "message",
-      "pattern": "you",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_dee11f4a"
-    },
-    {
-      "type": "message",
-      "pattern": "mean",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_7ba5c2b2"
-    },
-    {
-      "type": "message",
-      "pattern": "escape",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_dc8bdb40"
-    },
-    {
-      "type": "message",
-      "pattern": "it?",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_a1b7d07c"
-    },
-    {
-      "type": "message",
-      "pattern": "call",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_de8d5365"
-    },
-    {
-      "type": "message",
-      "pattern": "log",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_e98b1069"
-    },
-    {
-      "type": "message",
-      "pattern": "checking",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_49999b66"
-    },
-    {
-      "type": "message",
-      "pattern": "visibility",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_3d0f7ab4"
-    },
-    {
-      "type": "message",
-      "pattern": "nth=0",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_85d37d30"
-    },
-    {
-      "type": "message",
-      "pattern": "locator:isvisible",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_6d764d62"
-    },
-    {
-      "type": "message",
-      "pattern": "isvisible:unexpected",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_ab99d765"
-    },
-    {
-      "type": "message",
-      "pattern": "unexpected:token",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_22df5d12"
-    },
-    {
-      "type": "message",
-      "pattern": "token:while",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_f87c6ecc"
-    },
-    {
-      "type": "message",
-      "pattern": "while:parsing",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_1fcf0599"
-    },
-    {
-      "type": "message",
-      "pattern": "parsing:css",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_a137f13b"
-    },
-    {
-      "type": "message",
-      "pattern": "css:selector",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_30d6faec"
-    },
-    {
-      "type": "message",
-      "pattern": "selector:api-key-input",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_c64fecf2"
-    },
-    {
-      "type": "message",
-      "pattern": "api-key-input:text=configured",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 1,
-      "occurrences": 8,
-      "severity": "medium",
-      "id": "pattern_196aef30"
-    },
-    {
-      "type": "message",
-      "pattern": "text=configured:did",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_a2351afe"
-    },
-    {
-      "type": "message",
-      "pattern": "did:you",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_05e605a8"
-    },
-    {
-      "type": "message",
-      "pattern": "you:mean",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_abc7b1f5"
-    },
-    {
-      "type": "message",
-      "pattern": "mean:css",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_08264d94"
-    },
-    {
-      "type": "message",
-      "pattern": "css:escape",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_8d43107a"
-    },
-    {
-      "type": "message",
-      "pattern": "escape:it?",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_8e9bbbe6"
-    },
-    {
-      "type": "message",
-      "pattern": "it?:call",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_2cdfa5c7"
-    },
-    {
-      "type": "message",
-      "pattern": "call:log",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_c6286c28"
-    },
-    {
-      "type": "message",
-      "pattern": "log:checking",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_bb80198c"
-    },
-    {
-      "type": "message",
-      "pattern": "checking:visibility",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_183202d0"
-    },
-    {
-      "type": "message",
-      "pattern": "visibility:api-key-input",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_d65ad9c4"
-    },
-    {
-      "type": "message",
-      "pattern": "text=configured:nth=0",
-      "failures": [
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781312273429_g9jv5et38"
-      ],
-      "confidence": 0.8,
-      "occurrences": 4,
-      "severity": "medium",
-      "id": "pattern_656f0806"
-    },
-    {
-      "type": "message",
-      "pattern": "tobe",
-      "failures": [
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
-      ],
-      "confidence": 1,
-      "occurrences": 12,
-      "severity": "medium",
-      "id": "pattern_2b37e003"
-    },
-    {
-      "type": "message",
       "pattern": "object",
       "failures": [
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
+        "failure_1781319141815_6r5qxzdof",
+        "failure_1781319141815_dxl64p2fv",
+        "failure_1781319141815_jt8hxvj5n",
+        "failure_1781319141839_uouulnejz",
+        "failure_1781319142661_tj1d1o0xp",
+        "failure_1781319142687_5qedc1vxs",
+        "failure_1781319143898_846s3rmzs",
+        "failure_1781319143898_w9jzpdod1"
       ],
       "confidence": 1,
-      "occurrences": 12,
+      "occurrences": 8,
       "severity": "medium",
       "id": "pattern_11597796"
     },
@@ -806,294 +22,270 @@
       "type": "message",
       "pattern": "equality",
       "failures": [
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
+        "failure_1781319141815_6r5qxzdof",
+        "failure_1781319141815_dxl64p2fv",
+        "failure_1781319141815_jt8hxvj5n",
+        "failure_1781319141839_uouulnejz",
+        "failure_1781319142661_tj1d1o0xp",
+        "failure_1781319142687_5qedc1vxs",
+        "failure_1781319143898_846s3rmzs",
+        "failure_1781319143898_w9jzpdod1",
+        "failure_1781319143898_w9jzpdod1"
       ],
       "confidence": 1,
-      "occurrences": 12,
+      "occurrences": 9,
       "severity": "medium",
       "id": "pattern_e4576d2a"
     },
     {
       "type": "message",
-      "pattern": "true",
-      "failures": [
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
-      ],
-      "confidence": 1,
-      "occurrences": 12,
-      "severity": "medium",
-      "id": "pattern_73e41d0a"
-    },
-    {
-      "type": "message",
-      "pattern": "false",
-      "failures": [
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
-      ],
-      "confidence": 1,
-      "occurrences": 12,
-      "severity": "medium",
-      "id": "pattern_e273f494"
-    },
-    {
-      "type": "message",
-      "pattern": "received:tobe",
-      "failures": [
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
-      ],
-      "confidence": 1,
-      "occurrences": 12,
-      "severity": "medium",
-      "id": "pattern_f69c9fc7"
-    },
-    {
-      "type": "message",
-      "pattern": "tobe:object",
-      "failures": [
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
-      ],
-      "confidence": 1,
-      "occurrences": 12,
-      "severity": "medium",
-      "id": "pattern_1edc519e"
-    },
-    {
-      "type": "message",
       "pattern": "object:equality",
       "failures": [
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
+        "failure_1781319141815_6r5qxzdof",
+        "failure_1781319141815_dxl64p2fv",
+        "failure_1781319141815_jt8hxvj5n",
+        "failure_1781319141839_uouulnejz",
+        "failure_1781319142661_tj1d1o0xp",
+        "failure_1781319142687_5qedc1vxs",
+        "failure_1781319143898_846s3rmzs",
+        "failure_1781319143898_w9jzpdod1"
       ],
       "confidence": 1,
-      "occurrences": 12,
+      "occurrences": 8,
       "severity": "medium",
       "id": "pattern_b6fae613"
     },
     {
       "type": "message",
-      "pattern": "equality:true",
+      "pattern": "with",
       "failures": [
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
+        "failure_1781319141815_c3tvgvjuc",
+        "failure_1781319141909_osuyv4igx",
+        "failure_1781319143898_w9jzpdod1",
+        "failure_1781319143898_w9jzpdod1"
       ],
-      "confidence": 1,
-      "occurrences": 12,
+      "confidence": 0.8,
+      "occurrences": 4,
       "severity": "medium",
-      "id": "pattern_9287d00b"
+      "id": "pattern_eef8e161"
     },
     {
       "type": "message",
-      "pattern": "true:received",
+      "pattern": "have",
       "failures": [
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
+        "failure_1781319141909_vqyfnkiw9",
+        "failure_1781319141909_x582bfd4a",
+        "failure_1781319142660_y1h14jzjj",
+        "failure_1781319142661_kaxxzadnc",
+        "failure_1781319142662_1ygxv9nvg",
+        "failure_1781319144061_vui77uw1u",
+        "failure_1781319144106_0f8jpcinw"
       ],
       "confidence": 1,
-      "occurrences": 12,
+      "occurrences": 7,
       "severity": "medium",
-      "id": "pattern_e77446d6"
+      "id": "pattern_25c74df0"
     },
     {
       "type": "message",
-      "pattern": "received:false",
+      "pattern": "length",
       "failures": [
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
+        "failure_1781319141909_vqyfnkiw9",
+        "failure_1781319141909_x582bfd4a",
+        "failure_1781319142660_y1h14jzjj",
+        "failure_1781319142661_kaxxzadnc",
+        "failure_1781319142662_1ygxv9nvg",
+        "failure_1781319144061_vui77uw1u",
+        "failure_1781319144106_0f8jpcinw"
       ],
       "confidence": 1,
-      "occurrences": 12,
+      "occurrences": 7,
       "severity": "medium",
-      "id": "pattern_80e9b048"
+      "id": "pattern_ba8e57e7"
     },
     {
       "type": "message",
-      "pattern": "tobegreaterthanorequal",
+      "pattern": "but",
       "failures": [
-        "failure_1781310847796_tdzhdkkqo",
-        "failure_1781310878317_3ztelpuhb",
-        "failure_1781310983700_nj7qk5398",
-        "failure_1781311015800_y7qezucj7",
-        "failure_1781311499546_pfp7fgjk3",
-        "failure_1781311529850_zhyjee57l",
-        "failure_1781312287826_8vojxl8ee",
-        "failure_1781312319178_br3xouuo3"
+        "failure_1781319141909_vqyfnkiw9",
+        "failure_1781319141909_x582bfd4a",
+        "failure_1781319142660_y1h14jzjj",
+        "failure_1781319142661_kaxxzadnc",
+        "failure_1781319142662_1ygxv9nvg",
+        "failure_1781319144061_vui77uw1u",
+        "failure_1781319144106_0f8jpcinw"
       ],
       "confidence": 1,
-      "occurrences": 8,
+      "occurrences": 7,
       "severity": "medium",
-      "id": "pattern_1e4a5dc7"
+      "id": "pattern_40999399"
     },
     {
       "type": "message",
-      "pattern": "received:tobegreaterthanorequal",
+      "pattern": "got",
       "failures": [
-        "failure_1781310847796_tdzhdkkqo",
-        "failure_1781310878317_3ztelpuhb",
-        "failure_1781310983700_nj7qk5398",
-        "failure_1781311015800_y7qezucj7",
-        "failure_1781311499546_pfp7fgjk3",
-        "failure_1781311529850_zhyjee57l",
-        "failure_1781312287826_8vojxl8ee",
-        "failure_1781312319178_br3xouuo3"
+        "failure_1781319141909_vqyfnkiw9",
+        "failure_1781319141909_x582bfd4a",
+        "failure_1781319142660_y1h14jzjj",
+        "failure_1781319142661_kaxxzadnc",
+        "failure_1781319142662_1ygxv9nvg",
+        "failure_1781319144061_vui77uw1u",
+        "failure_1781319144106_0f8jpcinw"
       ],
       "confidence": 1,
-      "occurrences": 8,
+      "occurrences": 7,
       "severity": "medium",
-      "id": "pattern_9daa7776"
+      "id": "pattern_744ab165"
     },
     {
       "type": "message",
-      "pattern": "tobegreaterthanorequal:received",
+      "pattern": "have:length",
       "failures": [
-        "failure_1781310847796_tdzhdkkqo",
-        "failure_1781310878317_3ztelpuhb",
-        "failure_1781310983700_nj7qk5398",
-        "failure_1781311015800_y7qezucj7",
-        "failure_1781311499546_pfp7fgjk3",
-        "failure_1781311529850_zhyjee57l",
-        "failure_1781312287826_8vojxl8ee",
-        "failure_1781312319178_br3xouuo3"
+        "failure_1781319141909_vqyfnkiw9",
+        "failure_1781319141909_x582bfd4a",
+        "failure_1781319142660_y1h14jzjj",
+        "failure_1781319142661_kaxxzadnc",
+        "failure_1781319142662_1ygxv9nvg",
+        "failure_1781319144061_vui77uw1u",
+        "failure_1781319144106_0f8jpcinw"
       ],
       "confidence": 1,
-      "occurrences": 8,
+      "occurrences": 7,
       "severity": "medium",
-      "id": "pattern_f81f20d0"
+      "id": "pattern_7aee5977"
+    },
+    {
+      "type": "message",
+      "pattern": "length:but",
+      "failures": [
+        "failure_1781319141909_vqyfnkiw9",
+        "failure_1781319141909_x582bfd4a",
+        "failure_1781319142660_y1h14jzjj",
+        "failure_1781319142661_kaxxzadnc",
+        "failure_1781319142662_1ygxv9nvg",
+        "failure_1781319144061_vui77uw1u",
+        "failure_1781319144106_0f8jpcinw"
+      ],
+      "confidence": 1,
+      "occurrences": 7,
+      "severity": "medium",
+      "id": "pattern_90ef7a0e"
+    },
+    {
+      "type": "message",
+      "pattern": "but:got",
+      "failures": [
+        "failure_1781319141909_vqyfnkiw9",
+        "failure_1781319141909_x582bfd4a",
+        "failure_1781319142660_y1h14jzjj",
+        "failure_1781319142661_kaxxzadnc",
+        "failure_1781319142662_1ygxv9nvg",
+        "failure_1781319144061_vui77uw1u",
+        "failure_1781319144106_0f8jpcinw"
+      ],
+      "confidence": 1,
+      "occurrences": 7,
+      "severity": "medium",
+      "id": "pattern_1f0451f5"
+    },
+    {
+      "type": "message",
+      "pattern": "promise",
+      "failures": [
+        "failure_1781319143898_w9jzpdod1",
+        "failure_1781319143898_w9jzpdod1",
+        "failure_1781319143898_w9jzpdod1"
+      ],
+      "confidence": 0.6000000000000001,
+      "occurrences": 3,
+      "severity": "medium",
+      "id": "pattern_2549fceb"
+    },
+    {
+      "type": "stack_trace",
+      "pattern": "runWithCancel:chunk-artifact.js",
+      "function": "runWithCancel",
+      "file": "file:///home/user/devforge/node_modules/@vitest/runner/dist/chunk-artifact.js",
+      "failures": [
+        "failure_1781319141815_6r5qxzdof",
+        "failure_1781319141815_c3tvgvjuc",
+        "failure_1781319141815_dxl64p2fv",
+        "failure_1781319141815_jt8hxvj5n",
+        "failure_1781319141839_uouulnejz",
+        "failure_1781319141909_osuyv4igx",
+        "failure_1781319141909_vqyfnkiw9",
+        "failure_1781319141909_x582bfd4a",
+        "failure_1781319142533_hw3pnah0b",
+        "failure_1781319142660_y1h14jzjj",
+        "failure_1781319142661_kaxxzadnc",
+        "failure_1781319142661_tj1d1o0xp",
+        "failure_1781319142662_1ygxv9nvg",
+        "failure_1781319142687_15ggbdegc",
+        "failure_1781319142687_5qedc1vxs",
+        "failure_1781319143388_49eobfqnd",
+        "failure_1781319143898_846s3rmzs",
+        "failure_1781319143898_w9jzpdod1",
+        "failure_1781319144061_vui77uw1u",
+        "failure_1781319144106_0f8jpcinw"
+      ],
+      "confidence": 1,
+      "occurrences": 20,
+      "severity": "high",
+      "id": "pattern_5f29a0db"
+    },
+    {
+      "type": "stack_trace",
+      "pattern": "runWithTimeout:chunk-artifact.js",
+      "function": "runWithTimeout",
+      "file": "file:///home/user/devforge/node_modules/@vitest/runner/dist/chunk-artifact.js",
+      "failures": [
+        "failure_1781319141815_6r5qxzdof",
+        "failure_1781319141815_dxl64p2fv",
+        "failure_1781319141815_jt8hxvj5n",
+        "failure_1781319141839_uouulnejz",
+        "failure_1781319142533_hw3pnah0b",
+        "failure_1781319142661_tj1d1o0xp",
+        "failure_1781319142687_15ggbdegc",
+        "failure_1781319142687_5qedc1vxs",
+        "failure_1781319143388_49eobfqnd",
+        "failure_1781319143898_846s3rmzs",
+        "failure_1781319143898_w9jzpdod1"
+      ],
+      "confidence": 1,
+      "occurrences": 11,
+      "severity": "high",
+      "id": "pattern_99e6399a"
     },
     {
       "type": "category",
       "pattern": "category:assertion",
       "category": "assertion",
       "failures": [
-        "failure_1781310833059_u842ce2ys",
-        "failure_1781310833848_izt2hyutc",
-        "failure_1781310837420_5at1ljql4",
-        "failure_1781310847796_tdzhdkkqo",
-        "failure_1781310878317_3ztelpuhb",
-        "failure_1781310896222_yyodonsl4",
-        "failure_1781310896640_lioua8z92",
-        "failure_1781310967989_n8qex49pj",
-        "failure_1781310969095_kbjx0rqjp",
-        "failure_1781310973332_z2fyb48p6",
-        "failure_1781310983700_nj7qk5398",
-        "failure_1781311015800_y7qezucj7",
-        "failure_1781311034088_1w9ogkoyj",
-        "failure_1781311034484_p92svvnwb",
-        "failure_1781311485323_x99kj4u5b",
-        "failure_1781311486004_q9rvtnu85",
-        "failure_1781311489567_kg3h4nl0x",
-        "failure_1781311499546_pfp7fgjk3",
-        "failure_1781311529850_zhyjee57l",
-        "failure_1781311548053_l99z79w8k",
-        "failure_1781311548463_trfd2uv1j",
-        "failure_1781312272497_cr09g9yv5",
-        "failure_1781312273429_g9jv5et38",
-        "failure_1781312277234_gjt7dx3f4",
-        "failure_1781312287826_8vojxl8ee",
-        "failure_1781312319178_br3xouuo3",
-        "failure_1781312336215_isi68xxri",
-        "failure_1781312336592_bo25x15c8"
+        "failure_1781319141815_6r5qxzdof",
+        "failure_1781319141815_dxl64p2fv",
+        "failure_1781319141815_jt8hxvj5n",
+        "failure_1781319141839_uouulnejz",
+        "failure_1781319141909_osuyv4igx",
+        "failure_1781319141909_vqyfnkiw9",
+        "failure_1781319141909_x582bfd4a",
+        "failure_1781319142533_hw3pnah0b",
+        "failure_1781319142660_y1h14jzjj",
+        "failure_1781319142661_kaxxzadnc",
+        "failure_1781319142661_tj1d1o0xp",
+        "failure_1781319142662_1ygxv9nvg",
+        "failure_1781319142687_15ggbdegc",
+        "failure_1781319142687_5qedc1vxs",
+        "failure_1781319143898_846s3rmzs",
+        "failure_1781319143898_w9jzpdod1",
+        "failure_1781319144061_vui77uw1u",
+        "failure_1781319144106_0f8jpcinw"
       ],
       "confidence": 1,
-      "occurrences": 28,
+      "occurrences": 18,
       "severity": "high",
       "id": "pattern_71ca0728"
     }
   ],
-  "lastUpdated": "2026-06-13T01:07:49.862Z",
+  "lastUpdated": "2026-06-13T02:52:39.470Z",
   "version": "1.0"
 }
