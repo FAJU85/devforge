@@ -35,6 +35,8 @@
     "qa:failures:demo": "node scripts/analyze-failures.js demo",
     "qa:failures:collect": "node scripts/analyze-failures.js collect",
     "qa:failures:clear": "node scripts/analyze-failures.js clear",
+    "qa:report": "node scripts/analyze-failures.js report",
+    "qa:suggest": "node scripts/analyze-failures.js suggest",
     "qa:dashboard": "node scripts/dashboard.js",
     "qa:cron": "node scripts/cron-learn.js",
     "qa:cron:hourly": "node scripts/cron-learn.js --interval 3600000",

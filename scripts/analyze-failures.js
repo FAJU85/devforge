@@ -29,14 +29,16 @@ const FailureCollector = safeRequire('../qa/learning/failure_collector', 'Failur
 const PatternLearner = safeRequire('../qa/learning/pattern_learner', 'PatternLearner');
 const PatternMatcher = safeRequire('../qa/learning/pattern_matcher', 'PatternMatcher');
 const SuggestionGenerator = safeRequire('../qa/learning/suggestion_generator', 'SuggestionGenerator');
+const PatternSuggester = safeRequire('../qa/learning/pattern-suggester', 'PatternSuggester');
 
 // Create instances with error handling
-let failureCollector, patternLearner, patternMatcher, suggestionGenerator;
+let failureCollector, patternLearner, patternMatcher, suggestionGenerator, patternSuggester;
 try {
   failureCollector = new FailureCollector();
   patternLearner = new PatternLearner();
   patternMatcher = new PatternMatcher();
   suggestionGenerator = new SuggestionGenerator();
+  patternSuggester = new PatternSuggester();
 } catch (err) {
   console.error(`\n❌ Error initializing QA system: ${err.message}\n`);
   process.exit(1);
@@ -187,10 +189,12 @@ function displayReport() {
   // so the report reflects what's actually on disk, not just this process.
   const persisted = patternMatcher.patterns || [];
   const stats = patternMatcher.getStatistics();
+  const suggesterReport = patternSuggester.generateReport();
 
   console.log(`${COLORS.bold}Overview:${COLORS.reset}`);
   console.log(`  Total Patterns Learned: ${stats.totalPatterns}`);
   console.log(`  Total Failures: ${failureCollector.loadFailures().length}`);
+  console.log(`  High-Confidence Patterns: ${suggesterReport.highConfidencePatterns} (${stats.totalPatterns > 0 ? (suggesterReport.highConfidencePatterns / stats.totalPatterns * 100).toFixed(0) : 0}%)`);
   console.log(`  Avg Confidence: ${(stats.avgConfidence * 100).toFixed(0)}%`);
 
   if (Object.keys(stats.byType).length > 0) {
@@ -215,6 +219,23 @@ function displayReport() {
     console.log(`\n${COLORS.dim}No patterns learned yet. Run tests, then "npm run qa:learn".${COLORS.reset}`);
   }
 
+  // Show critical patterns
+  if (suggesterReport.criticalPatterns > 0) {
+    console.log(`\n${COLORS.bold}${COLORS.red}⚠ Critical Patterns (${suggesterReport.criticalPatterns}):${COLORS.reset}`);
+    const criticalPatterns = persisted
+      .filter(p => p.severity === 'critical')
+      .sort((a, b) => (b.occurrences || 0) - (a.occurrences || 0))
+      .slice(0, 3);
+
+    criticalPatterns.forEach(p => {
+      console.log(`  • ${p.pattern.substring(0, 50)} (${p.occurrences}x)`);
+    });
+  }
+
+  console.log(`\n${COLORS.bold}Suggested Next Steps:${COLORS.reset}`);
+  console.log(`  1. View live dashboard: ${COLORS.cyan}npm run qa:dashboard${COLORS.reset}`);
+  console.log(`  2. Get suggestions for failures: ${COLORS.cyan}npm run qa:suggest${COLORS.reset}`);
+  console.log(`  3. Set up auto-learning: ${COLORS.cyan}npm run qa:cron${COLORS.reset}`);
   console.log('');
 }
 
@@ -263,25 +284,28 @@ ${COLORS.bold}Commands:${COLORS.reset}
 
   ${COLORS.cyan}collect${COLORS.reset}
     Collect a sample test failure
-    
+
   ${COLORS.cyan}list${COLORS.reset}
     List recent failures
-    
+
   ${COLORS.cyan}stats${COLORS.reset}
     Show failure statistics
-    
+
   ${COLORS.cyan}learn${COLORS.reset}
     Learn patterns from collected failures
-    
+
   ${COLORS.cyan}report${COLORS.reset}
     Show learning progress and pattern recommendations
-    
+
+  ${COLORS.cyan}suggest [failure-id]${COLORS.reset}
+    Get suggestions for a specific failure based on learned patterns
+
   ${COLORS.cyan}match <code> ${COLORS.reset}
     Analyze code for potential issues
-    
+
   ${COLORS.cyan}clear${COLORS.reset}
     Clear all collected failures
-    
+
   ${COLORS.cyan}demo${COLORS.reset}
     Run a complete learning demo with sample data
 
@@ -289,11 +313,15 @@ ${COLORS.bold}Examples:${COLORS.reset}
   # Collect and analyze failures
   node scripts/analyze-failures.js collect
   node scripts/analyze-failures.js stats
-  
+
   # Learn from failures and get suggestions
   node scripts/analyze-failures.js learn
   node scripts/analyze-failures.js report
-  
+
+  # Get intelligent suggestions for a failure
+  node scripts/analyze-failures.js suggest
+  node scripts/analyze-failures.js suggest failure_123456789
+
   # Run full demo
   node scripts/analyze-failures.js demo
 `);
@@ -362,7 +390,7 @@ const command = process.argv[2];
 const args = process.argv.slice(3);
 
 // Validate command before executing
-if (command && !['collect', 'list', 'stats', 'learn', 'report', 'match', 'clear', 'demo', 'help', '--help', '-h'].includes(command)) {
+if (command && !['collect', 'list', 'stats', 'learn', 'report', 'suggest', 'match', 'clear', 'demo', 'help', '--help', '-h'].includes(command)) {
   validateCommand(command);
   process.exit(1);
 }
@@ -479,6 +507,63 @@ try {
         process.exit(1);
       }
       break;
+
+    case 'suggest': {
+      try {
+        logSection('Pattern-Based Suggestions');
+
+        failureCollector.loadFailures();
+        let failure;
+
+        if (args.length > 0) {
+          // Get specific failure by ID
+          const failureId = args[0];
+          failure = failureCollector.failures.find(f => f.id === failureId);
+          if (!failure) {
+            log('red', `❌ Failure not found: ${failureId}\n`);
+            process.exit(1);
+          }
+        } else {
+          // Get most recent failure
+          const recent = failureCollector.getRecent(1);
+          if (recent.length === 0) {
+            log('yellow', '⚠ No failures found.\n');
+            break;
+          }
+          failure = recent[0];
+        }
+
+        console.log(`${COLORS.bold}Failure:${COLORS.reset} ${failure.testName}`);
+        console.log(`${COLORS.bold}Error:${COLORS.reset} ${failure.errorMessage.substring(0, 100)}\n`);
+
+        // Get suggestions
+        const suggestions = patternSuggester.getTopSuggestions(failure, 5);
+
+        if (suggestions.length === 0) {
+          log('dim', 'No matching patterns found. Run more tests to build pattern database.\n');
+        } else {
+          console.log(`${COLORS.bold}Suggestions:${COLORS.reset}`);
+          console.log(patternSuggester.formatForCLI(suggestions));
+        }
+
+        // Show related failures
+        const relatedFailures = failureCollector.failures
+          .filter(f => f.id !== failure.id && f.category === failure.category)
+          .slice(0, 3);
+
+        if (relatedFailures.length > 0) {
+          console.log(`\n${COLORS.bold}Related Failures (same category):${COLORS.reset}`);
+          relatedFailures.forEach((f, idx) => {
+            console.log(`  ${idx + 1}. ${f.testName}`);
+          });
+          console.log('');
+        }
+      } catch (err) {
+        log('red', `\n❌ Error getting suggestions: ${err.message}\n`);
+        process.exit(1);
+      }
+      break;
+    }
 
     case 'clear':
       try {
