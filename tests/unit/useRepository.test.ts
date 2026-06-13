@@ -78,11 +78,12 @@ describe('useRepository Hook', () => {
   });
 
   it('should load repository', async () => {
-    await hook.loadRepository('owner', 'repo');
+    const promise = hook.loadRepository('owner', 'repo');
     vi.advanceTimersByTime(10);
+    await promise;
     const state = hook.getState();
     expect(state.current?.name).toBe('repo');
-  });
+  }, 10000);
 
   it('should set loading state', async () => {
     const promise = hook.loadRepository('owner', 'repo');

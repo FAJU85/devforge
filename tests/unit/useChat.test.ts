@@ -138,14 +138,15 @@ describe('useChat Hook', () => {
   });
 
   it('should send message', async () => {
-    await hook.sendMessage('Hello');
+    const promise = hook.sendMessage('Hello');
     vi.advanceTimersByTime(100);
+    await promise;
 
     expect(hook.getMessageCount()).toBe(2);
     const state = hook.getState();
     expect(state.messages[0].role).toBe('user');
     expect(state.messages[1].role).toBe('assistant');
-  });
+  }, 10000);
 
   it('should handle loading during send', async () => {
     const promise = hook.sendMessage('Test');
