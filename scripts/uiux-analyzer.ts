@@ -37,6 +37,9 @@ interface AnalysisReport {
   screenshots: string[];
   findings: UiuxFinding[];
   summary: string;
+  consoleLogs?: string[];
+  networkErrors?: string[];
+  pageContent?: string;
 }
 
 async function captureScreenshot(page: Page, label: string, dir: string): Promise<ScreenshotCapture> {
@@ -141,12 +144,38 @@ async function recordAndAnalyze(url: string, headless = true): Promise<AnalysisR
   });
 
   const page: Page = await context.newPage();
+
+  const consoleLogs: string[] = [];
+  const networkErrors: string[] = [];
+  let pageBodyText = '';
+
+  page.on('console', (msg) => {
+    const text = `[${msg.type().toUpperCase()}] ${msg.text()}`;
+    consoleLogs.push(text);
+    if (msg.type() === 'error') console.log(`  ⚠️  Console: ${text}`);
+  });
+
+  page.on('requestfailed', (request) => {
+    const error = `Failed: ${request.method()} ${request.url()}`;
+    networkErrors.push(error);
+    console.log(`  ⚠️  Network: ${error}`);
+  });
+
   const captures: ScreenshotCapture[] = [];
 
   try {
     // 1. Initial page load
     console.log('\n📡 Loading page...');
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+
+    // Check page content
+    pageBodyText = await page.evaluate(() => document.body.innerText);
+    if (!pageBodyText || pageBodyText.trim().length === 0) {
+      console.log('  ⚠️  Page body is empty');
+    } else {
+      console.log(`  ✓ Page body has content (${pageBodyText.length} chars)`);
+    }
+
     captures.push(await captureScreenshot(page, 'initial-load', sessionDir));
 
     // 2. Wait for animations to settle
@@ -231,6 +260,9 @@ async function recordAndAnalyze(url: string, headless = true): Promise<AnalysisR
     screenshots: captures.map(c => c.path),
     findings,
     summary,
+    consoleLogs,
+    networkErrors: networkErrors.length > 0 ? networkErrors : undefined,
+    pageContent: pageBodyText && pageBodyText.length > 0 ? 'Page has content' : 'Page is empty',
   };
 
   // Save report

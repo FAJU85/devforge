@@ -3,6 +3,7 @@ import { resolve } from 'path';
 
 export default defineConfig({
   root: 'src',
+  base: '/static/',
   server: {
     port: 5173,
     host: 'localhost',
