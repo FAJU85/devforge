@@ -1,183 +1,270 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
-  <head>
+<html lang="en" class="scroll-smooth">
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DevForge - Foundation Components</title>
-    <style>
-      :root {
-        --bg: #1a1a1a;
-        --panel: #2d2d2d;
-        --text: #e0e0e0;
-        --text-secondary: #a0a0a0;
-        --border: #404040;
-        --accent: #3b82f6;
-        --accent-dim: rgba(59, 130, 246, 0.1);
-        --green: #10b981;
-        --red: #ef4444;
-        --yellow: #f59e0b;
-        --input-bg: #252525;
-      }
-
-      html[data-theme='light'] {
-        --bg: #ffffff;
-        --panel: #f3f4f6;
-        --text: #1f2937;
-        --text-secondary: #6b7280;
-        --border: #d1d5db;
-        --accent: #2563eb;
-        --accent-dim: rgba(37, 99, 235, 0.1);
-        --green: #059669;
-        --red: #dc2626;
-        --yellow: #d97706;
-        --input-bg: #f9fafb;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        padding: 20px;
-        background-color: var(--bg);
-        color: var(--text);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        line-height: 1.6;
-      }
-
-      .container {
-        max-width: 1200px;
-        margin: 0 auto;
-      }
-
-      h1 {
-        margin-top: 0;
-        margin-bottom: 30px;
-        font-size: 32px;
-      }
-
-      h2 {
-        margin-top: 40px;
-        margin-bottom: 20px;
-        font-size: 24px;
-        border-bottom: 2px solid var(--border);
-        padding-bottom: 10px;
-      }
-
-      .component-section {
-        margin-bottom: 40px;
-        padding: 20px;
-        background-color: var(--panel);
-        border-radius: 8px;
-        border: 1px solid var(--border);
-      }
-
-      .controls {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-bottom: 20px;
-      }
-
-      .component-demo {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 15px;
-        padding: 20px;
-        background-color: var(--bg);
-        border-radius: 6px;
-        border: 1px solid var(--border);
-        min-height: 60px;
-      }
-
-      .demo-group {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-
-      .label {
-        font-size: 12px;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-right: 10px;
-      }
-
-      #toast-container {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        max-width: 400px;
-        z-index: 9999;
-      }
-
-      .footer {
-        margin-top: 60px;
-        padding-top: 20px;
-        border-top: 1px solid var(--border);
-        color: var(--text-secondary);
-        font-size: 14px;
-      }
-    </style>
-  </head>
-  <body style="margin: 0; padding: 0; height: 100vh; overflow: hidden;">
+    <title>⚡ DevForge — AI Coding Agent</title>
+    <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="bg-white dark:bg-[#0D1116] text-[#0D1116] dark:text-white">
     <div id="app"></div>
 
     <script type="module">
-      import { AppLayout, ChatWindow, Sidebar, InputBox } from './index.ts';
+      import './styles.css';
+      import {
+        AppLayout, ChatWindow, Sidebar, InputBox,
+        SettingsForm, ModelSelector, ProviderSelector,
+        MainPanel, CommandPalette, RepositoryService,
+        RepoSelector, RepoTree, SearchBox
+      } from './index.ts';
 
-      // Initialize the full DevForge app with sidebar and chat
-      const appContainer = document.getElementById('app');
-      if (appContainer) {
-        const layout = AppLayout.create({ showSidebar: true });
-        appContainer.appendChild(layout);
+      // Wait for DOM to be ready
+      async function initializeApp() {
+        const appContainer = document.getElementById('app');
+        if (!appContainer) {
+          console.error('App container not found');
+          return;
+        }
 
-        // Add Sidebar to sidebar section
-        const sidebarSection = layout.querySelector('.sidebar-section');
+        // Create main layout with proper structure
+        const appLayout = AppLayout.create({ showSidebar: true });
+        appContainer.appendChild(appLayout);
+
+        // Initialize Sidebar
+        const sidebarSection = appLayout.querySelector('.sidebar-section');
         if (sidebarSection) {
           const sidebar = Sidebar.create();
           sidebarSection.appendChild(sidebar);
         }
 
-        // Add a ChatWindow with InputBox to the main content area
-        const mainSection = layout.querySelector('.main-section');
+        // Initialize Main Content Area
+        const mainSection = appLayout.querySelector('.main-section');
         if (mainSection) {
-          // Clear any existing content
-          mainSection.innerHTML = '';
+          // Create main application wrapper with Tailwind
+          const appWrapper = document.createElement('div');
+          appWrapper.className = 'flex flex-col h-screen bg-white dark:bg-[#0D1116]';
 
-          // Create a container for chat components
-          const chatContainer = document.createElement('div');
-          chatContainer.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-            gap: 12px;
-            padding: 16px;
-            overflow: hidden;
+          // Create top navigation/header
+          const header = document.createElement('div');
+          header.className = 'bg-white dark:bg-[#131920] border-b border-gray-200 dark:border-[#1A2228] px-6 py-3 flex items-center justify-between';
+          header.innerHTML = `
+            <div class="flex items-center gap-4">
+              <h1 class="text-2xl font-bold">
+                <span class="text-[#E19200]">⚡</span> DevForge
+              </h1>
+            </div>
+            <div class="flex items-center gap-4">
+              <button class="dev-button-secondary" id="theme-toggle">🌙 Dark</button>
+              <button class="dev-button-primary" id="settings-btn">⚙️ Settings</button>
+            </div>
           `;
+          appWrapper.appendChild(header);
 
-          // Add ChatWindow and InputBox
+          // Create main content area with tabs
+          const contentWrapper = document.createElement('div');
+          contentWrapper.className = 'flex-1 flex flex-col overflow-hidden';
+
+          // Tab navigation
+          const tabs = document.createElement('div');
+          tabs.className = 'bg-white dark:bg-[#0D1116] border-b border-gray-200 dark:border-[#1A2228] flex gap-2 px-6 py-3 overflow-x-auto';
+          tabs.innerHTML = `
+            <button class="tab-btn active px-4 py-2 border-b-2 border-[#239A82] dark:border-[#76CD1D] font-semibold text-[#239A82] dark:text-[#76CD1D]" data-tab="chat">💬 Chat</button>
+            <button class="tab-btn px-4 py-2 border-b-2 border-transparent text-gray-600 dark:text-gray-400 font-semibold hover:text-[#0D1116] dark:hover:text-white" data-tab="repo">📦 Repository</button>
+            <button class="tab-btn px-4 py-2 border-b-2 border-transparent text-gray-600 dark:text-gray-400 font-semibold hover:text-[#0D1116] dark:hover:text-white" data-tab="config">⚙️ Configuration</button>
+            <button class="tab-btn px-4 py-2 border-b-2 border-transparent text-gray-600 dark:text-gray-400 font-semibold hover:text-[#0D1116] dark:hover:text-white" data-tab="debug">🐛 Debug</button>
+          `;
+          contentWrapper.appendChild(tabs);
+
+          // Tab content areas
+          const contentArea = document.createElement('div');
+          contentArea.className = 'flex-1 overflow-hidden';
+
+          // Chat Tab Content
+          const chatTab = document.createElement('div');
+          chatTab.className = 'tab-content h-full flex flex-col gap-4 p-6 overflow-y-auto';
+          chatTab.dataset.tab = 'chat';
+
           const chatWindow = ChatWindow.create();
+          chatWindow.className = 'flex-1 overflow-y-auto rounded-lg border border-gray-200 dark:border-[#1A2228]';
+
           const inputBox = InputBox.create({
-            placeholder: 'Type your message...',
+            placeholder: 'Ask DevForge anything...',
             disabled: false,
-            onSend: (message) => {
+            onSend: async (message) => {
               console.log('Message sent:', message);
-              // TODO: Connect to API
+              try {
+                const response = await fetch('/api/chat', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ message })
+                });
+                if (response.ok) {
+                  const data = await response.json();
+                  console.log('Response:', data);
+                }
+              } catch (error) {
+                console.error('Chat error:', error);
+              }
             },
           });
 
-          chatContainer.appendChild(chatWindow);
-          chatContainer.appendChild(inputBox);
-          mainSection.appendChild(chatContainer);
+          chatTab.appendChild(chatWindow);
+          chatTab.appendChild(inputBox);
+          contentArea.appendChild(chatTab);
+
+          // Repository Tab Content
+          const repoTab = document.createElement('div');
+          repoTab.className = 'tab-content h-full flex flex-col gap-4 p-6 overflow-y-auto hidden';
+          repoTab.dataset.tab = 'repo';
+          repoTab.innerHTML = `
+            <div class="bg-white dark:bg-[#131920] border border-gray-200 dark:border-[#1A2228] rounded-lg p-4 shadow-sm">
+              <h2 class="text-xl font-bold mb-4">Repository Browser</h2>
+              <div id="repo-selector"></div>
+            </div>
+            <div class="bg-white dark:bg-[#131920] border border-gray-200 dark:border-[#1A2228] rounded-lg p-4 shadow-sm flex-1 overflow-hidden">
+              <h3 class="text-lg font-semibold mb-4">Files</h3>
+              <div id="repo-tree" class="overflow-y-auto"></div>
+            </div>
+          `;
+          contentArea.appendChild(repoTab);
+
+          // Configuration Tab Content
+          const configTab = document.createElement('div');
+          configTab.className = 'tab-content h-full flex flex-col gap-4 p-6 overflow-y-auto hidden';
+          configTab.dataset.tab = 'config';
+          configTab.innerHTML = `
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div class="bg-white dark:bg-[#131920] border border-gray-200 dark:border-[#1A2228] rounded-lg p-4 shadow-sm">
+                <h3 class="text-lg font-semibold mb-4">AI Model</h3>
+                <div id="model-selector"></div>
+              </div>
+              <div class="bg-white dark:bg-[#131920] border border-gray-200 dark:border-[#1A2228] rounded-lg p-4 shadow-sm">
+                <h3 class="text-lg font-semibold mb-4">Provider</h3>
+                <div id="provider-selector"></div>
+              </div>
+            </div>
+            <div class="bg-white dark:bg-[#131920] border border-gray-200 dark:border-[#1A2228] rounded-lg p-4 shadow-sm">
+              <h3 class="text-lg font-semibold mb-4">API Keys & Settings</h3>
+              <div id="settings-form"></div>
+            </div>
+          `;
+          contentArea.appendChild(configTab);
+
+          // Debug Tab Content
+          const debugTab = document.createElement('div');
+          debugTab.className = 'tab-content h-full flex flex-col gap-4 p-6 overflow-y-auto hidden';
+          debugTab.dataset.tab = 'debug';
+          debugTab.innerHTML = `
+            <div class="bg-white dark:bg-[#131920] border border-gray-200 dark:border-[#1A2228] rounded-lg p-4 shadow-sm">
+              <h3 class="text-lg font-semibold mb-4">System Information</h3>
+              <div class="space-y-2 font-mono text-sm">
+                <p>User Agent: <span id="user-agent" class="text-gray-600 dark:text-gray-400"></span></p>
+                <p>App Version: <span class="text-gray-600 dark:text-gray-400">1.0.0</span></p>
+                <p>Status: <span class="text-green-600">Connected</span></p>
+              </div>
+            </div>
+            <div class="bg-white dark:bg-[#131920] border border-gray-200 dark:border-[#1A2228] rounded-lg p-4 shadow-sm flex-1">
+              <h3 class="text-lg font-semibold mb-4">Console</h3>
+              <div id="debug-console" class="bg-black text-green-400 rounded p-3 font-mono text-xs overflow-y-auto h-64"></div>
+            </div>
+          `;
+          contentArea.appendChild(debugTab);
+
+          contentWrapper.appendChild(contentArea);
+          appWrapper.appendChild(contentWrapper);
+          mainSection.appendChild(appWrapper);
+
+          // Initialize tab switching
+          const tabButtons = tabs.querySelectorAll('.tab-btn');
+          const tabContents = contentArea.querySelectorAll('.tab-content');
+
+          tabButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+              const tabName = btn.dataset.tab;
+
+              // Update active button
+              tabButtons.forEach(b => {
+                b.classList.remove('border-b-[#239A82]', 'dark:border-b-[#76CD1D]', 'text-[#239A82]', 'dark:text-[#76CD1D]');
+                b.classList.add('border-b-transparent', 'text-gray-600', 'dark:text-gray-400');
+              });
+              btn.classList.add('border-b-[#239A82]', 'dark:border-b-[#76CD1D]', 'text-[#239A82]', 'dark:text-[#76CD1D]');
+              btn.classList.remove('border-b-transparent', 'text-gray-600', 'dark:text-gray-400');
+
+              // Update visible content
+              tabContents.forEach(content => {
+                if (content.dataset.tab === tabName) {
+                  content.classList.remove('hidden');
+                } else {
+                  content.classList.add('hidden');
+                }
+              });
+
+              // Initialize tab-specific components
+              initializeTabContent(tabName);
+            });
+          });
+
+          // Initialize tab content when switching
+          function initializeTabContent(tabName) {
+            if (tabName === 'repo') {
+              const repoSelector = document.getElementById('repo-selector');
+              const repoTree = document.getElementById('repo-tree');
+              if (repoSelector && !repoSelector.hasChildNodes()) {
+                const selector = RepoSelector.create();
+                repoSelector.appendChild(selector);
+              }
+              if (repoTree && !repoTree.hasChildNodes()) {
+                const tree = RepoTree.create();
+                repoTree.appendChild(tree);
+              }
+            } else if (tabName === 'config') {
+              const modelSelector = document.getElementById('model-selector');
+              const providerSelector = document.getElementById('provider-selector');
+              const settingsForm = document.getElementById('settings-form');
+
+              if (modelSelector && !modelSelector.hasChildNodes()) {
+                const selector = ModelSelector.create();
+                modelSelector.appendChild(selector);
+              }
+              if (providerSelector && !providerSelector.hasChildNodes()) {
+                const selector = ProviderSelector.create();
+                providerSelector.appendChild(selector);
+              }
+              if (settingsForm && !settingsForm.hasChildNodes()) {
+                const form = SettingsForm.create();
+                settingsForm.appendChild(form);
+              }
+            } else if (tabName === 'debug') {
+              document.getElementById('user-agent').textContent = navigator.userAgent.substring(0, 60) + '...';
+            }
+          }
+
+          // Theme toggle
+          const themeBtn = document.getElementById('theme-toggle');
+          if (themeBtn) {
+            themeBtn.addEventListener('click', () => {
+              document.documentElement.classList.toggle('dark');
+              themeBtn.textContent = document.documentElement.classList.contains('dark') ? '☀️ Light' : '🌙 Dark';
+            });
+          }
+
+          // Settings button
+          const settingsBtn = document.getElementById('settings-btn');
+          if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => {
+              const configTab = tabs.querySelector('[data-tab="config"]');
+              if (configTab) configTab.click();
+            });
+          }
         }
       }
+
+      // Initialize when page loads
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeApp);
+      } else {
+        initializeApp();
+      }
     </script>
-  </body>
+</body>
 </html>
