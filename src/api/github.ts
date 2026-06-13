@@ -75,9 +75,6 @@ export interface GitHubIssue {
 }
 
 export class GitHubClient extends ApiClient {
-  private owner: string = '';
-  private repo: string = '';
-
   constructor(token?: string) {
     const config: ApiConfig = {
       baseUrl: 'https://api.github.com',
@@ -95,9 +92,8 @@ export class GitHubClient extends ApiClient {
     super(config);
   }
 
-  setRepository(owner: string, repo: string): void {
-    this.owner = owner;
-    this.repo = repo;
+  setRepository(_owner: string, _repo: string): void {
+    // Repository context is passed in method calls directly
   }
 
   async getUser(username: string): Promise<ApiResponse<GitHubUser>> {
