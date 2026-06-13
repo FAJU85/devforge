@@ -3,13 +3,16 @@
 import pytest
 import uuid
 from datetime import datetime
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
+
+# Skip entire module if SQLAlchemy or DB deps are unavailable (CI without PostgreSQL)
+sqlalchemy = pytest.importorskip("sqlalchemy", reason="sqlalchemy not installed")
+from sqlalchemy.orm import Session  # noqa: E402
 
 # Import after environment setup
-from main import app
-from db.database import SessionLocal, engine
-from db.models import Base, User, Conversation, Message, Repository, Snippet, UserPreset
+from fastapi.testclient import TestClient  # noqa: E402
+from main import app  # noqa: E402
+from db.database import SessionLocal, engine  # noqa: E402
+from db.models import Base, User, Conversation, Message, Repository, Snippet, UserPreset  # noqa: E402
 
 
 @pytest.fixture(scope="function")
