@@ -305,3 +305,31 @@ class WebSocketConnectionManager:
 
 # Global connection manager instance
 connection_manager = WebSocketConnectionManager()
+
+
+# Initialize task service broadcast callback
+def initialize_task_broadcast():
+    """Initialize task service with WebSocket broadcast callback"""
+    try:
+        from api.services.task_service import task_service
+
+        async def broadcast_task_update(
+            task_id: str,
+            status: str,
+            progress: int,
+            message: str,
+            metadata: dict = None,
+        ):
+            """Broadcast task update to subscribed users"""
+            await connection_manager.broadcast_task_update(
+                task_id,
+                status,
+                progress,
+                message,
+                metadata,
+            )
+
+        task_service.set_broadcast_callback(broadcast_task_update)
+        logger.info("Task service broadcast callback initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize task broadcast: {e}")

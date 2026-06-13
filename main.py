@@ -25,6 +25,7 @@ try:
     from api.routes.chat import router as chat_router
     from api.routes.config import router as config_router
     from api.routes.repositories import router as repositories_router
+    from api.routes.tasks import router as tasks_router
     _DASHBOARD_ROUTES_AVAILABLE = True
 except ImportError as e:
     print(f"[WARN] Dashboard routes unavailable: {e}")
@@ -33,12 +34,13 @@ except ImportError as e:
 # WebSocket support
 try:
     from fastapi import WebSocket, WebSocketDisconnect
-    from api.websocket import connection_manager
+    from api.websocket import connection_manager, initialize_task_broadcast
     _WEBSOCKET_AVAILABLE = True
 except ImportError as e:
     print(f"[WARN] WebSocket support unavailable: {e}")
     _WEBSOCKET_AVAILABLE = False
     connection_manager = None
+    initialize_task_broadcast = None
 
 # Optional: Sentry error monitoring (backend + request tracing)
 try:
@@ -126,7 +128,11 @@ if _DASHBOARD_ROUTES_AVAILABLE:
     app.include_router(chat_router)
     app.include_router(config_router)
     app.include_router(repositories_router)
+    app.include_router(tasks_router)
 
+# Initialize WebSocket-Task integration
+if _WEBSOCKET_AVAILABLE and initialize_task_broadcast:
+    initialize_task_broadcast()
 
 # WebSocket endpoint for real-time updates
 if _WEBSOCKET_AVAILABLE:
