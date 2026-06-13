@@ -1,42 +1,32 @@
-# Stage 1: Build frontend
-FROM node:20-alpine AS frontend-builder
+# Build Next.js application
+FROM node:20-alpine
 
 WORKDIR /app
 
+# Copy package files
 COPY package*.json ./
+
+# Install dependencies
 RUN npm ci
 
+# Copy application code
 COPY . .
+
+# Build Next.js application
 RUN npm run build
 
-# Stage 2: Python backend
-FROM python:3.11-slim
+# Install Python dependencies for API services
+RUN apk add --no-cache python3 py3-pip && \
+    pip install --no-cache-dir -r requirements.txt || true && \
+    pip install --no-cache-dir playwright==1.60.0 && \
+    python -m playwright install chromium || true
 
-WORKDIR /code
+# Expose port for HF Spaces (default: 7860)
+EXPOSE 7860 3000 8001 8002 8003
 
-COPY requirements.txt requirements-db.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-# Database dependencies (SQLAlchemy, PostgreSQL, migrations)
-RUN pip install --no-cache-dir -r requirements-db.txt
-# Error monitoring + product analytics
-RUN pip install --no-cache-dir "sentry-sdk[fastapi]>=2.0" "posthog>=7.0"
-# Optional: AirLLM for local model inference (pulls torch + transformers; skip if not needed)
-RUN pip install --no-cache-dir airllm || true
-# Headless browser support
-RUN pip install --no-cache-dir playwright==1.60.0 && python -m playwright install chromium || true
-
-COPY . .
-
-# Copy built frontend from builder stage
-COPY --from=frontend-builder /app/dist ./static
-
-# Optional: control-plane dependencies (LangGraph, LangChain, Pinecone)
-RUN pip install --no-cache-dir -r control_plane/requirements.txt || true
-
-# Initialize database on startup (if DATABASE_URL provided)
+# Set environment
+ENV NODE_ENV=production
 ENV PYTHONUNBUFFERED=1
-RUN python -c "from db.database import init_db; init_db()" || true
 
-EXPOSE 7860
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Start Next.js production server
+CMD ["npm", "start"]
