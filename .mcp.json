@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.anthropic.com/claude/mcp/mcp.schema.json",
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ],
+      "description": "Playwright browser automation and testing via MCP"
+    }
+  }
+}
