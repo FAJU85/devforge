@@ -3,32 +3,43 @@
 import os
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import QueuePool
 from contextlib import contextmanager
 from db.models import Base
 
-# Configuration
-DB_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://devforge:devforge@localhost:5432/devforge"
-)
+# Configuration — fall back to SQLite when PostgreSQL is not available
+DB_URL = os.environ.get("DATABASE_URL", "")
 
-# Optional pool settings
-DB_POOL_SIZE = int(os.environ.get("DB_POOL_SIZE", "10"))
-DB_POOL_RECYCLE = int(os.environ.get("DB_POOL_RECYCLE", "3600"))
-DB_MAX_OVERFLOW = int(os.environ.get("DB_MAX_OVERFLOW", "20"))
-DB_POOL_PRE_PING = os.environ.get("DB_POOL_PRE_PING", "true").lower() == "true"
+if not DB_URL:
+    try:
+        import psycopg2  # noqa: F401
+        DB_URL = "postgresql://devforge:devforge@localhost:5432/devforge"
+    except ImportError:
+        DB_URL = "sqlite:///./devforge.db"
 
-# Create engine with connection pooling
-engine = create_engine(
-    DB_URL,
-    poolclass=QueuePool,
-    pool_size=DB_POOL_SIZE,
-    max_overflow=DB_MAX_OVERFLOW,
-    pool_recycle=DB_POOL_RECYCLE,
-    pool_pre_ping=DB_POOL_PRE_PING,
-    echo=os.environ.get("SQLALCHEMY_ECHO", "false").lower() == "true",
-)
+# Only apply pool settings for non-SQLite databases
+_is_sqlite = DB_URL.startswith("sqlite")
+
+if _is_sqlite:
+    engine = create_engine(
+        DB_URL,
+        connect_args={"check_same_thread": False},
+        echo=os.environ.get("SQLALCHEMY_ECHO", "false").lower() == "true",
+    )
+else:
+    from sqlalchemy.pool import QueuePool
+    DB_POOL_SIZE = int(os.environ.get("DB_POOL_SIZE", "10"))
+    DB_POOL_RECYCLE = int(os.environ.get("DB_POOL_RECYCLE", "3600"))
+    DB_MAX_OVERFLOW = int(os.environ.get("DB_MAX_OVERFLOW", "20"))
+    DB_POOL_PRE_PING = os.environ.get("DB_POOL_PRE_PING", "true").lower() == "true"
+    engine = create_engine(
+        DB_URL,
+        poolclass=QueuePool,
+        pool_size=DB_POOL_SIZE,
+        max_overflow=DB_MAX_OVERFLOW,
+        pool_recycle=DB_POOL_RECYCLE,
+        pool_pre_ping=DB_POOL_PRE_PING,
+        echo=os.environ.get("SQLALCHEMY_ECHO", "false").lower() == "true",
+    )
 
 # Session factory
 SessionLocal = sessionmaker(
