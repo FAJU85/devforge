@@ -41,6 +41,10 @@
     "qa:cron": "node scripts/cron-learn.js",
     "qa:cron:hourly": "node scripts/cron-learn.js --interval 3600000",
     "qa:cron:daily": "node scripts/cron-learn.js --interval 86400000",
+    "test:generate": "npx ts-node tests/generators/generate-tests.ts",
+    "test:generate:test": "npx ts-node tests/generators/generate-tests.ts --type test",
+    "test:generate:data": "npx ts-node tests/generators/generate-tests.ts --type data",
+    "test:self-heal": "npx playwright test tests/generated/self-healing-example.spec.ts",
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'"
   },
   "repository": {
@@ -51,6 +55,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
     "zustand": "^4.4.0"
   },
   "devDependencies": {
