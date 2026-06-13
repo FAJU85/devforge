@@ -18,7 +18,7 @@ export function createDialog(options: DialogOptions): HTMLDivElement {
     justify-content: center;
     z-index: 9998;
     animation: fadeIn 0.2s ease-out;
-    pointer-events: none;
+    pointer-events: auto;
   `;
 
 
@@ -144,12 +144,30 @@ export function createDialog(options: DialogOptions): HTMLDivElement {
     }
   };
 
+  // Handle Escape key for keyboard navigation
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      if (options.onCancel) options.onCancel();
+      closeDialog();
+      document.removeEventListener('keydown', handleKeyDown);
+    }
+  };
+
+  // Focus management: focus the confirm button initially for better keyboard navigation
+  const focusConfirmButton = () => {
+    setTimeout(() => confirmBtn.focus(), 100);
+  };
+
   overlay.addEventListener('click', handleOverlayClick);
+  document.addEventListener('keydown', handleKeyDown);
 
   dialog.appendChild(title);
   dialog.appendChild(message);
   dialog.appendChild(buttonContainer);
   overlay.appendChild(dialog);
+
+  // Set initial focus
+  focusConfirmButton();
 
   const style = document.createElement('style');
   style.textContent = `

@@ -63,7 +63,10 @@ export function createSidebar(): HTMLDivElement {
     { icon: '📊', label: 'Analytics', id: 'nav-analytics' },
   ];
 
-  menuItems.forEach((item) => {
+  let activeMenuItem: HTMLButtonElement | null = null;
+
+  // Set first item as active by default
+  menuItems.forEach((item, index) => {
     const menuItem = document.createElement('button');
     menuItem.id = item.id;
     menuItem.style.cssText = `
@@ -79,14 +82,55 @@ export function createSidebar(): HTMLDivElement {
       transition: all 0.2s;
       font-family: inherit;
       text-align: left;
+      border-left: 3px solid transparent;
     `;
 
+    // Make first item active by default
+    const isActive = index === 0;
+    if (isActive) {
+      menuItem.style.backgroundColor = 'var(--accent-dim)';
+      menuItem.style.borderLeftColor = 'var(--accent)';
+      menuItem.style.color = 'var(--accent)';
+      activeMenuItem = menuItem;
+    }
+
     menuItem.addEventListener('mouseover', () => {
-      menuItem.style.backgroundColor = 'var(--border)';
+      if (menuItem !== activeMenuItem) {
+        menuItem.style.backgroundColor = 'var(--border)';
+      }
     });
 
     menuItem.addEventListener('mouseout', () => {
-      menuItem.style.backgroundColor = 'transparent';
+      if (menuItem !== activeMenuItem) {
+        menuItem.style.backgroundColor = 'transparent';
+      }
+    });
+
+    // Add click handler to set active state
+    menuItem.addEventListener('click', () => {
+      if (activeMenuItem) {
+        activeMenuItem.style.backgroundColor = 'transparent';
+        activeMenuItem.style.borderLeftColor = 'transparent';
+        activeMenuItem.style.color = 'var(--text)';
+      }
+      menuItem.style.backgroundColor = 'var(--accent-dim)';
+      menuItem.style.borderLeftColor = 'var(--accent)';
+      menuItem.style.color = 'var(--accent)';
+      activeMenuItem = menuItem;
+    });
+
+    // Add keyboard navigation support
+    menuItem.addEventListener('keydown', (e) => {
+      const buttons = Array.from(nav.querySelectorAll('button'));
+      const currentIndex = buttons.indexOf(menuItem);
+
+      if (e.key === 'ArrowDown' && currentIndex < buttons.length - 1) {
+        e.preventDefault();
+        (buttons[currentIndex + 1] as HTMLButtonElement).focus();
+      } else if (e.key === 'ArrowUp' && currentIndex > 0) {
+        e.preventDefault();
+        (buttons[currentIndex - 1] as HTMLButtonElement).focus();
+      }
     });
 
     const icon = document.createElement('span');

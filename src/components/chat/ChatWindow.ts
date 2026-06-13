@@ -39,11 +39,13 @@ export function createChatWindow(options?: ChatWindowOptions): HTMLDivElement {
     options?.onScroll?.(messagesContainer.scrollTop);
   });
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom using requestAnimationFrame for better performance
   const scrollToBottom = () => {
-    setTimeout(() => {
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }, 0);
+    requestAnimationFrame(() => {
+      if (messagesContainer.parentNode) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+    });
   };
 
   // Empty state
@@ -87,7 +89,12 @@ export function createChatWindow(options?: ChatWindowOptions): HTMLDivElement {
 
   (chatWindow as any).clearMessages = () => {
     messagesContainer.innerHTML = '';
-    messagesContainer.appendChild(emptyState);
+    const newEmptyState = document.createElement('div');
+    newEmptyState.className = 'chat-empty-state';
+    newEmptyState.style.cssText = emptyState.style.cssText;
+    newEmptyState.appendChild(emptyIcon.cloneNode(true));
+    newEmptyState.appendChild(emptyText.cloneNode(true));
+    messagesContainer.appendChild(newEmptyState);
   };
 
   (chatWindow as any).getMessagesContainer = () => messagesContainer;

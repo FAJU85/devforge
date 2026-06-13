@@ -57,6 +57,7 @@ export function createToast(props: ToastElementProps): HTMLDivElement {
 
   const closeBtn = document.createElement('button');
   closeBtn.textContent = '×';
+  closeBtn.setAttribute('aria-label', 'Close notification');
   closeBtn.style.cssText = `
     background: none;
     border: none;
@@ -66,6 +67,7 @@ export function createToast(props: ToastElementProps): HTMLDivElement {
     padding: 0;
     flex-shrink: 0;
     transition: opacity 0.2s;
+    outline: none;
   `;
 
   closeBtn.addEventListener('mouseover', () => {
@@ -74,6 +76,16 @@ export function createToast(props: ToastElementProps): HTMLDivElement {
 
   closeBtn.addEventListener('mouseout', () => {
     closeBtn.style.opacity = '1';
+  });
+
+  // Add keyboard focus styling
+  closeBtn.addEventListener('focus', () => {
+    closeBtn.style.outline = '2px solid white';
+    closeBtn.style.outlineOffset = '2px';
+  });
+
+  closeBtn.addEventListener('blur', () => {
+    closeBtn.style.outline = 'none';
   });
 
   closeBtn.addEventListener('click', () => {
@@ -107,6 +119,8 @@ export function createToastContainer(): HTMLDivElement {
     flex-direction: column;
     gap: 10px;
     max-width: 400px;
+    max-height: 90vh;
+    overflow-y: auto;
     z-index: 9999;
   `;
 

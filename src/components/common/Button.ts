@@ -38,18 +38,24 @@ export function createButton(props: ButtonProps): HTMLButtonElement {
 
   button.style.cssText += variants[props.variant || 'primary'];
 
-  // Apply hover state
-  button.addEventListener('mouseenter', () => {
-    button.style.opacity = '0.8';
-  });
-
-  button.addEventListener('mouseleave', () => {
-    button.style.opacity = '1';
-  });
-
   // Set properties
   button.textContent = props.label;
   button.disabled = props.disabled || false;
+
+  // Apply disabled state styling
+  if (props.disabled) {
+    button.style.opacity = '0.5';
+    button.style.cursor = 'not-allowed';
+  }
+
+  // Apply hover state (skip if disabled)
+  button.addEventListener('mouseenter', () => {
+    if (!button.disabled) button.style.opacity = '0.8';
+  });
+
+  button.addEventListener('mouseleave', () => {
+    if (!button.disabled) button.style.opacity = '1';
+  });
   if (props.className) button.className = props.className;
 
   // Attach click handler
