@@ -31,3 +31,8 @@ devforge.db
 
 # UI/UX Analysis reports
 uiux-reports/
+
+# Installation directories
+venv/
+tools/
+.next/dev/
