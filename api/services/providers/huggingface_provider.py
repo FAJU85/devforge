@@ -181,47 +181,88 @@ class HuggingFaceProvider(BaseProvider):
         Yields:
             Response chunks as they arrive
         """
-        try:
-            # Note: HF Inference API doesn't support streaming in the same way
-            # So we'll generate the full response and yield it in chunks
-            prompt = self._format_messages_for_hf(messages)
+        max_retries = 3
+        retry_count = 0
+        last_error = None
 
-            temperature = kwargs.get("temperature", self.config.temperature)
-            max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
-            top_p = kwargs.get("top_p", self.config.top_p)
+        while retry_count < max_retries:
+            try:
+                # Note: HF Inference API doesn't support streaming in the same way
+                # So we'll generate the full response and yield it in chunks
+                prompt = self._format_messages_for_hf(messages)
 
-            url = f"{self.HF_API_URL}/{model}"
+                temperature = kwargs.get("temperature", self.config.temperature)
+                max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
+                top_p = kwargs.get("top_p", self.config.top_p)
 
-            payload = {
-                "inputs": prompt,
-                "parameters": {
-                    "temperature": temperature,
-                    "max_new_tokens": max_tokens,
-                    "top_p": top_p,
-                    "return_full_text": False,
-                },
-            }
+                url = f"{self.HF_API_URL}/{model}"
 
-            response = await self.http_client.post(url, json=payload)
-            response.raise_for_status()
+                payload = {
+                    "inputs": prompt,
+                    "parameters": {
+                        "temperature": temperature,
+                        "max_new_tokens": max_tokens,
+                        "top_p": top_p,
+                        "return_full_text": False,
+                    },
+                }
 
-            result = response.json()
+                response = await self.http_client.post(url, json=payload)
 
-            # Extract generated text
-            if isinstance(result, list) and len(result) > 0:
-                content = result[0].get("generated_text", "")
-            else:
-                content = result.get("generated_text", "")
+                # Handle model loading (503 response)
+                if response.status_code == 503:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        wait_time = min(2 ** retry_count + random.uniform(0, 1), 30)
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        yield "[ERROR] Model is still loading after max retries"
+                        return
 
-            # Yield in chunks (simulate streaming)
-            for word in content.split():
-                yield word + " "
-                # Small delay to simulate streaming
-                await asyncio.sleep(0.01)
+                response.raise_for_status()
 
-        except Exception as error:
-            error_msg = self.handle_error(error)
-            yield f"[ERROR] {error_msg}"
+                result = response.json()
+
+                # Extract generated text
+                if isinstance(result, list) and len(result) > 0:
+                    content = result[0].get("generated_text", "")
+                else:
+                    content = result.get("generated_text", "")
+
+                # Yield in chunks (simulate streaming with sentence breaks for better UX)
+                import re
+                # Split by sentences, periods, or newlines to yield more natural chunks
+                chunks = re.split(r'([.!?\n])', content)
+                for i, chunk in enumerate(chunks):
+                    if chunk.strip():
+                        yield chunk
+                        # Add the punctuation back
+                        if i + 1 < len(chunks) and chunks[i + 1] in '.!?\n':
+                            yield chunks[i + 1]
+                        # Small delay to simulate streaming
+                        await asyncio.sleep(0.02)
+                return
+
+            except Exception as error:
+                last_error = error
+                error_str = str(error).lower()
+
+                # Retry on rate limit or temporary errors
+                if "rate_limit" in error_str or "429" in error_str or "overloaded" in error_str:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        wait_time = min(2 ** retry_count + random.uniform(0, 1), 30)
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                error_msg = self.handle_error(error)
+                yield f"[ERROR] {error_msg}"
+                return
+
+        # Max retries exceeded
+        error_msg = self.handle_error(last_error)
+        yield f"[ERROR] Max retries exceeded: {error_msg}"
 
     def count_tokens(self, text: str, model: Optional[str] = None) -> int:
         """
