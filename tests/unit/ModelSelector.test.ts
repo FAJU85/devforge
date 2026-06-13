@@ -94,8 +94,9 @@ describe('ModelSelector', () => {
   });
 
   it('should not add duplicate models', () => {
+    const initialCount = selector.getModelCount();
     selector.addModel(mockModels[0]);
-    expect(selector.getModelCount()).toBe(3);
+    expect(selector.getModelCount()).toBe(initialCount);
   });
 
   it('should select model', () => {

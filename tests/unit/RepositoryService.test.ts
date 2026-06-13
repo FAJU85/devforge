@@ -174,13 +174,15 @@ describe('RepositoryService', () => {
 
   it('should not add duplicate files', () => {
     service.setFiles(mockFiles);
+    const initialCount = service.getFiles().length;
     service.addFile(mockFiles[0]);
-    expect(service.getFiles()).toHaveLength(4);
+    expect(service.getFiles()).toHaveLength(initialCount);
   });
 
   it('should calculate total size', () => {
     service.setFiles(mockFiles);
-    expect(service.getTotalSize()).toBe(3584); // 1024 + 2048 + 512
+    const expectedSize = mockFiles.reduce((sum, f) => sum + f.size, 0);
+    expect(service.getTotalSize()).toBe(expectedSize);
   });
 
   it('should call onRepositoryChange callback', () => {

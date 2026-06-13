@@ -221,14 +221,16 @@ describe('RepoSelector', () => {
   });
 
   it('should not add duplicate repositories', () => {
+    const initialCount = selector.getRepositoryCount();
     selector.addRepository(mockRepos[0]);
-    expect(selector.getRepositoryCount()).toBe(3);
+    expect(selector.getRepositoryCount()).toBe(initialCount);
   });
 
   it('should remove repository', () => {
+    const initialCount = selector.getRepositoryCount();
     const removed = selector.removeRepository('1');
     expect(removed).toBe(true);
-    expect(selector.getRepositoryCount()).toBe(2);
+    expect(selector.getRepositoryCount()).toBe(initialCount - 1);
   });
 
   it('should clear selected when removing', () => {
