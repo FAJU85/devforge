@@ -29,6 +29,12 @@
     "qa:scan": "node qa/pattern_detector.js scan ./src",
     "qa:patterns": "node qa/pattern_detector.js list-patterns",
     "test:all": "node scripts/run-all-tests.js",
+    "qa:learn": "node scripts/analyze-failures.js learn",
+    "qa:failures": "node scripts/analyze-failures.js list",
+    "qa:failures:stats": "node scripts/analyze-failures.js stats",
+    "qa:failures:demo": "node scripts/analyze-failures.js demo",
+    "qa:failures:collect": "node scripts/analyze-failures.js collect",
+    "qa:failures:clear": "node scripts/analyze-failures.js clear",
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'"
   },
   "repository": {
