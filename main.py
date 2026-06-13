@@ -24,6 +24,7 @@ try:
     from api.routes.auth import router as auth_router
     from api.routes.chat import router as chat_router
     from api.routes.config import router as config_router
+    from api.routes.repositories import router as repositories_router
     _DASHBOARD_ROUTES_AVAILABLE = True
 except ImportError as e:
     print(f"[WARN] Dashboard routes unavailable: {e}")
@@ -114,6 +115,7 @@ if _DASHBOARD_ROUTES_AVAILABLE:
     app.include_router(auth_router)
     app.include_router(chat_router)
     app.include_router(config_router)
+    app.include_router(repositories_router)
 
 
 @app.middleware("http")
