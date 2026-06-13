@@ -5,6 +5,9 @@ on:
     workflows: ["Sync to Hugging Face Space"]
     types: [completed]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   monitor:
     name: Monitor & Auto-Fix HF Build
