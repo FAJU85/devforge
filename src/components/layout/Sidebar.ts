@@ -15,6 +15,9 @@ export function createSidebar(): HTMLDivElement {
     border-right: 1px solid var(--border);
     overflow-y: auto;
     transition: width 0.3s ease;
+    position: relative;
+    z-index: 100;
+    pointer-events: auto;
   `;
 
   // Header section
@@ -83,6 +86,9 @@ export function createSidebar(): HTMLDivElement {
       font-family: inherit;
       text-align: left;
       border-left: 3px solid transparent;
+      pointer-events: auto;
+      width: 100%;
+      z-index: 10;
     `;
 
     // Make first item active by default

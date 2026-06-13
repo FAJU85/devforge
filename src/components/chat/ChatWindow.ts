@@ -18,6 +18,10 @@ export function createChatWindow(options?: ChatWindowOptions): HTMLDivElement {
     border-radius: 8px;
     border: 1px solid var(--border);
     overflow: hidden;
+    min-height: 400px;
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
   `;
 
   // Messages container
