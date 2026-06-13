@@ -172,11 +172,19 @@ class BaseProvider(ABC):
             Formatted error message
         """
         error_msg = str(error)
-        if "401" in error_msg or "unauthorized" in error_msg.lower():
+        error_lower = error_msg.lower()
+
+        if "401" in error_msg or "unauthorized" in error_lower or "invalid api key" in error_lower:
             return "Authentication failed. Please check your API key."
-        elif "rate" in error_msg.lower():
+        elif "403" in error_msg or "forbidden" in error_lower:
+            return "Access forbidden. Check your API key permissions."
+        elif "rate" in error_lower or "429" in error_msg or "quota" in error_lower:
             return "Rate limit exceeded. Please try again later."
-        elif "timeout" in error_msg.lower():
-            return "Request timeout. Please try again."
+        elif "timeout" in error_lower or "connection" in error_lower:
+            return "Connection timeout. Please check your internet and try again."
+        elif "not found" in error_lower or "404" in error_msg:
+            return "Resource not found. Please verify the model name and provider."
+        elif "overloaded" in error_lower or "loading" in error_lower:
+            return "Service temporarily overloaded. Please try again in a moment."
         else:
-            return f"Provider error: {error_msg}"
+            return f"Provider error: {error_msg[:200]}"
