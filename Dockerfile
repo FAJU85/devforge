@@ -1,3 +1,15 @@
+# Stage 1: Build frontend
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# Stage 2: Python backend
 FROM python:3.11-slim
 
 WORKDIR /code
@@ -14,6 +26,10 @@ RUN pip install --no-cache-dir airllm || true
 RUN pip install --no-cache-dir playwright==1.60.0 && python -m playwright install chromium || true
 
 COPY . .
+
+# Copy built frontend from builder stage
+COPY --from=frontend-builder /app/dist ./static
+
 # Optional: control-plane dependencies (LangGraph, LangChain, Pinecone)
 RUN pip install --no-cache-dir -r control_plane/requirements.txt || true
 
