@@ -9,6 +9,8 @@ from api.services.providers.base import BaseProvider, ProviderResponse, MessageU
 import httpx
 import asyncio
 import json
+import time
+import random
 
 # Try to import transformers for tokenization
 try:
@@ -77,59 +79,90 @@ class HuggingFaceProvider(BaseProvider):
         Returns:
             ProviderResponse with content and usage
         """
-        try:
-            # Format messages as a single prompt
-            prompt = self._format_messages_for_hf(messages)
+        max_retries = 3
+        retry_count = 0
+        last_error = None
 
-            # Extract parameters
-            temperature = kwargs.get("temperature", self.config.temperature)
-            max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
-            top_p = kwargs.get("top_p", self.config.top_p)
+        while retry_count < max_retries:
+            try:
+                # Format messages as a single prompt
+                prompt = self._format_messages_for_hf(messages)
 
-            # Call Hugging Face API
-            url = f"{self.HF_API_URL}/{model}"
+                # Extract parameters
+                temperature = kwargs.get("temperature", self.config.temperature)
+                max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
+                top_p = kwargs.get("top_p", self.config.top_p)
 
-            payload = {
-                "inputs": prompt,
-                "parameters": {
-                    "temperature": temperature,
-                    "max_new_tokens": max_tokens,
-                    "top_p": top_p,
-                    "return_full_text": False,
-                },
-            }
+                # Call Hugging Face API
+                url = f"{self.HF_API_URL}/{model}"
 
-            response = await self.http_client.post(url, json=payload)
-            response.raise_for_status()
+                payload = {
+                    "inputs": prompt,
+                    "parameters": {
+                        "temperature": temperature,
+                        "max_new_tokens": max_tokens,
+                        "top_p": top_p,
+                        "return_full_text": False,
+                    },
+                }
 
-            result = response.json()
+                response = await self.http_client.post(url, json=payload)
 
-            # Extract generated text
-            if isinstance(result, list) and len(result) > 0:
-                content = result[0].get("generated_text", "")
-            else:
-                content = result.get("generated_text", "")
+                # Handle model loading (503 response)
+                if response.status_code == 503:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        # Wait for model to load
+                        wait_time = min(2 ** retry_count + random.uniform(0, 1), 30)
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        raise RuntimeError("Model is still loading after max retries")
 
-            # Estimate token usage
-            input_tokens = self.count_tokens(prompt, model)
-            output_tokens = self.count_tokens(content, model)
+                response.raise_for_status()
 
-            usage = MessageUsage(
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                total_tokens=input_tokens + output_tokens,
-            )
+                result = response.json()
 
-            return ProviderResponse(
-                content=content,
-                usage=usage,
-                model=model,
-                provider=self.provider_name,
-                stop_reason="end_of_sequence",
-            )
+                # Extract generated text
+                if isinstance(result, list) and len(result) > 0:
+                    content = result[0].get("generated_text", "")
+                else:
+                    content = result.get("generated_text", "")
 
-        except Exception as error:
-            raise RuntimeError(f"Hugging Face API error: {self.handle_error(error)}")
+                # Estimate token usage
+                input_tokens = self.count_tokens(prompt, model)
+                output_tokens = self.count_tokens(content, model)
+
+                usage = MessageUsage(
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=input_tokens + output_tokens,
+                )
+
+                return ProviderResponse(
+                    content=content,
+                    usage=usage,
+                    model=model,
+                    provider=self.provider_name,
+                    stop_reason="end_of_sequence",
+                )
+
+            except Exception as error:
+                last_error = error
+                error_str = str(error).lower()
+
+                # Retry on rate limit or temporary errors
+                if "rate_limit" in error_str or "429" in error_str or "overloaded" in error_str:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        wait_time = min(2 ** retry_count + random.uniform(0, 1), 30)
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                raise RuntimeError(f"Hugging Face API error: {self.handle_error(error)}")
+
+        # Max retries exceeded
+        raise RuntimeError(f"Hugging Face API error (max retries exceeded): {self.handle_error(last_error)}")
 
     async def stream_generate(
         self,

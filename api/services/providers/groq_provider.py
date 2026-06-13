@@ -6,6 +6,8 @@ Handles Groq API integration with Mixtral models
 
 from typing import Dict, List, AsyncIterator, Optional
 from api.services.providers.base import BaseProvider, ProviderResponse, MessageUsage
+import time
+import random
 
 # Try to import groq, but don't fail if not available
 try:
@@ -65,44 +67,65 @@ class GroqProvider(BaseProvider):
         Returns:
             ProviderResponse with content and usage
         """
-        try:
-            # Extract parameters from kwargs or config
-            temperature = kwargs.get("temperature", self.config.temperature)
-            max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
-            top_p = kwargs.get("top_p", self.config.top_p)
+        max_retries = 3
+        retry_count = 0
+        last_error = None
 
-            # Call Groq API
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                top_p=top_p,
-            )
+        while retry_count < max_retries:
+            try:
+                # Extract parameters from kwargs or config
+                temperature = kwargs.get("temperature", self.config.temperature)
+                max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
+                top_p = kwargs.get("top_p", self.config.top_p)
 
-            # Extract usage information
-            usage = MessageUsage(
-                input_tokens=response.usage.prompt_tokens if response.usage else 0,
-                output_tokens=response.usage.completion_tokens if response.usage else 0,
-                total_tokens=response.usage.total_tokens if response.usage else 0,
-            )
+                # Call Groq API
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_p=top_p,
+                )
 
-            # Extract content
-            content = response.choices[0].message.content if response.choices else ""
+                # Extract usage information
+                usage = MessageUsage(
+                    input_tokens=response.usage.prompt_tokens if response.usage else 0,
+                    output_tokens=response.usage.completion_tokens if response.usage else 0,
+                    total_tokens=response.usage.total_tokens if response.usage else 0,
+                )
 
-            # Get finish reason
-            stop_reason = response.choices[0].finish_reason if response.choices else None
+                # Extract content
+                content = response.choices[0].message.content if response.choices else ""
 
-            return ProviderResponse(
-                content=content,
-                usage=usage,
-                model=model,
-                provider=self.provider_name,
-                stop_reason=stop_reason,
-            )
+                # Get finish reason
+                stop_reason = response.choices[0].finish_reason if response.choices else None
 
-        except Exception as error:
-            raise RuntimeError(f"Groq API error: {self.handle_error(error)}")
+                return ProviderResponse(
+                    content=content,
+                    usage=usage,
+                    model=model,
+                    provider=self.provider_name,
+                    stop_reason=stop_reason,
+                )
+
+            except Exception as error:
+                last_error = error
+                error_str = str(error).lower()
+
+                # Retry on rate limit or temporary errors
+                if "rate_limit" in error_str or "429" in error_str:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        # Exponential backoff with jitter
+                        wait_time = min(2 ** retry_count + random.uniform(0, 1), 30)
+                        time.sleep(wait_time)
+                        continue
+
+                # Don't retry on auth or other non-transient errors
+                raise RuntimeError(f"Groq API error: {self.handle_error(error)}")
+
+        # Max retries exceeded
+        raise RuntimeError(f"Groq API error (max retries exceeded): {self.handle_error(last_error)}")
 
     async def stream_generate(
         self,
@@ -121,29 +144,53 @@ class GroqProvider(BaseProvider):
         Yields:
             Response chunks as they arrive
         """
-        try:
-            # Extract parameters from kwargs or config
-            temperature = kwargs.get("temperature", self.config.temperature)
-            max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
-            top_p = kwargs.get("top_p", self.config.top_p)
+        max_retries = 3
+        retry_count = 0
+        last_error = None
 
-            # Stream response from Groq
-            stream = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                top_p=top_p,
-                stream=True,
-            )
+        while retry_count < max_retries:
+            try:
+                # Extract parameters from kwargs or config
+                temperature = kwargs.get("temperature", self.config.temperature)
+                max_tokens = kwargs.get("max_tokens", self.config.max_tokens)
+                top_p = kwargs.get("top_p", self.config.top_p)
 
-            for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                # Stream response from Groq
+                stream = self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_p=top_p,
+                    stream=True,
+                )
 
-        except Exception as error:
-            error_msg = self.handle_error(error)
-            yield f"[ERROR] {error_msg}"
+                for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+                return
+
+            except Exception as error:
+                last_error = error
+                error_str = str(error).lower()
+
+                # Retry on rate limit or temporary errors
+                if "rate_limit" in error_str or "429" in error_str:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        # Exponential backoff with jitter
+                        wait_time = min(2 ** retry_count + random.uniform(0, 1), 30)
+                        time.sleep(wait_time)
+                        continue
+
+                # Don't retry on auth or other non-transient errors
+                error_msg = self.handle_error(error)
+                yield f"[ERROR] {error_msg}"
+                return
+
+        # Max retries exceeded
+        error_msg = self.handle_error(last_error)
+        yield f"[ERROR] Max retries exceeded: {error_msg}"
 
     def count_tokens(self, text: str, model: Optional[str] = None) -> int:
         """
