@@ -3,7 +3,7 @@ import { resolve } from 'path';
 
 export default defineConfig({
   root: 'src',
-  base: '/static/',
+  base: process.env.NODE_ENV === 'production' ? '/static/' : '/',
   server: {
     port: 5173,
     host: 'localhost',
