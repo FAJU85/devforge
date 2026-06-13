@@ -311,10 +311,11 @@ def stats():
 
         click.echo("Task Statistics:")
         click.echo(f"  Total tasks: {stats['total_tasks']}")
-        click.echo(f"  Completed: {stats['completed']}")
-        click.echo(f"  Failed: {stats['failed']}")
-        click.echo(f"  Running: {stats['running']}")
-        click.echo(f"  Pending: {stats['pending']}")
+        status = stats.get('status', {})
+        click.echo(f"  Completed: {status.get('completed', 0)}")
+        click.echo(f"  Failed: {status.get('failed', 0)}")
+        click.echo(f"  Running: {status.get('running', 0)}")
+        click.echo(f"  Pending: {status.get('pending', 0)}")
 
     except Exception as e:
         click.echo(f"❌ Error: {e}")

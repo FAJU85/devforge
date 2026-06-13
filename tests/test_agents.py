@@ -126,7 +126,7 @@ class TestTestGenerationAgent:
         with patch.object(agent.client.messages, 'create') as mock_create:
             mock_create.return_value.content = [Mock(text='{"improved_code": "..."}')]
             result = agent.refine_test(test_code, feedback)
-            assert "improved_code" in result or "error" in result
+            assert "code" in result or "error" in result
 
 
 class TestBugDetectionAgent:
