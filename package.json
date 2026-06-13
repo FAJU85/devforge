@@ -36,6 +36,9 @@
     "qa:failures:collect": "node scripts/analyze-failures.js collect",
     "qa:failures:clear": "node scripts/analyze-failures.js clear",
     "qa:dashboard": "node scripts/dashboard.js",
+    "qa:cron": "node scripts/cron-learn.js",
+    "qa:cron:hourly": "node scripts/cron-learn.js --interval 3600000",
+    "qa:cron:daily": "node scripts/cron-learn.js --interval 86400000",
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'"
   },
   "repository": {
