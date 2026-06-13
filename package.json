@@ -35,6 +35,7 @@
     "qa:failures:demo": "node scripts/analyze-failures.js demo",
     "qa:failures:collect": "node scripts/analyze-failures.js collect",
     "qa:failures:clear": "node scripts/analyze-failures.js clear",
+    "qa:dashboard": "node scripts/dashboard.js",
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'"
   },
   "repository": {
