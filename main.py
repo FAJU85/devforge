@@ -19,6 +19,16 @@ except ImportError:
 from anthropic import Anthropic
 from huggingface_hub import InferenceClient
 
+# Phase 5 - Dashboard Routes
+try:
+    from api.routes.auth import router as auth_router
+    from api.routes.chat import router as chat_router
+    from api.routes.config import router as config_router
+    _DASHBOARD_ROUTES_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARN] Dashboard routes unavailable: {e}")
+    _DASHBOARD_ROUTES_AVAILABLE = False
+
 # Optional: Sentry error monitoring (backend + request tracing)
 try:
     import sentry_sdk
@@ -98,6 +108,12 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Include v2 API router (database-backed endpoints)
 if _DB_API_AVAILABLE:
     app.include_router(v2_router)
+
+# Include Phase 5 Dashboard routes
+if _DASHBOARD_ROUTES_AVAILABLE:
+    app.include_router(auth_router)
+    app.include_router(chat_router)
+    app.include_router(config_router)
 
 
 @app.middleware("http")
