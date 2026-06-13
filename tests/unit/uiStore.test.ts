@@ -319,13 +319,10 @@ describe('UI Store', () => {
 
     it('should update localStorage when setting theme', () => {
       const state = useUIStore.getState();
-      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
 
       state.setTheme('light');
 
-      expect(setItemSpy).toHaveBeenCalledWith('devforge-theme', 'light');
-
-      setItemSpy.mockRestore();
+      expect(localStorage.getItem('devforge-theme')).toBe('light');
     });
 
     it('should persist theme preference', () => {

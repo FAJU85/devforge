@@ -19,7 +19,7 @@ class RepositoryService {
   private currentRepo: Repository | null = null;
   private files: File[] = [];
   private onRepoChange: ((repo: Repository | null) => void) | null = null;
-  private onFilesChange: ((files: File[]) => void) | null = null;
+  private _onFilesChange: ((files: File[]) => void) | null = null;
 
   setRepository(repo: Repository): void {
     this.currentRepo = repo;
@@ -33,7 +33,7 @@ class RepositoryService {
 
   setFiles(files: File[]): void {
     this.files = files;
-    this.onFilesChange?.(files);
+    this._onFilesChange?.(files);
   }
 
   getFiles(): File[] {
@@ -78,7 +78,7 @@ class RepositoryService {
   }
 
   onFilesChange(callback: (files: File[]) => void): void {
-    this.onFilesChange = callback;
+    this._onFilesChange = callback;
   }
 
   search(query: string): File[] {

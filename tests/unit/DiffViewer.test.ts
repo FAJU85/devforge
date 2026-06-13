@@ -159,7 +159,7 @@ describe('DiffViewer', () => {
     const newContent = 'line1\nline2modified\nline3\nline4';
     viewer.setContent(old, newContent);
 
-    expect(viewer.getAddedLines()).toHaveLength(1);
+    expect(viewer.getAddedLines()).toHaveLength(2);
     expect(viewer.getRemovedLines()).toHaveLength(1);
   });
 
