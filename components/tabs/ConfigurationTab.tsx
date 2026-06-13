@@ -10,11 +10,19 @@ interface Config {
   theme: string;
   notifications_enabled: boolean;
   auto_save: boolean;
+  github_token?: string;
 }
 
 interface ApiKey {
   provider: string;
   api_key: string;
+}
+
+interface ProviderValidationStatus {
+  provider: string;
+  valid: boolean;
+  message: string;
+  lastChecked?: Date;
 }
 
 interface ValidationError {
@@ -43,6 +51,8 @@ export default function ConfigurationTab() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<ValidationError[]>([]);
+  const [validationStatuses, setValidationStatuses] = useState<Record<string, ProviderValidationStatus>>({});
+  const [validatingProvider, setValidatingProvider] = useState<string | null>(null);
 
   // Load configuration on mount
   useEffect(() => {
@@ -97,6 +107,45 @@ export default function ConfigurationTab() {
     }
 
     return true;
+  };
+
+  const validateProvider = async (token: string, provider: string) => {
+    setValidatingProvider(provider);
+    setError('');
+
+    try {
+      if (provider === 'github') {
+        const response = await fetch('/api/repositories/validate-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, owner: '', repo: '' }),
+        });
+
+        const result = await response.json();
+        setValidationStatuses((prev) => ({
+          ...prev,
+          [provider]: {
+            provider,
+            valid: response.ok,
+            message: response.ok ? 'GitHub token is valid' : (result.detail || 'Invalid GitHub token'),
+            lastChecked: new Date(),
+          },
+        }));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Validation failed');
+      setValidationStatuses((prev) => ({
+        ...prev,
+        [provider]: {
+          provider,
+          valid: false,
+          message: 'Could not validate token',
+          lastChecked: new Date(),
+        },
+      }));
+    } finally {
+      setValidatingProvider(null);
+    }
   };
 
   const handleConfigChange = (field: keyof Config, value: any) => {
@@ -336,6 +385,7 @@ export default function ConfigurationTab() {
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="groq">Groq</option>
               <option value="huggingface">Hugging Face</option>
+              <option value="github">GitHub (Repository Access)</option>
             </select>
           </div>
           <div>
@@ -345,12 +395,38 @@ export default function ConfigurationTab() {
               value={apiKey.api_key}
               onChange={(e) => setApiKey({ ...apiKey, api_key: e.target.value })}
               className="dev-input"
-              placeholder="Enter your API key"
+              placeholder={apiKey.provider === 'github' ? 'ghp_...' : 'Enter your API key'}
             />
             <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-              Your API key is stored securely and never sent to our servers.
+              {apiKey.provider === 'github'
+                ? 'Use a GitHub personal access token with repo scope'
+                : 'Your API key is stored securely and never sent to our servers.'}
             </p>
           </div>
+
+          {/* Provider Validation UI */}
+          {apiKey.provider === 'github' && apiKey.api_key && (
+            <button
+              onClick={() => validateProvider(apiKey.api_key, 'github')}
+              disabled={validatingProvider === 'github'}
+              className="dev-button-secondary w-full"
+            >
+              {validatingProvider === 'github' ? '🔍 Validating...' : '🔍 Validate Token'}
+            </button>
+          )}
+
+          {validationStatuses['github'] && (
+            <div
+              className={`rounded-lg p-3 text-sm ${
+                validationStatuses['github'].valid
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+              }`}
+            >
+              {validationStatuses['github'].valid ? '✓' : '✗'} {validationStatuses['github'].message}
+            </div>
+          )}
+
           <button
             onClick={saveApiKey}
             disabled={loading}
