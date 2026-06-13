@@ -27,3 +27,4 @@ qa/**/*-results.log
 
 # QA learning system - runtime failure records (captured per test run)
 failures/
+devforge.db
