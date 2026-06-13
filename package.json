@@ -56,6 +56,7 @@
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
+    "@mindstudio-ai/agent": "^0.1.66",
     "zustand": "^4.4.0"
   },
   "devDependencies": {
