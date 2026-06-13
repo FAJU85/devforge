@@ -1,6 +1,8 @@
 name: Autonomous Evolution Cycle
 
 on:
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   schedule:
     - cron: "0 */3 * * *"   # every 3 hours — matches the cadence GitHub actually delivers; */30 only queued throttled runs
   workflow_dispatch:

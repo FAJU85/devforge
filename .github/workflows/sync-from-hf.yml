@@ -1,6 +1,8 @@
 name: Sync from Hugging Face Space
 
 on:
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   workflow_dispatch:
   repository_dispatch:
     types: [hf-space-update]
