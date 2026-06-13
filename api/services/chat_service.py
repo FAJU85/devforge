@@ -7,6 +7,8 @@ Handles message processing and LLM provider routing
 from typing import List, Dict, Any, Optional, AsyncIterator
 import json
 from api.services.config_service import config_service
+from api.services.providers import ProviderFactory
+from api.services.token_counter import token_counter
 
 
 class Message:
@@ -28,6 +30,8 @@ class Conversation:
         self.messages: List[Message] = []
         self.model: str = "claude-3-5-sonnet-20241022"
         self.provider: str = "anthropic"
+        self.tokens_used: int = 0
+        self.total_cost: float = 0.0
 
     def add_message(self, role: str, content: str):
         """Add message to conversation"""
@@ -44,6 +48,8 @@ class Conversation:
             "model": self.model,
             "provider": self.provider,
             "message_count": len(self.messages),
+            "tokens_used": self.tokens_used,
+            "total_cost": self.total_cost,
             "messages": self.get_messages_for_api(),
         }
 
@@ -135,9 +141,53 @@ class ChatService:
         conv.model = model
         conv.provider = provider
 
-        # For now, return a placeholder response
-        # In production, this would call the actual LLM provider
-        response_content = f"[{provider.upper()}] Processing message with model {model}...\n\nYour message: {message}\n\nThis is a placeholder response. In production, this would be connected to the actual LLM provider API."
+        try:
+            # Get API key for provider
+            api_key = config_service.get_api_key(user_id, provider)
+            if not api_key:
+                error_msg = f"No API key configured for {provider}. Please set up your API key in settings."
+                response_content = f"[ERROR] {error_msg}"
+                self.add_message(conversation_id, "assistant", response_content)
+                return {
+                    "role": "assistant",
+                    "content": response_content,
+                    "model": model,
+                    "provider": provider,
+                    "error": True,
+                }
+
+            # Create provider instance
+            llm_provider = ProviderFactory.create_provider(provider, api_key)
+
+            # Get conversation history for context
+            messages = conv.get_messages_for_api()
+
+            # Get user preferences
+            temperature = config.get("temperature", 0.7)
+            max_tokens = config.get("max_tokens", 4096)
+
+            # Call the LLM provider
+            response = await llm_provider.generate(
+                messages=messages,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+            response_content = response.content
+
+            # Store token usage if available
+            conv.tokens_used = response.usage.total_tokens if response.usage else 0
+
+        except ValueError as e:
+            # Provider not supported
+            response_content = f"[ERROR] {str(e)}"
+        except RuntimeError as e:
+            # Provider error (API key, connection, etc.)
+            response_content = f"[ERROR] {str(e)}"
+        except Exception as e:
+            # Unexpected error
+            response_content = f"[ERROR] Unexpected error: {str(e)}"
 
         # Add assistant response to conversation
         self.add_message(conversation_id, "assistant", response_content)
@@ -147,6 +197,7 @@ class ChatService:
             "content": response_content,
             "model": model,
             "provider": provider,
+            "tokens_used": getattr(conv, "tokens_used", 0),
         }
 
     async def stream_message(
@@ -178,15 +229,61 @@ class ChatService:
             provider = config.get("preferred_provider", "anthropic")
 
         # Add user message
-        self.add_message(conversation_id, "user", message)
+        conv = self.add_message(conversation_id, "user", message)
+        conv.model = model
+        conv.provider = provider
 
-        # Yield placeholder response in chunks
-        response = f"[{provider.upper()}] Streaming response from {model}..."
-        for chunk in response.split(" "):
-            yield chunk + " "
+        try:
+            # Get API key for provider
+            api_key = config_service.get_api_key(user_id, provider)
+            if not api_key:
+                error_msg = f"No API key configured for {provider}. Please set up your API key in settings."
+                yield f"[ERROR] {error_msg}"
+                self.add_message(conversation_id, "assistant", error_msg)
+                return
 
-        # Add full response to conversation
-        self.add_message(conversation_id, "assistant", response)
+            # Create provider instance
+            llm_provider = ProviderFactory.create_provider(provider, api_key)
+
+            # Get conversation history for context
+            messages = conv.get_messages_for_api()
+
+            # Get user preferences
+            temperature = config.get("temperature", 0.7)
+            max_tokens = config.get("max_tokens", 4096)
+
+            # Collect full response while streaming
+            full_response = ""
+
+            # Stream from the provider
+            async for chunk in llm_provider.stream_generate(
+                messages=messages,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                full_response += chunk
+                yield chunk
+
+            # Add full response to conversation
+            if full_response:
+                self.add_message(conversation_id, "assistant", full_response)
+
+        except ValueError as e:
+            # Provider not supported
+            error_msg = str(e)
+            yield f"[ERROR] {error_msg}"
+            self.add_message(conversation_id, "assistant", error_msg)
+        except RuntimeError as e:
+            # Provider error (API key, connection, etc.)
+            error_msg = str(e)
+            yield f"[ERROR] {error_msg}"
+            self.add_message(conversation_id, "assistant", error_msg)
+        except Exception as e:
+            # Unexpected error
+            error_msg = f"Unexpected error: {str(e)}"
+            yield f"[ERROR] {error_msg}"
+            self.add_message(conversation_id, "assistant", error_msg)
 
     def list_conversations(self, user_id: int) -> List[Dict[str, Any]]:
         """
