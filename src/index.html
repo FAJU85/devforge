@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DevForge - Foundation Components</title>
+    <style>
+      :root {
+        --bg: #1a1a1a;
+        --panel: #2d2d2d;
+        --text: #e0e0e0;
+        --text-secondary: #a0a0a0;
+        --border: #404040;
+        --accent: #3b82f6;
+        --accent-dim: rgba(59, 130, 246, 0.1);
+        --green: #10b981;
+        --red: #ef4444;
+        --yellow: #f59e0b;
+        --input-bg: #252525;
+      }
+
+      html[data-theme='light'] {
+        --bg: #ffffff;
+        --panel: #f3f4f6;
+        --text: #1f2937;
+        --text-secondary: #6b7280;
+        --border: #d1d5db;
+        --accent: #2563eb;
+        --accent-dim: rgba(37, 99, 235, 0.1);
+        --green: #059669;
+        --red: #dc2626;
+        --yellow: #d97706;
+        --input-bg: #f9fafb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 20px;
+        background-color: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin-top: 0;
+        margin-bottom: 30px;
+        font-size: 32px;
+      }
+
+      h2 {
+        margin-top: 40px;
+        margin-bottom: 20px;
+        font-size: 24px;
+        border-bottom: 2px solid var(--border);
+        padding-bottom: 10px;
+      }
+
+      .component-section {
+        margin-bottom: 40px;
+        padding: 20px;
+        background-color: var(--panel);
+        border-radius: 8px;
+        border: 1px solid var(--border);
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+
+      .component-demo {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        padding: 20px;
+        background-color: var(--bg);
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        min-height: 60px;
+      }
+
+      .demo-group {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-right: 10px;
+      }
+
+      #toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-width: 400px;
+        z-index: 9999;
+      }
+
+      .footer {
+        margin-top: 60px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+        color: var(--text-secondary);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🔧 DevForge Foundation Components</h1>
+
+      <!-- Button Components -->
+      <section class="component-section">
+        <h2>Button Component</h2>
+        <div class="component-demo">
+          <div class="demo-group">
+            <span class="label">Primary Variant</span>
+            <button data-variant="primary" id="btn-primary">Click me</button>
+          </div>
+          <div class="demo-group">
+            <span class="label">Secondary Variant</span>
+            <button data-variant="secondary" id="btn-secondary">Secondary</button>
+          </div>
+          <div class="demo-group">
+            <span class="label">Danger Variant</span>
+            <button data-variant="danger" id="btn-danger">Delete</button>
+          </div>
+          <div class="demo-group">
+            <span class="label">Disabled State</span>
+            <button data-variant="primary" disabled id="btn-disabled">Disabled</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Input Components -->
+      <section class="component-section">
+        <h2>Input Component</h2>
+        <div class="component-demo">
+          <div class="demo-group">
+            <span class="label">Text Input</span>
+            <input type="text" placeholder="Enter text..." data-testid="foundation-input" id="input-text" />
+          </div>
+          <div class="demo-group">
+            <span class="label">Password Input</span>
+            <input type="password" placeholder="Enter password..." id="input-password" />
+          </div>
+          <div class="demo-group">
+            <span class="label">Email Input</span>
+            <input type="email" placeholder="Enter email..." id="input-email" />
+          </div>
+          <div class="demo-group">
+            <span class="label">Disabled Input</span>
+            <input type="text" placeholder="Disabled..." disabled id="input-disabled" />
+          </div>
+        </div>
+      </section>
+
+      <!-- NotificationHub Components -->
+      <section class="component-section">
+        <h2>Notification Hub</h2>
+        <div class="controls">
+          <button id="btn-success-notif" data-variant="primary">Show Success</button>
+          <button id="btn-error-notif" data-variant="primary">Show Error</button>
+          <button id="btn-info-notif" data-variant="primary">Show Info</button>
+          <button id="btn-warning-notif" data-variant="primary">Show Warning</button>
+        </div>
+        <div id="notification-hub-container"></div>
+      </section>
+
+      <!-- Toast Components -->
+      <section class="component-section">
+        <h2>Toast Notifications</h2>
+        <div class="controls">
+          <button id="btn-success-toast" data-variant="primary">Show Success Toast</button>
+          <button id="btn-error-toast" data-variant="primary">Show Error Toast</button>
+          <button id="btn-info-toast" data-variant="primary">Show Info Toast</button>
+          <button id="btn-warning-toast" data-variant="primary">Show Warning Toast</button>
+        </div>
+        <div id="toast-container" data-testid="toast-container"></div>
+      </section>
+
+      <!-- Dialog Components -->
+      <section class="component-section">
+        <h2>Dialog Modals</h2>
+        <div class="controls">
+          <button id="btn-confirm-dialog" data-variant="primary">Show Confirm Dialog</button>
+          <button id="btn-alert-dialog" data-variant="primary">Show Alert Dialog</button>
+        </div>
+      </section>
+
+      <!-- Layout Components -->
+      <section class="component-section">
+        <h2>Layout Components</h2>
+        <div class="controls">
+          <button id="btn-sidebar" data-variant="primary">Show Sidebar</button>
+          <button id="btn-main-panel" data-variant="primary">Show Main Panel</button>
+          <button id="btn-settings-panel" data-variant="primary">Show Settings</button>
+          <button id="btn-command-palette" data-variant="primary">Open Command Palette</button>
+        </div>
+        <div id="layout-container" style="margin-top: 20px; border: 1px solid var(--border); border-radius: 6px; min-height: 300px;"></div>
+      </section>
+
+      <div class="footer">
+        <p>Foundation and layout components E2E testing environment. All components are interactive.</p>
+      </div>
+    </div>
+
+    <script type="module">
+      import { Button, Input, Toast, Dialog, Sidebar, MainPanel, SettingsPanel, CommandPalette, NotificationHub, useUIStore } from './index.ts';
+
+      // Window API for test assertions
+      window.lastClickedButton = null;
+      window.lastInputValue = '';
+      window.dialogConfirmed = false;
+
+      // Initialize toast container
+      const toastContainer = document.getElementById('toast-container');
+      const toastContainerElement = Toast.createContainer();
+      if (toastContainer) {
+        toastContainer.parentNode.replaceChild(toastContainerElement, toastContainer);
+        toastContainerElement.id = 'toast-container';
+        toastContainerElement.setAttribute('data-testid', 'toast-container');
+      }
+
+      // Initialize notification hub
+      const notificationHubContainer = document.getElementById('notification-hub-container');
+      const hub = NotificationHub.create();
+      if (notificationHubContainer) {
+        notificationHubContainer.appendChild(hub);
+      }
+
+      // Style applied inputs
+      const styleInputs = (container) => {
+        const inputs = container.querySelectorAll('input');
+        inputs.forEach((input) => {
+          input.style.cssText = `
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background-color: var(--input-bg);
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+            width: 200px;
+          `;
+
+          input.addEventListener('focus', () => {
+            input.style.borderColor = 'var(--accent)';
+            input.style.boxShadow = '0 0 0 2px var(--accent-dim)';
+          });
+
+          input.addEventListener('blur', () => {
+            input.style.borderColor = 'var(--border)';
+            input.style.boxShadow = 'none';
+          });
+
+          input.addEventListener('input', (e) => {
+            window.lastInputValue = e.target.value;
+          });
+        });
+      };
+
+      // Style buttons
+      const styleButtons = (container) => {
+        const buttons = container.querySelectorAll('button');
+        buttons.forEach((button) => {
+          if (button.id && button.id.startsWith('btn-')) {
+            button.style.cssText = `
+              padding: 8px 16px;
+              border-radius: 6px;
+              border: none;
+              cursor: pointer;
+              font-size: 14px;
+              font-weight: 500;
+              transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+              opacity: 1;
+              font-family: inherit;
+            `;
+
+            const variant = button.getAttribute('data-variant') || 'primary';
+            const variants = {
+              primary: `
+                background-color: var(--accent);
+                color: var(--bg);
+              `,
+              secondary: `
+                background-color: var(--panel);
+                color: var(--text);
+                border: 1px solid var(--border);
+              `,
+              danger: `
+                background-color: var(--red);
+                color: white;
+              `,
+            };
+
+            button.style.cssText += variants[variant];
+
+            button.addEventListener('mouseenter', () => {
+              button.style.opacity = '0.8';
+            });
+
+            button.addEventListener('mouseleave', () => {
+              button.style.opacity = '1';
+            });
+
+            button.addEventListener('click', () => {
+              window.lastClickedButton = button.textContent;
+            });
+          }
+        });
+      };
+
+      styleButtons(document);
+      styleInputs(document);
+
+      // Toast button handlers
+      document.getElementById('btn-success-toast')?.addEventListener('click', () => {
+        const toast = Toast.create({
+          id: 'success-' + Date.now(),
+          text: 'Operation completed successfully!',
+          type: 'success',
+          duration: 3000,
+          onRemove: (id) => {
+            document.getElementById(id)?.remove();
+          },
+        });
+        toastContainerElement.appendChild(toast);
+      });
+
+      document.getElementById('btn-error-toast')?.addEventListener('click', () => {
+        const toast = Toast.create({
+          id: 'error-' + Date.now(),
+          text: 'An error occurred. Please try again.',
+          type: 'error',
+          duration: 3000,
+          onRemove: (id) => {
+            document.getElementById(id)?.remove();
+          },
+        });
+        toastContainerElement.appendChild(toast);
+      });
+
+      document.getElementById('btn-info-toast')?.addEventListener('click', () => {
+        const toast = Toast.create({
+          id: 'info-' + Date.now(),
+          text: 'Here is some useful information.',
+          type: 'info',
+          duration: 3000,
+          onRemove: (id) => {
+            document.getElementById(id)?.remove();
+          },
+        });
+        toastContainerElement.appendChild(toast);
+      });
+
+      document.getElementById('btn-warning-toast')?.addEventListener('click', () => {
+        const toast = Toast.create({
+          id: 'warning-' + Date.now(),
+          text: 'Warning: This action requires attention.',
+          type: 'warning',
+          duration: 3000,
+          onRemove: (id) => {
+            document.getElementById(id)?.remove();
+          },
+        });
+        toastContainerElement.appendChild(toast);
+      });
+
+      // NotificationHub button handlers
+      document.getElementById('btn-success-notif')?.addEventListener('click', () => {
+        hub.success('Success', 'Operation completed successfully!');
+      });
+
+      document.getElementById('btn-error-notif')?.addEventListener('click', () => {
+        hub.error('Error', 'An error occurred. Please try again.');
+      });
+
+      document.getElementById('btn-info-notif')?.addEventListener('click', () => {
+        hub.info('Info', 'Here is some useful information.');
+      });
+
+      document.getElementById('btn-warning-notif')?.addEventListener('click', () => {
+        hub.warning('Warning', 'Warning: This action requires attention.');
+      });
+
+      // Dialog button handlers
+      document.getElementById('btn-confirm-dialog')?.addEventListener('click', () => {
+        const dialog = Dialog.create({
+          title: 'Confirm Action',
+          message: 'Are you sure you want to proceed with this action?',
+          confirmText: 'Confirm',
+          cancelText: 'Cancel',
+          type: 'confirm',
+          onConfirm: () => {
+            window.dialogConfirmed = true;
+            const toast = Toast.create({
+              id: 'confirm-' + Date.now(),
+              text: 'Action confirmed!',
+              type: 'success',
+              duration: 3000,
+              onRemove: (id) => {
+                document.getElementById(id)?.remove();
+              },
+            });
+            toastContainerElement.appendChild(toast);
+          },
+          onCancel: () => {
+            const toast = Toast.create({
+              id: 'cancel-' + Date.now(),
+              text: 'Action cancelled.',
+              type: 'info',
+              duration: 3000,
+              onRemove: (id) => {
+                document.getElementById(id)?.remove();
+              },
+            });
+            toastContainerElement.appendChild(toast);
+          },
+        });
+        document.body.appendChild(dialog);
+      });
+
+      document.getElementById('btn-alert-dialog')?.addEventListener('click', () => {
+        const dialog = Dialog.create({
+          title: 'Alert',
+          message: 'This is an important alert message.',
+          confirmText: 'OK',
+          type: 'alert',
+          onConfirm: () => {
+            const toast = Toast.create({
+              id: 'alert-' + Date.now(),
+              text: 'Alert acknowledged!',
+              type: 'info',
+              duration: 3000,
+              onRemove: (id) => {
+                document.getElementById(id)?.remove();
+              },
+            });
+            toastContainerElement.appendChild(toast);
+          },
+        });
+        document.body.appendChild(dialog);
+      });
+
+      // Layout component handlers
+      const layoutContainer = document.getElementById('layout-container');
+
+      document.getElementById('btn-sidebar')?.addEventListener('click', () => {
+        if (layoutContainer) {
+          layoutContainer.innerHTML = '';
+          const sidebar = Sidebar.create();
+          layoutContainer.appendChild(sidebar);
+        }
+      });
+
+      document.getElementById('btn-main-panel')?.addEventListener('click', () => {
+        if (layoutContainer) {
+          layoutContainer.innerHTML = '';
+          const mainPanel = MainPanel.create();
+          layoutContainer.appendChild(mainPanel);
+        }
+      });
+
+      document.getElementById('btn-settings-panel')?.addEventListener('click', () => {
+        if (layoutContainer) {
+          layoutContainer.innerHTML = '';
+          const settingsPanel = SettingsPanel.create();
+          layoutContainer.appendChild(settingsPanel);
+        }
+      });
+
+      document.getElementById('btn-command-palette')?.addEventListener('click', () => {
+        const palette = CommandPalette.create({
+          commands: [
+            {
+              id: 'cmd-new-chat',
+              label: 'New Chat',
+              description: 'Start a new conversation',
+              category: 'Chat',
+              icon: '💬',
+              onSelect: () => {
+                const toast = Toast.create({
+                  id: 'cmd-' + Date.now(),
+                  text: 'New chat started!',
+                  type: 'success',
+                  duration: 3000,
+                  onRemove: (id) => {
+                    document.getElementById(id)?.remove();
+                  },
+                });
+                toastContainerElement.appendChild(toast);
+              },
+            },
+            {
+              id: 'cmd-open-file',
+              label: 'Open File',
+              description: 'Open a file from repository',
+              category: 'File',
+              icon: '📁',
+              onSelect: () => {
+                const toast = Toast.create({
+                  id: 'cmd-' + Date.now(),
+                  text: 'File dialog opened',
+                  type: 'info',
+                  duration: 3000,
+                  onRemove: (id) => {
+                    document.getElementById(id)?.remove();
+                  },
+                });
+                toastContainerElement.appendChild(toast);
+              },
+            },
+            {
+              id: 'cmd-settings',
+              label: 'Settings',
+              description: 'Open settings',
+              category: 'General',
+              icon: '⚙️',
+              onSelect: () => {
+                const toast = Toast.create({
+                  id: 'cmd-' + Date.now(),
+                  text: 'Settings opened',
+                  type: 'info',
+                  duration: 3000,
+                  onRemove: (id) => {
+                    document.getElementById(id)?.remove();
+                  },
+                });
+                toastContainerElement.appendChild(toast);
+              },
+            },
+            {
+              id: 'cmd-search',
+              label: 'Search',
+              description: 'Search in repository',
+              category: 'File',
+              icon: '🔍',
+              onSelect: () => {
+                const toast = Toast.create({
+                  id: 'cmd-' + Date.now(),
+                  text: 'Search initiated',
+                  type: 'info',
+                  duration: 3000,
+                  onRemove: (id) => {
+                    document.getElementById(id)?.remove();
+                  },
+                });
+                toastContainerElement.appendChild(toast);
+              },
+            },
+          ],
+          onClose: () => {
+            // Command palette closed
+          },
+        });
+        document.body.appendChild(palette);
+      });
+    </script>
+  </body>
+</html>

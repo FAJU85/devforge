@@ -1,0 +1,17 @@
+{
+  "patterns": [],
+  "lastUpdated": "2026-06-12T00:00:00.000Z",
+  "version": "1.0",
+  "description": "Learned failure patterns database - starts empty and grows as real tests fail. Populated by 'npm run qa:learn' after test runs capture failures into the (gitignored) failures/ directory.",
+  "structure": {
+    "pattern": {
+      "id": "string - unique pattern identifier",
+      "type": "string - message|stack_trace|category|context_browser|context_selector",
+      "pattern": "string - the actual pattern to match",
+      "failures": "array - IDs of failures that matched this pattern",
+      "occurrences": "number - how many times this pattern appeared",
+      "confidence": "number - 0-1 confidence score",
+      "severity": "string - critical|high|medium|low"
+    }
+  }
+}

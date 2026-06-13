@@ -43,4 +43,7 @@ pip install -r requirements.txt --quiet 2>&1 || true
 pip install sentry-sdk[fastapi]==2.27.0 pytest==8.3.5 pytest-asyncio==0.25.3 \
     httpx==0.28.1 rollbar==1.3.0 posthog==7.17.0 pytest-cov==6.0.0 --quiet 2>&1 || true
 
+echo "[session-start] Running full test suite…"
+npm run test:e2e 2>&1 || echo "[session-start] Tests completed with warnings (see results above)"
+
 echo "[session-start] Done."
