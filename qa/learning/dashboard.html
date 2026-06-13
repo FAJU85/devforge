@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QA Learning System Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px 30px;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 2em;
+      margin-bottom: 10px;
+    }
+
+    header p {
+      font-size: 0.95em;
+      opacity: 0.9;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      padding: 30px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .stat-card h3 {
+      font-size: 0.85em;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-card .value {
+      font-size: 2em;
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    main {
+      padding: 30px;
+    }
+
+    section {
+      margin-bottom: 40px;
+    }
+
+    section h2 {
+      font-size: 1.4em;
+      margin-bottom: 20px;
+      color: #333;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #667eea;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 10px 15px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 0.95em;
+    }
+
+    select {
+      padding: 10px 15px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: white;
+      cursor: pointer;
+      font-size: 0.95em;
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.95em;
+      font-weight: 500;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #5568d3;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
+
+    th {
+      background: #f8f9fa;
+      padding: 15px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.9em;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid #dee2e6;
+    }
+
+    td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #dee2e6;
+    }
+
+    tr:hover {
+      background: #f8f9fa;
+    }
+
+    .pattern-text {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.85em;
+      color: #666;
+      word-break: break-word;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75em;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge.message {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .badge.stack {
+      background: #fff3e0;
+      color: #f57c00;
+    }
+
+    .badge.category {
+      background: #f3e5f5;
+      color: #7b1fa2;
+    }
+
+    .badge.context {
+      background: #e0f2f1;
+      color: #00796b;
+    }
+
+    .confidence {
+      font-weight: 600;
+    }
+
+    .confidence.high {
+      color: #27ae60;
+    }
+
+    .confidence.medium {
+      color: #f39c12;
+    }
+
+    .confidence.low {
+      color: #e74c3c;
+    }
+
+    .occurrences {
+      text-align: center;
+      font-weight: 500;
+    }
+
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+
+    .no-data p {
+      font-size: 1.1em;
+      margin-bottom: 10px;
+    }
+
+    footer {
+      background: #f8f9fa;
+      padding: 20px;
+      text-align: center;
+      color: #666;
+      font-size: 0.85em;
+      border-top: 1px solid #dee2e6;
+    }
+
+    footer p {
+      margin: 5px 0;
+    }
+
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      border: 1px solid #f5c6cb;
+    }
+
+    .success {
+      background: #d4edda;
+      color: #155724;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      border: 1px solid #c3e6cb;
+    }
+
+    .refresh-btn {
+      background: #28a745;
+    }
+
+    .refresh-btn:hover {
+      background: #218838;
+    }
+
+    .chart-bars {
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    .chart-item {
+      flex: 1;
+      min-width: 250px;
+    }
+
+    .chart-item h4 {
+      margin-bottom: 15px;
+      font-size: 0.95em;
+      color: #666;
+    }
+
+    .bar {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 10px;
+    }
+
+    .bar-label {
+      min-width: 100px;
+      font-size: 0.85em;
+      font-weight: 500;
+    }
+
+    .bar-fill {
+      flex: 1;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      height: 24px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 8px;
+      color: white;
+      font-size: 0.75em;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎯 QA Learning System Dashboard</h1>
+      <p>Real-time analysis of learned test failure patterns</p>
+    </header>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>Total Patterns</h3>
+        <div class="value" id="totalPatterns">0</div>
+      </div>
+      <div class="stat-card">
+        <h3>Total Failures</h3>
+        <div class="value" id="totalFailures">0</div>
+      </div>
+      <div class="stat-card">
+        <h3>Avg Confidence</h3>
+        <div class="value" id="avgConfidence">0%</div>
+      </div>
+      <div class="stat-card">
+        <h3>Last Updated</h3>
+        <div class="value" id="lastUpdated" style="font-size: 0.8em;">—</div>
+      </div>
+    </div>
+
+    <main>
+      <section>
+        <h2>Pattern Type Distribution</h2>
+        <div class="chart-bars" id="typeChart"></div>
+      </section>
+
+      <section>
+        <h2>Severity Distribution</h2>
+        <div class="chart-bars" id="severityChart"></div>
+      </section>
+
+      <section>
+        <h2>Top Patterns by Occurrences</h2>
+        <div class="controls">
+          <input type="text" id="searchInput" placeholder="Search patterns..." />
+          <select id="typeFilter">
+            <option value="">All Types</option>
+            <option value="message">Message</option>
+            <option value="stack_trace">Stack Trace</option>
+            <option value="category">Category</option>
+            <option value="context_browser">Browser Context</option>
+            <option value="context_selector">Selector Context</option>
+          </select>
+          <button class="refresh-btn" onclick="loadDashboard()">🔄 Refresh</button>
+        </div>
+        <div id="patternsContainer"></div>
+      </section>
+
+      <section>
+        <h2>Recent Patterns</h2>
+        <div id="recentPatternsContainer"></div>
+      </section>
+    </main>
+
+    <footer>
+      <p>📊 QA Learning Dashboard | Automatically populated by npm run qa:learn</p>
+      <p>Last refresh: <span id="refreshTime">just now</span></p>
+    </footer>
+  </div>
+
+  <script>
+    let allPatterns = [];
+    let patternsData = null;
+
+    async function loadPatternsData() {
+      try {
+        const response = await fetch('./learned_patterns.json');
+        if (!response.ok) throw new Error('Failed to load patterns');
+        patternsData = await response.json();
+        return patternsData;
+      } catch (err) {
+        console.error('Error loading patterns:', err);
+        document.body.innerHTML = `
+          <div class="container">
+            <header>
+              <h1>🎯 QA Learning System Dashboard</h1>
+              <p>Error loading dashboard</p>
+            </header>
+            <main>
+              <div class="error">
+                <strong>⚠️ Could not load learned patterns</strong>
+                <p>${err.message}</p>
+                <p>Make sure to run <code>npm run qa:learn</code> first to populate the system.</p>
+              </div>
+            </main>
+          </div>
+        `;
+        return null;
+      }
+    }
+
+    function createChart(data, title) {
+      if (!data || Object.keys(data).length === 0) {
+        return '<p style="color: #999;">No data available</p>';
+      }
+
+      const total = Object.values(data).reduce((a, b) => a + b, 0);
+      const sorted = Object.entries(data)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5);
+
+      let html = `<div class="chart-item"><h4>${title}</h4>`;
+      sorted.forEach(([key, count]) => {
+        const percent = ((count / total) * 100).toFixed(0);
+        const displayCount = count > 1 ? `${count} items` : `${count} item`;
+        html += `
+          <div class="bar">
+            <div class="bar-label">${key}</div>
+            <div class="bar-fill" style="width: ${percent}%">${displayCount}</div>
+          </div>
+        `;
+      });
+      html += '</div>';
+      return html;
+    }
+
+    function renderPatternTable(patterns) {
+      if (patterns.length === 0) {
+        return '<div class="no-data"><p>No patterns found</p></div>';
+      }
+
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Pattern</th>
+              <th>Type</th>
+              <th style="width: 100px;">Occurrences</th>
+              <th style="width: 120px;">Confidence</th>
+              <th style="width: 100px;">Severity</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      patterns.forEach(p => {
+        const confPercent = Math.round((p.confidence || 0) * 100);
+        const confColor = confPercent >= 80 ? 'high' : confPercent >= 60 ? 'medium' : 'low';
+        const truncPattern = p.pattern.substring(0, 60) + (p.pattern.length > 60 ? '...' : '');
+
+        html += `
+          <tr>
+            <td><div class="pattern-text" title="${p.pattern}">${truncPattern}</div></td>
+            <td><span class="badge ${p.type}">${p.type}</span></td>
+            <td class="occurrences">${p.occurrences || 0}</td>
+            <td><span class="confidence ${confColor}">${confPercent}%</span></td>
+            <td>${p.severity || 'N/A'}</td>
+          </tr>
+        `;
+      });
+
+      html += `
+          </tbody>
+        </table>
+      `;
+      return html;
+    }
+
+    function filterPatterns() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const typeFilter = document.getElementById('typeFilter').value;
+
+      let filtered = allPatterns.filter(p => {
+        const matchesSearch = !search || p.pattern.toLowerCase().includes(search);
+        const matchesType = !typeFilter || p.type === typeFilter;
+        return matchesSearch && matchesType;
+      });
+
+      // Sort by occurrences
+      filtered.sort((a, b) => (b.occurrences || 0) - (a.occurrences || 0));
+
+      document.getElementById('patternsContainer').innerHTML = renderPatternTable(filtered);
+    }
+
+    async function loadDashboard() {
+      const data = await loadPatternsData();
+      if (!data) return;
+
+      allPatterns = data.patterns || [];
+
+      // Update stats
+      const totalPatterns = allPatterns.length;
+      const totalFailures = allPatterns.reduce((sum, p) => sum + (p.failures?.length || 0), 0);
+      const avgConf = totalPatterns > 0
+        ? (allPatterns.reduce((sum, p) => sum + (p.confidence || 0), 0) / totalPatterns * 100).toFixed(0)
+        : 0;
+
+      document.getElementById('totalPatterns').textContent = totalPatterns;
+      document.getElementById('totalFailures').textContent = totalFailures;
+      document.getElementById('avgConfidence').textContent = avgConf + '%';
+
+      const lastUpdated = data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : 'Never';
+      document.getElementById('lastUpdated').textContent = lastUpdated;
+      document.getElementById('refreshTime').textContent = new Date().toLocaleTimeString();
+
+      // Build distribution charts
+      const byType = {};
+      const bySeverity = {};
+
+      allPatterns.forEach(p => {
+        byType[p.type] = (byType[p.type] || 0) + 1;
+        const sev = p.severity || 'unknown';
+        bySeverity[sev] = (bySeverity[sev] || 0) + 1;
+      });
+
+      document.getElementById('typeChart').innerHTML = createChart(byType, 'Pattern Types');
+      document.getElementById('severityChart').innerHTML = createChart(bySeverity, 'Severity Levels');
+
+      // Show top patterns
+      const sorted = [...allPatterns]
+        .sort((a, b) => (b.occurrences || 0) - (a.occurrences || 0));
+      document.getElementById('patternsContainer').innerHTML = renderPatternTable(sorted.slice(0, 50));
+
+      // Show recent patterns
+      const recent = [...allPatterns].slice(-10).reverse();
+      document.getElementById('recentPatternsContainer').innerHTML = renderPatternTable(recent);
+
+      // Add event listeners
+      document.getElementById('searchInput').addEventListener('input', filterPatterns);
+      document.getElementById('typeFilter').addEventListener('change', filterPatterns);
+
+      // Auto-refresh every 30 seconds
+      setTimeout(loadDashboard, 30000);
+    }
+
+    // Load on page load
+    document.addEventListener('DOMContentLoaded', loadDashboard);
+  </script>
+</body>
+</html>

@@ -13,6 +13,9 @@ export function createMainPanel(): HTMLDivElement {
     height: 100vh;
     background-color: var(--bg);
     overflow: hidden;
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
   `;
 
   // Top bar with tabs

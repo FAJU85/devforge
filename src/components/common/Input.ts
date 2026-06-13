@@ -37,10 +37,18 @@ export function createInput(props: InputProps): HTMLInputElement {
     input.style.boxShadow = 'none';
   });
 
-  // Attach change handler
+  // Add error state styling if provided
+  if ((props as any).error) {
+    input.style.borderColor = 'var(--red)';
+    input.style.boxShadow = '0 0 0 2px rgba(239, 68, 68, 0.2)';
+  }
+
+  // Attach change handler with guard
   input.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement;
-    props.onChange(target.value);
+    if (props.onChange) {
+      props.onChange(target.value);
+    }
   });
 
   return input;
