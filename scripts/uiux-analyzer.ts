@@ -152,7 +152,7 @@ async function recordAndAnalyze(url: string, headless = true): Promise<AnalysisR
   page.on('console', (msg) => {
     const text = `[${msg.type().toUpperCase()}] ${msg.text()}`;
     consoleLogs.push(text);
-    if (msg.type() === 'error') console.log(`  ⚠️  Console: ${text}`);
+    console.log(`  💬 Console: ${text}`);
   });
 
   page.on('requestfailed', (request) => {

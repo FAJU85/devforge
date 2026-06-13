@@ -130,7 +130,7 @@
     <div id="app"></div>
 
     <script type="module">
-      import { AppLayout, ChatWindow, Sidebar } from './index.ts';
+      import { AppLayout, ChatWindow, Sidebar, InputBox } from './index.ts';
 
       // Initialize the full DevForge app with sidebar and chat
       const appContainer = document.getElementById('app');
@@ -145,13 +145,37 @@
           sidebarSection.appendChild(sidebar);
         }
 
-        // Add a ChatWindow to the main content area
+        // Add a ChatWindow with InputBox to the main content area
         const mainSection = layout.querySelector('.main-section');
         if (mainSection) {
-          const chatWindow = ChatWindow.create();
-          // Clear any existing content and add the chat window
+          // Clear any existing content
           mainSection.innerHTML = '';
-          mainSection.appendChild(chatWindow);
+
+          // Create a container for chat components
+          const chatContainer = document.createElement('div');
+          chatContainer.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            gap: 12px;
+            padding: 16px;
+            overflow: hidden;
+          `;
+
+          // Add ChatWindow and InputBox
+          const chatWindow = ChatWindow.create();
+          const inputBox = InputBox.create({
+            placeholder: 'Type your message...',
+            disabled: false,
+            onSend: (message) => {
+              console.log('Message sent:', message);
+              // TODO: Connect to API
+            },
+          });
+
+          chatContainer.appendChild(chatWindow);
+          chatContainer.appendChild(inputBox);
+          mainSection.appendChild(chatContainer);
         }
       }
     </script>
