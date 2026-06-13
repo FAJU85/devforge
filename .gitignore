@@ -36,3 +36,6 @@ uiux-reports/
 venv/
 tools/
 .next/dev/
+
+# Claude Code worktrees (temporary agent workspaces)
+.claude/worktrees/
