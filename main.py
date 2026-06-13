@@ -30,6 +30,16 @@ except ImportError as e:
     print(f"[WARN] Dashboard routes unavailable: {e}")
     _DASHBOARD_ROUTES_AVAILABLE = False
 
+# WebSocket support
+try:
+    from fastapi import WebSocket, WebSocketDisconnect
+    from api.websocket import connection_manager
+    _WEBSOCKET_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARN] WebSocket support unavailable: {e}")
+    _WEBSOCKET_AVAILABLE = False
+    connection_manager = None
+
 # Optional: Sentry error monitoring (backend + request tracing)
 try:
     import sentry_sdk
@@ -116,6 +126,37 @@ if _DASHBOARD_ROUTES_AVAILABLE:
     app.include_router(chat_router)
     app.include_router(config_router)
     app.include_router(repositories_router)
+
+
+# WebSocket endpoint for real-time updates
+if _WEBSOCKET_AVAILABLE:
+    @app.websocket("/ws/{user_id}")
+    async def websocket_endpoint(websocket: WebSocket, user_id: str):
+        """
+        WebSocket endpoint for real-time communication
+
+        Args:
+            websocket: WebSocket connection
+            user_id: User ID
+        """
+        await websocket.accept()
+        await connection_manager.connect(user_id, websocket)
+
+        try:
+            while True:
+                data = await websocket.receive_text()
+                message_data = json.loads(data)
+                await connection_manager.handle_message(user_id, message_data)
+        except WebSocketDisconnect:
+            await connection_manager.disconnect(user_id, websocket)
+        except Exception as e:
+            print(f"WebSocket error for user {user_id}: {e}")
+            await connection_manager.disconnect(user_id, websocket)
+
+    @app.get("/api/websocket/stats")
+    async def get_websocket_stats():
+        """Get WebSocket connection statistics"""
+        return connection_manager.get_connection_stats()
 
 
 @app.middleware("http")
