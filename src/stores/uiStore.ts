@@ -47,7 +47,7 @@ export const useUIStore = create<UIState>()(
       toasts: [],
       addToast: (message) => {
         const id = `toast-${toastIdCounter++}`;
-        const duration = message.duration || 3000;
+        const duration = message.duration ?? 3000;
 
         set((state) => ({
           toasts: [...state.toasts, { ...message, id }],

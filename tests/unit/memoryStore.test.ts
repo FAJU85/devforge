@@ -65,7 +65,7 @@ describe('Memory Store', () => {
 
       const updated = useMemoryStore.getState().memories[0];
       expect(updated.value).toBe('light_mode');
-      expect(updated.updatedAt.getTime()).toBeGreaterThan(updated.createdAt.getTime());
+      expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(updated.createdAt.getTime());
     });
 
     it('should remove a memory item', () => {

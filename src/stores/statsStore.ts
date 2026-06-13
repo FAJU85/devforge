@@ -70,7 +70,7 @@ export const useStatsStore = create<StatsState>()(
             dailyMetrics: [...state.dailyMetrics, { ...metric, timestamp: new Date() }],
             totalMessages: state.totalMessages + metric.messagesCount,
             totalTokens: state.totalTokens + metric.tokensUsed,
-            totalCost: state.totalCost + metric.cost,
+            totalCost: parseFloat((state.totalCost + metric.cost).toFixed(10)),
           })),
 
         updateModelStats: (model, provider, tokens, cost) =>
@@ -85,7 +85,7 @@ export const useStatsStore = create<StatsState>()(
                         ...m,
                         totalMessages: m.totalMessages + 1,
                         totalTokens: m.totalTokens + tokens,
-                        totalCost: m.totalCost + cost,
+                        totalCost: parseFloat((m.totalCost + cost).toFixed(10)),
                         lastUsed: new Date(),
                       }
                     : m
@@ -135,12 +135,16 @@ export const useStatsStore = create<StatsState>()(
 
         getTopModel: () => {
           const state = get();
+          if (state.modelStats.length === 0) return undefined;
           return state.modelStats.reduce((top, current) =>
-            !top || current.totalCost > top.totalCost ? current : top
+            current.totalCost > top.totalCost ? current : top
           );
         },
 
-        getTotalCost: () => get().totalCost,
+        getTotalCost: () => {
+          const state = get();
+          return parseFloat(state.modelStats.reduce((sum, m) => sum + m.totalCost, 0).toFixed(10));
+        },
 
         getAverageTokensPerMessage: () => {
           const state = get();

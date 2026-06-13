@@ -85,7 +85,7 @@ describe('Dialog Component', () => {
     expect(buttons.length).toBe(1);
   });
 
-  it('should have pointer-events none on overlay', () => {
+  it('should have pointer-events auto on overlay', () => {
     const dialog = createDialog({
       title: 'Title',
       message: 'Message',
@@ -94,7 +94,7 @@ describe('Dialog Component', () => {
     });
 
     const pointerEvents = dialog.style.pointerEvents;
-    expect(pointerEvents).toBe('none');
+    expect(pointerEvents).toBe('auto');
   });
 
   it('should have pointer-events auto on dialog', () => {

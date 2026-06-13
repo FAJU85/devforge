@@ -57,6 +57,8 @@ export interface MemoryState {
   getMemorySize: () => number;
 }
 
+let _memIdCounter = 0;
+
 export const useMemoryStore = create<MemoryState>()(
   devtools(
     persist(
@@ -67,7 +69,7 @@ export const useMemoryStore = create<MemoryState>()(
         maxRecentContext: 20,
 
         addMemory: (item) => {
-          const id = `mem-${Date.now()}`;
+          const id = `mem-${Date.now()}${_memIdCounter++}`;
           const now = new Date();
 
           set((state) => ({

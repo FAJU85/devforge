@@ -14,7 +14,7 @@ class ModelSelector {
   private onSelect: ((model: Model) => void) | null = null;
 
   constructor(models: Model[] = []) {
-    this.models = models;
+    this.models = [...models];
   }
 
   addModel(model: Model): void {

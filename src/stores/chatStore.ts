@@ -57,6 +57,8 @@ export interface ChatState {
   getTotalTokens: (id: string) => number;
 }
 
+let _convIdCounter = 0;
+
 export const useChatStore = create<ChatState>()(
   devtools(
     persist(
@@ -67,7 +69,7 @@ export const useChatStore = create<ChatState>()(
         currentInput: '',
 
         createConversation: (title) => {
-          const id = `conv-${Date.now()}`;
+          const id = `conv-${Date.now()}${_convIdCounter++}`;
           const newConversation: Conversation = {
             id,
             title,

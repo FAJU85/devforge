@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 class RequestDeduplicator {
   private pending: Map<string, Promise<unknown>> = new Map();
 
-  async execute<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  execute<T>(key: string, fn: () => Promise<T>): Promise<T> {
     if (this.pending.has(key)) {
       return this.pending.get(key) as Promise<T>;
     }
@@ -63,15 +63,12 @@ describe('RequestDeduplicator', () => {
   });
 
   it('should track pending requests', async () => {
-    const fn = vi.fn(async () => {
-      vi.advanceTimersByTime(100);
-      return 'result';
-    });
+    const fn = vi.fn().mockResolvedValue('result');
 
-    deduplicator.execute('key1', fn);
+    const promise = deduplicator.execute('key1', fn);
     expect(deduplicator.getPendingCount()).toBe(1);
 
-    vi.advanceTimersByTime(100);
+    await promise;
     expect(deduplicator.getPendingCount()).toBe(0);
   });
 

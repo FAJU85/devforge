@@ -122,6 +122,7 @@ describe('ChatMessage', () => {
 
   it('should handle long messages', () => {
     message.content = 'a '.repeat(100);
+    message.tokens = undefined;
     const chatMsg = new ChatMessage(message);
     const tokens = chatMsg.getTokenCount();
     expect(tokens).toBeGreaterThan(50);
