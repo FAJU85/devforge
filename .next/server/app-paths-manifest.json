@@ -1,5 +1,11 @@
 {
   "/_global-error/page": "app/_global-error/page.js",
   "/_not-found/page": "app/_not-found/page.js",
-  "/page": "app/page.js"
+  "/api/page": "app/api/page.js",
+  "/create-task/page": "app/create-task/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/generate/page": "app/generate/page.js",
+  "/page": "app/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/tasks/page": "app/tasks/page.js"
 }
