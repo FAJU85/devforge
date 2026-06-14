@@ -26,6 +26,7 @@ try:
     from api.routes.config import router as config_router
     from api.routes.repositories import router as repositories_router
     from api.routes.tasks import router as tasks_router
+    from api.routes.generate import router as generate_router
     _DASHBOARD_ROUTES_AVAILABLE = True
 except ImportError as e:
     print(f"[WARN] Dashboard routes unavailable: {e}")
@@ -129,6 +130,7 @@ if _DASHBOARD_ROUTES_AVAILABLE:
     app.include_router(config_router)
     app.include_router(repositories_router)
     app.include_router(tasks_router)
+    app.include_router(generate_router)
 
 # Initialize WebSocket-Task integration
 if _WEBSOCKET_AVAILABLE and initialize_task_broadcast:

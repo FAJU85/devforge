@@ -300,6 +300,85 @@ class GitHubService:
         except Exception:
             return False
 
+    async def create_pull_request(
+        self,
+        token: str,
+        owner: str,
+        repo: str,
+        title: str,
+        description: str,
+        file_path: str,
+        file_content: str,
+        branch_name: str = "devforge-changes"
+    ) -> Dict[str, Any]:
+        """
+        Create a GitHub pull request with modified code
+
+        Args:
+            token: GitHub API token
+            owner: Repository owner
+            repo: Repository name
+            title: PR title
+            description: PR description
+            file_path: File to modify
+            file_content: New file content
+            branch_name: Branch name for the PR
+
+        Returns:
+            PR data dict with html_url and number
+        """
+        try:
+            import base64
+
+            # Step 1: Get current file content and SHA (needed for update)
+            file_response = requests.get(
+                f"{self.BASE_URL}/repos/{owner}/{repo}/contents/{file_path.lstrip('/')}",
+                headers=self._get_headers(token),
+                timeout=self.TIMEOUT
+            )
+            file_response.raise_for_status()
+            file_data = file_response.json()
+            file_sha = file_data.get("sha")
+
+            # Step 2: Update file on a new branch
+            update_response = requests.put(
+                f"{self.BASE_URL}/repos/{owner}/{repo}/contents/{file_path.lstrip('/')}",
+                headers=self._get_headers(token),
+                json={
+                    "message": f"DevForge: {title}",
+                    "content": base64.b64encode(file_content.encode()).decode(),
+                    "sha": file_sha,
+                    "branch": branch_name,
+                },
+                timeout=self.TIMEOUT
+            )
+            update_response.raise_for_status()
+
+            # Step 3: Create pull request
+            pr_response = requests.post(
+                f"{self.BASE_URL}/repos/{owner}/{repo}/pulls",
+                headers=self._get_headers(token),
+                json={
+                    "title": title,
+                    "body": description,
+                    "head": branch_name,
+                    "base": "main",  # Default to main branch
+                },
+                timeout=self.TIMEOUT
+            )
+            pr_response.raise_for_status()
+            pr_data = pr_response.json()
+
+            return {
+                "html_url": pr_data.get("html_url", ""),
+                "number": pr_data.get("number", 0),
+                "id": pr_data.get("id", 0),
+                "head": pr_data.get("head", {}).get("ref", ""),
+            }
+
+        except requests.RequestException as e:
+            raise Exception(f"Failed to create PR: {str(e)}")
+
 
 # Global GitHub service instance
 github_service = GitHubService()
