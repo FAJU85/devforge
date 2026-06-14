@@ -39,3 +39,5 @@ tools/
 
 # Claude Code worktrees (temporary agent workspaces)
 .claude/worktrees/
+form-*.png
+.playwright-mcp/
