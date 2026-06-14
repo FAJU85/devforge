@@ -10,10 +10,16 @@ from typing import Optional, Dict, Any, List
 import json
 import difflib
 import asyncio
+import os
+import logging
 from api.services.github_service import github_service
 from api.services.providers import ProviderFactory
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/generate", tags=["generate"])
+
+# Get HF token from environment
+HF_TOKEN = os.environ.get("HF_TOKEN", "")
 
 
 class CodeGenerationRequest(BaseModel):
@@ -105,15 +111,31 @@ async def generate_code_with_model(
 ) -> tuple[str, Optional[int]]:
     """Generate code using a specific model, return code and token count"""
     try:
-        provider_instance = provider_factory.create_provider(provider, model)
-        response = await provider_instance.complete(
-            prompt=prompt,
+        # Create provider with API token
+        if not HF_TOKEN:
+            raise ValueError("HF_TOKEN environment variable is required for code generation")
+
+        provider_instance = provider_factory.create_provider(provider, HF_TOKEN)
+
+        # Format prompt as messages for the provider
+        messages = [{"role": "user", "content": prompt}]
+
+        # Generate response using the provider
+        response = await provider_instance.generate(
+            messages=messages,
+            model=model,
             max_tokens=4000,
             temperature=0.3,
         )
-        return response.text.strip(), getattr(response, 'tokens_used', None)
+
+        # Extract token count from usage
+        tokens_used = response.usage.total_tokens if response.usage else None
+
+        return response.content.strip(), tokens_used
     except Exception as e:
-        raise Exception(f"Model {model} failed: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error generating with model {model}: {error_msg}")
+        raise Exception(f"Model {model} failed: {error_msg}")
 
 
 @router.post("/code", response_model=CodeGenerationResponse)
@@ -165,16 +187,26 @@ Original code:
 Modified code:"""
 
         # Generate modified code using the provider
-        provider_factory = ProviderFactory()
-        provider = provider_factory.create_provider(request.provider, request.model)
+        if not HF_TOKEN:
+            raise HTTPException(
+                status_code=500,
+                detail="HF_TOKEN environment variable not configured. Cannot generate code."
+            )
 
-        response = await provider.complete(
-            prompt=prompt,
+        provider_factory = ProviderFactory()
+        provider = provider_factory.create_provider(request.provider, HF_TOKEN)
+
+        # Format prompt as messages
+        messages = [{"role": "user", "content": prompt}]
+
+        response = await provider.generate(
+            messages=messages,
+            model=request.model,
             max_tokens=4000,
             temperature=0.3,  # Lower temperature for more deterministic code
         )
 
-        modified_code = response.text.strip()
+        modified_code = response.content.strip()
 
         # Generate diff
         original_lines = file_content.splitlines(keepends=True)
@@ -252,8 +284,14 @@ Original code:
 Modified code:"""
 
         # Create tasks for parallel execution
+        if not HF_TOKEN:
+            raise HTTPException(
+                status_code=500,
+                detail="HF_TOKEN environment variable not configured. Cannot generate code."
+            )
+
         provider_factory = ProviderFactory()
-        tasks = []
+        tasks = {}
         for model in request.models:
             task = generate_code_with_model(
                 provider_factory,
@@ -261,13 +299,23 @@ Modified code:"""
                 model,
                 prompt
             )
-            tasks.append((model, task))
+            tasks[model] = task
 
-        # Run all models in parallel
+        # Run all models in parallel using gather
         results = []
-        for model, task in tasks:
+        model_tasks = list(tasks.items())
+
+        # Execute all tasks concurrently
+        task_coroutines = [task for _, task in model_tasks]
+        task_results = await asyncio.gather(*task_coroutines, return_exceptions=True)
+
+        # Process results
+        for (model, _), task_result in zip(model_tasks, task_results):
             try:
-                modified_code, tokens_used = await task
+                if isinstance(task_result, Exception):
+                    raise task_result
+
+                modified_code, tokens_used = task_result
                 diff = generate_diff(file_content, modified_code, request.file_path)
                 results.append(MultiModelResult(
                     model=model,
@@ -277,6 +325,7 @@ Modified code:"""
                     tokens_used=tokens_used,
                 ))
             except Exception as e:
+                logger.error(f"Error with model {model}: {str(e)}")
                 results.append(MultiModelResult(
                     model=model,
                     original_code=file_content,
