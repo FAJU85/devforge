@@ -10,7 +10,9 @@ export interface GeneratorFormData {
   filePath: string;
   instruction: string;
   githubToken: string;
-  model: string;
+  model?: string;
+  models?: string[];
+  useMultiModel?: boolean;
 }
 
 const HF_MODELS = [
@@ -29,6 +31,8 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
     instruction: '',
     githubToken: '',
     model: 'deepseek-coder',
+    models: ['deepseek-coder'],
+    useMultiModel: false,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -51,6 +55,16 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
       newErrors.instruction = 'Instruction is required';
     } else if (formData.instruction.trim().length < 10) {
       newErrors.instruction = 'Instruction must be at least 10 characters';
+    }
+
+    if (formData.useMultiModel) {
+      if (!formData.models || formData.models.length === 0) {
+        newErrors.models = 'Select at least one model';
+      }
+    } else {
+      if (!formData.model?.trim()) {
+        newErrors.model = 'Model is required';
+      }
     }
 
     if (!formData.githubToken.trim()) {
@@ -124,25 +138,102 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
           )}
         </div>
 
-        {/* Model Selection */}
+        {/* Model Selection Mode */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            AI Model
+            Model Selection
           </label>
-          <select
-            value={formData.model}
-            onChange={(e) => handleInputChange('model', e.target.value)}
-            disabled={isLoading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:cursor-not-allowed"
-          >
-            {HF_MODELS.map(model => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-              </option>
-            ))}
-          </select>
-          <p className="text-gray-500 text-xs mt-1">Hugging Face open models</p>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                checked={!formData.useMultiModel}
+                onChange={() => {
+                  setFormData(prev => ({ ...prev, useMultiModel: false }));
+                  if (errors.models) {
+                    setErrors(prev => ({ ...prev, models: '' }));
+                  }
+                }}
+                disabled={isLoading}
+                className="disabled:cursor-not-allowed"
+              />
+              <span className="text-sm text-gray-700">Single Model</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                checked={formData.useMultiModel}
+                onChange={() => {
+                  setFormData(prev => ({ ...prev, useMultiModel: true }));
+                  if (errors.model) {
+                    setErrors(prev => ({ ...prev, model: '' }));
+                  }
+                }}
+                disabled={isLoading}
+                className="disabled:cursor-not-allowed"
+              />
+              <span className="text-sm text-gray-700">Multiple Models</span>
+            </label>
+          </div>
         </div>
+
+        {/* Single Model Selection */}
+        {!formData.useMultiModel && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Choose a Model
+            </label>
+            <select
+              value={formData.model}
+              onChange={(e) => handleInputChange('model', e.target.value)}
+              disabled={isLoading}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              {HF_MODELS.map(model => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-gray-500 text-xs mt-1">Hugging Face open models</p>
+          </div>
+        )}
+
+        {/* Multi-Model Selection */}
+        {formData.useMultiModel && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Models to Run in Parallel
+            </label>
+            <div className="space-y-2">
+              {HF_MODELS.map(model => (
+                <label key={model.id} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.models?.includes(model.id) || false}
+                    onChange={(e) => {
+                      const models = formData.models || [];
+                      const updated = e.target.checked
+                        ? [...models, model.id]
+                        : models.filter(m => m !== model.id);
+                      setFormData(prev => ({ ...prev, models: updated }));
+                      if (errors.models) {
+                        setErrors(prev => ({ ...prev, models: '' }));
+                      }
+                    }}
+                    disabled={isLoading}
+                    className="disabled:cursor-not-allowed"
+                  />
+                  <span className="text-sm text-gray-700">{model.name}</span>
+                </label>
+              ))}
+            </div>
+            {errors.models && (
+              <p className="text-red-500 text-sm mt-2">{errors.models}</p>
+            )}
+            <p className="text-gray-500 text-xs mt-2">Results will show side-by-side for comparison</p>
+          </div>
+        )}
 
         {/* Instruction */}
         <div>
