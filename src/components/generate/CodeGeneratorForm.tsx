@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface CodeGeneratorFormProps {
   onSubmit: (data: GeneratorFormData) => void;
@@ -15,28 +15,64 @@ export interface GeneratorFormData {
   useMultiModel?: boolean;
 }
 
-const HF_MODELS = [
-  { id: 'deepseek-coder', name: 'DeepSeek Coder (7B)' },
-  { id: 'codellama', name: 'CodeLlama (7B)' },
-  { id: 'mistral-7b', name: 'Mistral (7B)' },
-];
+interface ModelMetadata {
+  model_id: string;
+  name: string;
+  downloads: number;
+  likes: number;
+  url: string;
+  architecture?: string;
+}
 
 export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
   onSubmit,
   isLoading = false
 }) => {
+  const [models, setModels] = useState<ModelMetadata[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+
   const [formData, setFormData] = useState<GeneratorFormData>({
     repoUrl: '',
     filePath: '',
     instruction: '',
     githubToken: '',
-    model: 'deepseek-coder',
-    models: ['deepseek-coder'],
+    model: '',
+    models: [],
     useMultiModel: false,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showTokenInput, setShowTokenInput] = useState(false);
+
+  // Fetch models from API on component mount
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        setModelsLoading(true);
+        const response = await fetch('/api/models/popular');
+        if (!response.ok) throw new Error('Failed to fetch models');
+        const data = await response.json();
+        setModels(data.models || []);
+
+        // Set first model as default
+        if (data.models && data.models.length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            model: data.models[0].model_id,
+            models: [data.models[0].model_id],
+          }));
+        }
+      } catch (err) {
+        setModelsError(err instanceof Error ? err.message : 'Failed to load models');
+        console.error('Error fetching models:', err);
+      } finally {
+        setModelsLoading(false);
+      }
+    };
+
+    fetchModels();
+  }, []);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -183,18 +219,45 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Choose a Model
             </label>
-            <select
-              value={formData.model}
-              onChange={(e) => handleInputChange('model', e.target.value)}
-              disabled={isLoading}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              {HF_MODELS.map(model => (
-                <option key={model.id} value={model.id}>
-                  {model.name}
-                </option>
-              ))}
-            </select>
+            {modelsLoading ? (
+              <div className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                Loading models...
+              </div>
+            ) : modelsError ? (
+              <div className="w-full px-4 py-2 border border-red-500 rounded-lg bg-red-50 text-red-600 text-sm">
+                {modelsError}
+              </div>
+            ) : (
+              <>
+                <select
+                  value={formData.model || ''}
+                  onChange={(e) => handleInputChange('model', e.target.value)}
+                  disabled={isLoading}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  <option value="">Select a model...</option>
+                  {models.map(model => (
+                    <option key={model.model_id} value={model.model_id}>
+                      {model.name} • {model.downloads.toLocaleString()} downloads
+                    </option>
+                  ))}
+                </select>
+                {formData.model && (
+                  <div className="mt-2 p-2 bg-blue-50 rounded text-xs text-gray-600">
+                    {(() => {
+                      const selected = models.find(m => m.model_id === formData.model);
+                      return selected ? (
+                        <>
+                          <div>📥 {selected.downloads.toLocaleString()} downloads</div>
+                          <div>👍 {selected.likes.toLocaleString()} likes</div>
+                          {selected.architecture && <div>🏗️ {selected.architecture}</div>}
+                        </>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+              </>
+            )}
             <p className="text-gray-500 text-xs mt-1">Hugging Face open models</p>
           </div>
         )}
@@ -205,29 +268,60 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Select Models to Run in Parallel
             </label>
-            <div className="space-y-2">
-              {HF_MODELS.map(model => (
-                <label key={model.id} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.models?.includes(model.id) || false}
-                    onChange={(e) => {
-                      const models = formData.models || [];
-                      const updated = e.target.checked
-                        ? [...models, model.id]
-                        : models.filter(m => m !== model.id);
-                      setFormData(prev => ({ ...prev, models: updated }));
-                      if (errors.models) {
-                        setErrors(prev => ({ ...prev, models: '' }));
-                      }
-                    }}
-                    disabled={isLoading}
-                    className="disabled:cursor-not-allowed"
-                  />
-                  <span className="text-sm text-gray-700">{model.name}</span>
-                </label>
-              ))}
-            </div>
+            {modelsLoading ? (
+              <div className="p-4 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 text-sm">
+                Loading models...
+              </div>
+            ) : modelsError ? (
+              <div className="p-4 border border-red-500 rounded-lg bg-red-50 text-red-600 text-sm">
+                {modelsError}
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3 mb-4 max-h-96 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  {models.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No models available</p>
+                  ) : (
+                    models.map(model => (
+                      <label
+                        key={model.model_id}
+                        className="flex items-start gap-3 cursor-pointer p-2 hover:bg-blue-50 rounded transition"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.models?.includes(model.model_id) || false}
+                          onChange={(e) => {
+                            const selectedModels = formData.models || [];
+                            const updated = e.target.checked
+                              ? [...selectedModels, model.model_id]
+                              : selectedModels.filter(m => m !== model.model_id);
+                            setFormData(prev => ({ ...prev, models: updated }));
+                            if (errors.models) {
+                              setErrors(prev => ({ ...prev, models: '' }));
+                            }
+                          }}
+                          disabled={isLoading}
+                          className="mt-1 disabled:cursor-not-allowed"
+                        />
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-900">{model.name}</div>
+                          <div className="text-xs text-gray-600 mt-1 flex gap-4">
+                            <span>📥 {model.downloads.toLocaleString()} downloads</span>
+                            <span>👍 {model.likes.toLocaleString()} likes</span>
+                            {model.architecture && <span>🏗️ {model.architecture}</span>}
+                          </div>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {(formData.models?.length ?? 0) > 0 && (
+                  <div className="text-xs text-blue-600 mb-2">
+                    ✓ {formData.models?.length} model{formData.models?.length === 1 ? '' : 's'} selected
+                  </div>
+                )}
+              </>
+            )}
             {errors.models && (
               <p className="text-red-500 text-sm mt-2">{errors.models}</p>
             )}
