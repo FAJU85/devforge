@@ -7,6 +7,7 @@ interface CodeDiffViewerProps {
   filePath: string;
   instruction: string;
   onApprove: () => void;
+  onReject?: () => void;
   isCreatingPR?: boolean;
 }
 
@@ -19,6 +20,7 @@ export const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({
   filePath,
   instruction,
   onApprove,
+  onReject,
   isCreatingPR = false,
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('split');
@@ -138,7 +140,8 @@ export const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({
           )}
         </button>
         <button
-          disabled={isCreatingPR}
+          onClick={onReject}
+          disabled={isCreatingPR || !onReject}
           className="flex-1 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-400 text-gray-900 font-medium py-2 px-4 rounded-lg transition"
         >
           Reject Changes

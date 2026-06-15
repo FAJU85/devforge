@@ -6,8 +6,8 @@ import { CodeDiffViewer } from './CodeDiffViewer';
 import { MultiModelResults } from './MultiModelResults';
 
 interface GenerationResult {
-  originalCode: string;
-  modifiedCode: string;
+  original_code: string;
+  modified_code: string;
   diff: string;
   instruction: string;
   model: string;
@@ -39,9 +39,9 @@ interface PageError {
 }
 
 interface PRResult {
-  prUrl: string;
-  prNumber: number;
-  branchName: string;
+  pr_url: string;
+  pr_number: number;
+  branch_name: string;
 }
 
 export const CodeGeneratorPage: React.FC = () => {
@@ -214,8 +214,8 @@ export const CodeGeneratorPage: React.FC = () => {
           </div>
         )}
 
-        {/* State: Result */}
-        {state === 'result' && result && (
+        {/* State: Result (also shown while creating PR for single-model) */}
+        {(state === 'result' || (state === 'creating-pr' && result)) && result && (
           <div>
             <CodeDiffViewer
               originalCode={result.original_code}
@@ -224,7 +224,8 @@ export const CodeGeneratorPage: React.FC = () => {
               filePath={currentFilePath}
               instruction={currentInstruction}
               onApprove={handleCreatePR}
-              isCreatingPR={false}
+              onReject={handleReset}
+              isCreatingPR={state === 'creating-pr'}
             />
             <div className="mt-6 text-center">
               <button
@@ -237,8 +238,8 @@ export const CodeGeneratorPage: React.FC = () => {
           </div>
         )}
 
-        {/* State: Multi-Model Result */}
-        {state === 'multi-result' && multiResult && (
+        {/* State: Multi-Model Result (also shown while creating PR for multi-model) */}
+        {(state === 'multi-result' || (state === 'creating-pr' && multiResult)) && multiResult && (
           <div>
             <MultiModelResults
               results={multiResult.results.map(r => ({
@@ -252,7 +253,7 @@ export const CodeGeneratorPage: React.FC = () => {
               instruction={currentInstruction}
               filePath={currentFilePath}
               onSelectModel={handleCreatePR}
-              isCreatingPR={false}
+              isCreatingPR={state === 'creating-pr'}
             />
             <div className="mt-6 text-center">
               <button
@@ -301,6 +302,7 @@ export const CodeGeneratorPage: React.FC = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-block bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition mb-4"
+                  data-testid="pr-link"
                 >
                   View PR #{prResult.pr_number} on GitHub →
                 </a>

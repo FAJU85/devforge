@@ -90,7 +90,7 @@ export const MultiModelResults: React.FC<MultiModelResultsProps> = ({
               }`}
             >
               <div className="font-medium text-sm text-gray-900">{result.model}</div>
-              {result.tokensUsed && (
+              {result.tokensUsed !== undefined && (
                 <div className="text-xs text-gray-500 mt-1">
                   {result.tokensUsed} tokens
                 </div>

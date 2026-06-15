@@ -79,8 +79,15 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
 
     if (!formData.repoUrl.trim()) {
       newErrors.repoUrl = 'Repository URL is required';
-    } else if (!formData.repoUrl.includes('github.com')) {
-      newErrors.repoUrl = 'Must be a GitHub repository URL';
+    } else {
+      try {
+        const parsed = new URL(formData.repoUrl.trim());
+        if (!['github.com', 'www.github.com'].includes(parsed.hostname)) {
+          newErrors.repoUrl = 'Must be a GitHub repository URL';
+        }
+      } catch {
+        newErrors.repoUrl = 'Must be a valid URL';
+      }
     }
 
     if (!formData.filePath.trim()) {
@@ -105,6 +112,7 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
 
     if (!formData.githubToken.trim()) {
       newErrors.githubToken = 'GitHub token is required';
+      setShowTokenInput(true);
     }
 
     setErrors(newErrors);

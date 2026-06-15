@@ -22,6 +22,26 @@ router = APIRouter(prefix="/api/generate", tags=["generate"])
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 
 
+def get_api_key_for_provider(provider: str) -> str:
+    """Return the API key configured for the given provider.
+
+    Maps provider name → env var (huggingface→HF_TOKEN, anthropic→ANTHROPIC_API_KEY,
+    groq→GROQ_API_KEY). Raises ValueError if no key is configured.
+    """
+    env_map = {
+        "huggingface": "HF_TOKEN",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "groq": "GROQ_API_KEY",
+    }
+    env_var = env_map.get(provider.lower())
+    if not env_var:
+        raise ValueError(f"Unsupported provider: {provider}")
+    key = os.environ.get(env_var, "")
+    if not key:
+        raise ValueError(f"{env_var} environment variable is required for provider '{provider}'")
+    return key
+
+
 class CodeGenerationRequest(BaseModel):
     """Request to generate/modify code"""
     repo_url: str
@@ -111,11 +131,10 @@ async def generate_code_with_model(
 ) -> tuple[str, Optional[int]]:
     """Generate code using a specific model, return code and token count"""
     try:
-        # Create provider with API token
-        if not HF_TOKEN:
-            raise ValueError("HF_TOKEN environment variable is required for code generation")
+        # Select the right API key for the provider (HF_TOKEN, ANTHROPIC_API_KEY, GROQ_API_KEY)
+        api_key = get_api_key_for_provider(provider)
 
-        provider_instance = provider_factory.create_provider(provider, HF_TOKEN)
+        provider_instance = provider_factory.create_provider(provider, api_key)
 
         # Format prompt as messages for the provider
         messages = [{"role": "user", "content": prompt}]
@@ -186,15 +205,14 @@ Original code:
 
 Modified code:"""
 
-        # Generate modified code using the provider
-        if not HF_TOKEN:
-            raise HTTPException(
-                status_code=500,
-                detail="HF_TOKEN environment variable not configured. Cannot generate code."
-            )
+        # Generate modified code using the provider with provider-specific API key
+        try:
+            api_key = get_api_key_for_provider(request.provider)
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
         provider_factory = ProviderFactory()
-        provider = provider_factory.create_provider(request.provider, HF_TOKEN)
+        provider = provider_factory.create_provider(request.provider, api_key)
 
         # Format prompt as messages
         messages = [{"role": "user", "content": prompt}]
@@ -283,29 +301,27 @@ Original code:
 
 Modified code:"""
 
-        # Create tasks for parallel execution
-        if not HF_TOKEN:
-            raise HTTPException(
-                status_code=500,
-                detail="HF_TOKEN environment variable not configured. Cannot generate code."
-            )
+        # Validate provider API key is configured before launching tasks
+        try:
+            get_api_key_for_provider(request.provider)
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
+        # Build ordered list of (model, task) tuples so duplicate model names
+        # in request.models still produce one task each.
         provider_factory = ProviderFactory()
-        tasks = {}
+        model_tasks: List[tuple] = []
         for model in request.models:
             task = generate_code_with_model(
                 provider_factory,
                 request.provider,
                 model,
-                prompt
+                prompt,
             )
-            tasks[model] = task
-
-        # Run all models in parallel using gather
-        results = []
-        model_tasks = list(tasks.items())
+            model_tasks.append((model, task))
 
         # Execute all tasks concurrently
+        results = []
         task_coroutines = [task for _, task in model_tasks]
         task_results = await asyncio.gather(*task_coroutines, return_exceptions=True)
 
