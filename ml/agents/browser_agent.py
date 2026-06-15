@@ -13,10 +13,8 @@ import os
 
 try:
     from anthropic import Anthropic
-    from playwright.async_api import async_playwright, Page, Browser
 except ImportError:
-    print("Install dependencies: pip install anthropic playwright")
-    exit(1)
+    Anthropic = None
 
 
 @dataclass
@@ -33,7 +31,7 @@ class BrowserAgent:
 
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
-        self.client = Anthropic(api_key=self.api_key)
+        self.client = Anthropic(api_key=self.api_key) if Anthropic else None
         self.browser = None
         self.page = None
         self.conversation_history = []
@@ -41,6 +39,11 @@ class BrowserAgent:
 
     async def start(self):
         """Start browser"""
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            raise ImportError("playwright is required for BrowserAgent. Install with: pip install playwright")
+
         playwright = await async_playwright().start()
         self.browser = await playwright.chromium.launch(
             headless=os.getenv('HEADLESS', 'true').lower() == 'true'
