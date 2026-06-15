@@ -7,6 +7,10 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: mit
+hf_oauth: true
+hf_oauth_scopes:
+  - inference-api
+  - read-repos
 ---
 
 # DevForge

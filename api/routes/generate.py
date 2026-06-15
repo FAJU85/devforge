@@ -4,7 +4,7 @@ Code Generation Routes
 Handles AI-powered code generation and modification
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Cookie
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import json
@@ -14,6 +14,7 @@ import os
 import logging
 from api.services.github_service import github_service
 from api.services.providers import ProviderFactory
+from api.services.auth_service import auth_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/generate", tags=["generate"])
@@ -22,14 +23,28 @@ router = APIRouter(prefix="/api/generate", tags=["generate"])
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 
 
-def get_api_key_for_provider(provider: str) -> str:
-    """Return the API key configured for the given provider.
+def get_api_key_for_provider(provider: str, session_token: Optional[str] = None) -> str:
+    """Return the API key for the given provider.
 
-    Maps provider name → env var (huggingface→HF_TOKEN, anthropic→ANTHROPIC_API_KEY,
-    groq→GROQ_API_KEY). Raises ValueError if no key is configured.
+    For huggingface: prefers the user's own token from their HF OAuth session,
+    then falls back to the Space-level HF_TOKEN env var.
+    For other providers: reads from env vars.
     """
+    if provider.lower() == "huggingface":
+        # 1. User's own token from HF OAuth session
+        if session_token:
+            user_token = auth_service.get_hf_token_from_session(session_token)
+            if user_token:
+                return user_token
+        # 2. Fall back to Space-level token
+        key = os.environ.get("HF_TOKEN", "")
+        if key:
+            return key
+        raise ValueError(
+            "No HF token available. Sign in with Hugging Face or set HF_TOKEN."
+        )
+
     env_map = {
-        "huggingface": "HF_TOKEN",
         "anthropic": "ANTHROPIC_API_KEY",
         "groq": "GROQ_API_KEY",
     }
@@ -128,11 +143,11 @@ async def generate_code_with_model(
     provider: str,
     model: str,
     prompt: str,
+    session_token: Optional[str] = None,
 ) -> tuple[str, Optional[int]]:
     """Generate code using a specific model, return code and token count"""
     try:
-        # Select the right API key for the provider (HF_TOKEN, ANTHROPIC_API_KEY, GROQ_API_KEY)
-        api_key = get_api_key_for_provider(provider)
+        api_key = get_api_key_for_provider(provider, session_token)
 
         provider_instance = provider_factory.create_provider(provider, api_key)
 
@@ -256,7 +271,10 @@ Modified code:"""
 
 
 @router.post("/code-parallel", response_model=MultiModelCodeGenerationResponse)
-async def generate_code_parallel(request: MultiModelCodeGenerationRequest) -> MultiModelCodeGenerationResponse:
+async def generate_code_parallel(
+    request: MultiModelCodeGenerationRequest,
+    session_token: Optional[str] = Cookie(None),
+) -> MultiModelCodeGenerationResponse:
     """
     Generate/modify code using multiple models in parallel
 
@@ -303,7 +321,7 @@ Modified code:"""
 
         # Validate provider API key is configured before launching tasks
         try:
-            get_api_key_for_provider(request.provider)
+            get_api_key_for_provider(request.provider, session_token)
         except ValueError as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -317,6 +335,7 @@ Modified code:"""
                 request.provider,
                 model,
                 prompt,
+                session_token,
             )
             model_tasks.append((model, task))
 

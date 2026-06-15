@@ -1,6 +1,7 @@
 'use client';
 
 import { type Dispatch, type SetStateAction } from 'react';
+import HFLoginButton from '@/components/HFLoginButton';
 
 interface HeaderProps {
   isDark: boolean;
@@ -18,7 +19,8 @@ export default function Header({ isDark, onThemeToggle, setActiveTab }: HeaderPr
         </span>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        <HFLoginButton />
         <button
           onClick={onThemeToggle}
           className="dev-button-secondary"
@@ -26,7 +28,6 @@ export default function Header({ isDark, onThemeToggle, setActiveTab }: HeaderPr
         >
           {isDark ? '☀️ Light' : '🌙 Dark'}
         </button>
-
         <button
           onClick={() => setActiveTab('config')}
           className="dev-button-primary"
