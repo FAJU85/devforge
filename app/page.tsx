@@ -7,8 +7,9 @@ import ChatTab from '@/components/tabs/ChatTab';
 import RepositoryTab from '@/components/tabs/RepositoryTab';
 import ConfigurationTab from '@/components/tabs/ConfigurationTab';
 import DebugTab from '@/components/tabs/DebugTab';
+import GenerateTab from '@/components/tabs/GenerateTab';
 
-type TabType = 'chat' | 'repo' | 'config' | 'debug';
+type TabType = 'chat' | 'repo' | 'config' | 'debug' | 'generate';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>('chat');
@@ -31,6 +32,7 @@ export default function Home() {
 
   const tabs = [
     { id: 'chat' as TabType, label: '💬 Chat', component: ChatTab },
+    { id: 'generate' as TabType, label: '⚡ Generate', component: GenerateTab },
     { id: 'repo' as TabType, label: '📦 Repository', component: RepositoryTab },
     { id: 'config' as TabType, label: '⚙️ Configuration', component: ConfigurationTab },
     { id: 'debug' as TabType, label: '🐛 Debug', component: DebugTab },
@@ -62,6 +64,7 @@ export default function Home() {
         {/* Tab Content */}
         <div className="flex-1 overflow-hidden">
           {activeTab === 'chat' && <ChatTab />}
+          {activeTab === 'generate' && <GenerateTab />}
           {activeTab === 'repo' && <RepositoryTab />}
           {activeTab === 'config' && <ConfigurationTab />}
           {activeTab === 'debug' && <DebugTab />}

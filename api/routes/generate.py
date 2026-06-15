@@ -10,10 +10,36 @@ from typing import Optional, Dict, Any, List
 import json
 import difflib
 import asyncio
+import os
+import logging
 from api.services.github_service import github_service
 from api.services.providers import ProviderFactory
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/generate", tags=["generate"])
+
+# Get HF token from environment
+HF_TOKEN = os.environ.get("HF_TOKEN", "")
+
+
+def get_api_key_for_provider(provider: str) -> str:
+    """Return the API key configured for the given provider.
+
+    Maps provider name → env var (huggingface→HF_TOKEN, anthropic→ANTHROPIC_API_KEY,
+    groq→GROQ_API_KEY). Raises ValueError if no key is configured.
+    """
+    env_map = {
+        "huggingface": "HF_TOKEN",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "groq": "GROQ_API_KEY",
+    }
+    env_var = env_map.get(provider.lower())
+    if not env_var:
+        raise ValueError(f"Unsupported provider: {provider}")
+    key = os.environ.get(env_var, "")
+    if not key:
+        raise ValueError(f"{env_var} environment variable is required for provider '{provider}'")
+    return key
 
 
 class CodeGenerationRequest(BaseModel):
@@ -105,15 +131,30 @@ async def generate_code_with_model(
 ) -> tuple[str, Optional[int]]:
     """Generate code using a specific model, return code and token count"""
     try:
-        provider_instance = provider_factory.create_provider(provider, model)
-        response = await provider_instance.complete(
-            prompt=prompt,
+        # Select the right API key for the provider (HF_TOKEN, ANTHROPIC_API_KEY, GROQ_API_KEY)
+        api_key = get_api_key_for_provider(provider)
+
+        provider_instance = provider_factory.create_provider(provider, api_key)
+
+        # Format prompt as messages for the provider
+        messages = [{"role": "user", "content": prompt}]
+
+        # Generate response using the provider
+        response = await provider_instance.generate(
+            messages=messages,
+            model=model,
             max_tokens=4000,
             temperature=0.3,
         )
-        return response.text.strip(), getattr(response, 'tokens_used', None)
+
+        # Extract token count from usage
+        tokens_used = response.usage.total_tokens if response.usage else None
+
+        return response.content.strip(), tokens_used
     except Exception as e:
-        raise Exception(f"Model {model} failed: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error generating with model {model}: {error_msg}")
+        raise Exception(f"Model {model} failed: {error_msg}")
 
 
 @router.post("/code", response_model=CodeGenerationResponse)
@@ -164,17 +205,26 @@ Original code:
 
 Modified code:"""
 
-        # Generate modified code using the provider
-        provider_factory = ProviderFactory()
-        provider = provider_factory.create_provider(request.provider, request.model)
+        # Generate modified code using the provider with provider-specific API key
+        try:
+            api_key = get_api_key_for_provider(request.provider)
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
-        response = await provider.complete(
-            prompt=prompt,
+        provider_factory = ProviderFactory()
+        provider = provider_factory.create_provider(request.provider, api_key)
+
+        # Format prompt as messages
+        messages = [{"role": "user", "content": prompt}]
+
+        response = await provider.generate(
+            messages=messages,
+            model=request.model,
             max_tokens=4000,
             temperature=0.3,  # Lower temperature for more deterministic code
         )
 
-        modified_code = response.text.strip()
+        modified_code = response.content.strip()
 
         # Generate diff
         original_lines = file_content.splitlines(keepends=True)
@@ -251,23 +301,37 @@ Original code:
 
 Modified code:"""
 
-        # Create tasks for parallel execution
+        # Validate provider API key is configured before launching tasks
+        try:
+            get_api_key_for_provider(request.provider)
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+        # Build ordered list of (model, task) tuples so duplicate model names
+        # in request.models still produce one task each.
         provider_factory = ProviderFactory()
-        tasks = []
+        model_tasks: List[tuple] = []
         for model in request.models:
             task = generate_code_with_model(
                 provider_factory,
                 request.provider,
                 model,
-                prompt
+                prompt,
             )
-            tasks.append((model, task))
+            model_tasks.append((model, task))
 
-        # Run all models in parallel
+        # Execute all tasks concurrently
         results = []
-        for model, task in tasks:
+        task_coroutines = [task for _, task in model_tasks]
+        task_results = await asyncio.gather(*task_coroutines, return_exceptions=True)
+
+        # Process results
+        for (model, _), task_result in zip(model_tasks, task_results):
             try:
-                modified_code, tokens_used = await task
+                if isinstance(task_result, Exception):
+                    raise task_result
+
+                modified_code, tokens_used = task_result
                 diff = generate_diff(file_content, modified_code, request.file_path)
                 results.append(MultiModelResult(
                     model=model,
@@ -277,6 +341,7 @@ Modified code:"""
                     tokens_used=tokens_used,
                 ))
             except Exception as e:
+                logger.error(f"Error with model {model}: {str(e)}")
                 results.append(MultiModelResult(
                     model=model,
                     original_code=file_content,

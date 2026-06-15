@@ -1,7 +1,7 @@
 {
   "name": "devforge",
   "version": "1.0.0",
-  "description": "--- title: DevForge emoji: ⚡ colorFrom: green colorTo: blue sdk: docker pinned: false license: mit ---",
+  "description": "AI-powered code generation with multi-model Hugging Face parallel execution and GitHub PR sync.",
   "main": "index.js",
   "directories": {
     "test": "tests"
