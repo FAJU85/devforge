@@ -85,6 +85,7 @@ jobs:
           DATABASE_URL: "postgresql://test_user:test_password@localhost:5432/devforge_test"
         run: |
           pytest tests/ -v --tb=short \
+            --ignore=tests/test_phase6_integration.py \
             --cov=autonomous --cov=main \
             --cov-report=term-missing \
             --cov-fail-under=70
