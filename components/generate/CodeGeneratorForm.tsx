@@ -31,6 +31,7 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
   const [models, setModels] = useState<ModelMetadata[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [formData, setFormData] = useState<GeneratorFormData>({
     repoUrl: '',
@@ -45,7 +46,7 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showTokenInput, setShowTokenInput] = useState(false);
 
-  // Fetch models from API on component mount
+  // Fetch popular models on mount
   useEffect(() => {
     const fetchModels = async () => {
       try {
@@ -55,7 +56,6 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
         const data = await response.json();
         setModels(data.models || []);
 
-        // Set first model as default
         if (data.models && data.models.length > 0) {
           setFormData(prev => ({
             ...prev,
@@ -73,6 +73,37 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
 
     fetchModels();
   }, []);
+
+  // Debounced model search — fires only when user actively types a query
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return;
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        setModelsLoading(true);
+        setModelsError(null);
+        const response = await fetch(
+          `/api/models/discover?query=${encodeURIComponent(trimmed)}&limit=20`,
+          { signal: controller.signal },
+        );
+        if (!response.ok) throw new Error('Search failed');
+        const data = await response.json();
+        setModels(data.models || []);
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+        setModelsError(err instanceof Error ? err.message : 'Search failed');
+      } finally {
+        setModelsLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -219,6 +250,38 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
               <span className="text-sm text-gray-700">Multiple Models</span>
             </label>
           </div>
+        </div>
+
+        {/* Model Search */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Search Models
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search Hugging Face models (e.g. starcoder, code, mistral)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              disabled={isLoading}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition disabled:bg-gray-100"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
+                title="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <p className="text-gray-500 text-xs mt-1">
+            {searchQuery
+              ? `Searching for "${searchQuery}" on Hugging Face Hub`
+              : 'Leave empty to see popular models'}
+          </p>
         </div>
 
         {/* Single Model Selection */}
