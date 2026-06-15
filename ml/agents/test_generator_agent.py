@@ -12,8 +12,7 @@ from dataclasses import dataclass
 try:
     from anthropic import Anthropic
 except ImportError:
-    print("Install dependencies: pip install anthropic")
-    exit(1)
+    Anthropic = None
 
 
 @dataclass
@@ -31,7 +30,7 @@ class TestGenerationAgent:
 
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
-        self.client = Anthropic(api_key=self.api_key)
+        self.client = Anthropic(api_key=self.api_key) if Anthropic else None
         self.conversation_history = []
 
     def generate_test(
