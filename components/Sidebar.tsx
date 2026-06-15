@@ -10,7 +10,7 @@ export default function Sidebar() {
   ];
 
   return (
-    <div className="w-64 border-r border-gray-200 dark:border-[#1a2228] bg-white dark:bg-[#131920] p-6 flex flex-col">
+    <div className="hidden md:flex w-64 border-r border-gray-200 dark:border-[#1a2228] bg-white dark:bg-[#131920] p-6 flex-col">
       {/* Logo */}
       <div className="mb-8 flex items-center gap-2">
         <span className="text-2xl">⚡</span>
