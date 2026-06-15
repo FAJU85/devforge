@@ -1,324 +1,586 @@
 'use client';
 
-import React, { useState } from 'react';
-import { CodeGeneratorForm, GeneratorFormData } from './CodeGeneratorForm';
-import { CodeDiffViewer } from './CodeDiffViewer';
-import { MultiModelResults } from './MultiModelResults';
+import React, { useState, useEffect, useRef } from 'react';
 
-interface GenerationResult {
-  original_code: string;
-  modified_code: string;
-  diff: string;
-  instruction: string;
-  model: string;
-  provider: string;
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface HFModel {
+  model_id: string;
+  name: string;
+  downloads: number;
+  likes: number;
 }
 
-interface MultiModelResult {
-  model: string;
-  original_code: string;
-  modified_code: string;
-  diff: string;
-  tokens_used?: number;
+type ModelStatus = 'idle' | 'generating' | 'done' | 'error';
+
+interface ModelState {
+  status: ModelStatus;
+  originalCode?: string;
+  modifiedCode?: string;
+  diff?: string;
+  tokensUsed?: number;
   error?: string;
+  creatingPR: boolean;
+  prUrl?: string;
+  prNumber?: number;
 }
 
-interface MultiModelGenerationResult {
-  original_code: string;
-  instruction: string;
-  results: MultiModelResult[];
-  models: string[];
-  provider: string;
+interface GitHubUser {
+  username: string;
+  avatar_url?: string;
 }
 
-type PageState = 'form' | 'generating' | 'result' | 'multi-result' | 'error' | 'creating-pr' | 'pr-created';
+// ─── Diff renderer ────────────────────────────────────────────────────────────
 
-interface PageError {
-  title: string;
-  message: string;
-}
+const DiffView: React.FC<{ diff: string }> = ({ diff }) => {
+  if (!diff) return <p className="text-gray-400 text-xs p-4">No changes detected.</p>;
+  return (
+    <pre className="text-xs font-mono overflow-auto h-full p-3 leading-5">
+      {diff.split('\n').map((line, i) => {
+        let cls = 'text-gray-300';
+        if (line.startsWith('+') && !line.startsWith('+++')) cls = 'text-green-400 bg-green-900/20';
+        else if (line.startsWith('-') && !line.startsWith('---')) cls = 'text-red-400 bg-red-900/20';
+        else if (line.startsWith('@@')) cls = 'text-blue-400';
+        else if (line.startsWith('---') || line.startsWith('+++')) cls = 'text-gray-500';
+        return (
+          <span key={i} className={`block ${cls}`}>{line || ' '}</span>
+        );
+      })}
+    </pre>
+  );
+};
 
-interface PRResult {
-  pr_url: string;
-  pr_number: number;
-  branch_name: string;
-}
+// ─── Single model column ──────────────────────────────────────────────────────
 
-export const CodeGeneratorPage: React.FC = () => {
-  const [state, setState] = useState<PageState>('form');
-  const [result, setResult] = useState<GenerationResult | null>(null);
-  const [multiResult, setMultiResult] = useState<MultiModelGenerationResult | null>(null);
-  const [error, setError] = useState<PageError | null>(null);
-  const [prResult, setPRResult] = useState<PRResult | null>(null);
-  const [currentFilePath, setCurrentFilePath] = useState('');
-  const [currentRepoUrl, setCurrentRepoUrl] = useState('');
-  const [currentInstruction, setCurrentInstruction] = useState('');
-  const [currentGitHubToken, setCurrentGitHubToken] = useState('');
-  const [currentModifiedCode, setCurrentModifiedCode] = useState('');
-  const [currentModel, setCurrentModel] = useState('');
+const ModelColumn: React.FC<{
+  model: string;
+  state: ModelState;
+  filePath: string;
+  onApplyPR: () => void;
+  onRemove: () => void;
+  isOnlyColumn: boolean;
+}> = ({ model, state, filePath, onApplyPR, onRemove, isOnlyColumn }) => {
+  const [viewMode, setViewMode] = useState<'diff' | 'modified'>('diff');
 
-  const handleGenerateCode = async (formData: GeneratorFormData) => {
-    setState('generating');
-    setError(null);
-    setResult(null);
-    setMultiResult(null);
+  const shortName = model.split('/').pop() ?? model;
 
-    const useMultiModel = formData.useMultiModel && formData.models && formData.models.length > 0;
-
-    try {
-      if (useMultiModel) {
-        // Multi-model flow
-        const response = await fetch('/api/generate/code-parallel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            repo_url: formData.repoUrl,
-            file_path: formData.filePath,
-            instruction: formData.instruction,
-            github_token: formData.githubToken,
-            models: formData.models,
-            provider: 'huggingface',
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Failed to generate code');
-        }
-
-        const data = await response.json();
-        setMultiResult(data);
-        setCurrentFilePath(formData.filePath);
-        setCurrentRepoUrl(formData.repoUrl);
-        setCurrentInstruction(formData.instruction);
-        setCurrentGitHubToken(formData.githubToken);
-        setState('multi-result');
-      } else {
-        // Single-model flow
-        const response = await fetch('/api/generate/code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            repo_url: formData.repoUrl,
-            file_path: formData.filePath,
-            instruction: formData.instruction,
-            github_token: formData.githubToken,
-            model: formData.model,
-            provider: 'huggingface',
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Failed to generate code');
-        }
-
-        const data = await response.json();
-        setResult(data);
-        setCurrentFilePath(formData.filePath);
-        setCurrentRepoUrl(formData.repoUrl);
-        setCurrentInstruction(formData.instruction);
-        setCurrentGitHubToken(formData.githubToken);
-        setCurrentModifiedCode(data.modified_code);
-        setCurrentModel(data.model);
-        setState('result');
-      }
-    } catch (err) {
-      setError({
-        title: 'Generation Failed',
-        message: err instanceof Error ? err.message : 'An unexpected error occurred',
-      });
-      setState('error');
-    }
-  };
-
-  const handleCreatePR = async (selectedModel?: string, modifiedCode?: string) => {
-    const code = modifiedCode || currentModifiedCode;
-    if (!code) return;
-
-    setState('creating-pr');
-    setError(null);
-
-    const modelInfo = selectedModel || currentModel;
-    const resultInfo = result || (multiResult && selectedModel ? { model: selectedModel, provider: multiResult.provider } : null);
-
-    try {
-      const response = await fetch('/api/generate/create-pr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repo_url: currentRepoUrl,
-          file_path: currentFilePath,
-          modified_code: code,
-          title: `DevForge: ${currentInstruction.substring(0, 50)}`,
-          description: `AI-generated modification:\n\n${currentInstruction}\n\nModel: ${modelInfo}\nProvider: ${resultInfo?.provider || 'huggingface'}`,
-          github_token: currentGitHubToken,
-          branch_name: `devforge/modify-${Date.now()}`,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to create PR');
-      }
-
-      const prData = await response.json();
-      setPRResult(prData);
-      setState('pr-created');
-    } catch (err) {
-      setError({
-        title: 'PR Creation Failed',
-        message: err instanceof Error ? err.message : 'An unexpected error occurred',
-      });
-      setState('error');
-    }
-  };
-
-  const handleReset = () => {
-    setState('form');
-    setResult(null);
-    setMultiResult(null);
-    setError(null);
-    setPRResult(null);
+  const statusBadge = () => {
+    if (state.status === 'idle') return null;
+    if (state.status === 'generating')
+      return <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/40 text-yellow-300 animate-pulse">generating…</span>;
+    if (state.status === 'done')
+      return <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/40 text-green-300">done</span>;
+    if (state.status === 'error')
+      return <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/40 text-red-300">error</span>;
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 py-12 px-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Code Generator</h1>
-          <p className="text-lg text-gray-600">
-            Use AI to modify your GitHub repositories with a single instruction
-          </p>
+    <div className="flex flex-col flex-1 min-w-0 border-r border-[#1a2228] last:border-r-0 overflow-hidden">
+      {/* Column header */}
+      <div className="flex items-center justify-between px-3 py-2 bg-[#131920] border-b border-[#1a2228] shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-mono font-semibold text-gray-200 truncate" title={model}>
+            {shortName}
+          </span>
+          {statusBadge()}
+          {state.tokensUsed !== undefined && (
+            <span className="text-xs text-gray-500 hidden lg:inline">{state.tokensUsed} tok</span>
+          )}
         </div>
+        <button
+          onClick={onRemove}
+          disabled={isOnlyColumn}
+          className="text-gray-600 hover:text-gray-300 text-xs px-1 disabled:opacity-30 disabled:cursor-not-allowed"
+          title="Remove column"
+        >
+          ✕
+        </button>
+      </div>
 
-        {/* State: Form */}
-        {state === 'form' && (
-          <CodeGeneratorForm
-            onSubmit={handleGenerateCode}
-            isLoading={false}
-          />
-        )}
+      {/* View toggle (only when done) */}
+      {state.status === 'done' && (
+        <div className="flex border-b border-[#1a2228] bg-[#0d1116] shrink-0">
+          <button
+            onClick={() => setViewMode('diff')}
+            className={`flex-1 py-1.5 text-xs font-medium transition ${
+              viewMode === 'diff' ? 'text-[#e19200] border-b-2 border-[#e19200]' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Diff
+          </button>
+          <button
+            onClick={() => setViewMode('modified')}
+            className={`flex-1 py-1.5 text-xs font-medium transition ${
+              viewMode === 'modified' ? 'text-[#e19200] border-b-2 border-[#e19200]' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Modified
+          </button>
+        </div>
+      )}
 
-        {/* State: Generating */}
-        {state === 'generating' && (
-          <div className="bg-white rounded-lg shadow-lg p-12 text-center">
-            <div className="inline-block animate-spin mb-4">
-              <div className="text-4xl">⏳</div>
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Generating Code...</h3>
-            <p className="text-gray-600">
-              This may take a moment while the AI model processes your request
+      {/* Column body */}
+      <div className="flex-1 overflow-auto bg-[#0d1116]">
+        {state.status === 'idle' && (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-600 text-xs text-center px-4">
+              Hit <span className="text-[#e19200] font-mono">Run</span> to generate
             </p>
           </div>
         )}
 
-        {/* State: Result (also shown while creating PR for single-model) */}
-        {(state === 'result' || (state === 'creating-pr' && result)) && result && (
-          <div>
-            <CodeDiffViewer
-              originalCode={result.original_code}
-              modifiedCode={result.modified_code}
-              diff={result.diff}
-              filePath={currentFilePath}
-              instruction={currentInstruction}
-              onApprove={handleCreatePR}
-              onReject={handleReset}
-              isCreatingPR={state === 'creating-pr'}
-            />
-            <div className="mt-6 text-center">
-              <button
-                onClick={handleReset}
-                className="text-blue-600 hover:text-blue-700 font-medium"
-              >
-                ← Back to Generator
-              </button>
-            </div>
+        {state.status === 'generating' && (
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <div className="w-6 h-6 border-2 border-[#e19200] border-t-transparent rounded-full animate-spin" />
+            <p className="text-gray-500 text-xs">Generating…</p>
           </div>
         )}
 
-        {/* State: Multi-Model Result (also shown while creating PR for multi-model) */}
-        {(state === 'multi-result' || (state === 'creating-pr' && multiResult)) && multiResult && (
-          <div>
-            <MultiModelResults
-              results={multiResult.results.map(r => ({
-                model: r.model,
-                originalCode: r.original_code,
-                modifiedCode: r.modified_code,
-                diff: r.diff,
-                tokensUsed: r.tokens_used,
-                error: r.error,
-              }))}
-              instruction={currentInstruction}
-              filePath={currentFilePath}
-              onSelectModel={handleCreatePR}
-              isCreatingPR={state === 'creating-pr'}
-            />
-            <div className="mt-6 text-center">
-              <button
-                onClick={handleReset}
-                className="text-blue-600 hover:text-blue-700 font-medium"
-              >
-                ← Back to Generator
-              </button>
-            </div>
-          </div>
+        {state.status === 'done' && (
+          viewMode === 'diff' ? (
+            <DiffView diff={state.diff ?? ''} />
+          ) : (
+            <pre className="text-xs font-mono text-gray-300 overflow-auto h-full p-3 leading-5 whitespace-pre-wrap">
+              {state.modifiedCode}
+            </pre>
+          )
         )}
 
-        {/* State: Error */}
-        {state === 'error' && error && (
-          <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-red-500">
-            <div className="flex gap-4">
-              <span className="text-red-500 flex-shrink-0 text-2xl">⚠️</span>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{error.title}</h3>
-                <p className="text-gray-700 mb-4">{error.message}</p>
-                <button
-                  onClick={handleReset}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition"
-                >
-                  Try Again
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* State: PR Created */}
-        {state === 'pr-created' && prResult && (
-          <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-500">
-            <div className="flex gap-4">
-              <span className="text-green-500 flex-shrink-0 text-2xl">✓</span>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Pull Request Created! 🎉
-                </h3>
-                <p className="text-gray-700 mb-4">
-                  Branch: <code className="bg-gray-100 px-2 py-1 rounded">{prResult.branch_name}</code>
-                </p>
-                <a
-                  href={prResult.pr_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition mb-4"
-                  data-testid="pr-link"
-                >
-                  View PR #{prResult.pr_number} on GitHub →
-                </a>
-                <div>
-                  <button
-                    onClick={handleReset}
-                    className="text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Generate Another
-                  </button>
-                </div>
-              </div>
-            </div>
+        {state.status === 'error' && (
+          <div className="p-4">
+            <p className="text-red-400 text-xs">{state.error}</p>
           </div>
         )}
       </div>
+
+      {/* Apply PR footer */}
+      {state.status === 'done' && (
+        <div className="shrink-0 border-t border-[#1a2228] p-2 bg-[#131920]">
+          {state.prUrl ? (
+            <a
+              href={state.prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full text-center text-xs font-medium py-1.5 px-3 rounded
+                         bg-green-900/40 text-green-300 hover:bg-green-900/60 transition"
+            >
+              PR #{state.prNumber} →
+            </a>
+          ) : (
+            <button
+              onClick={onApplyPR}
+              disabled={state.creatingPR}
+              className="w-full text-xs font-medium py-1.5 px-3 rounded transition
+                         bg-[#e19200]/10 text-[#e19200] hover:bg-[#e19200]/20
+                         disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {state.creatingPR ? 'Creating PR…' : 'Apply as PR'}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Model picker dropdown ─────────────────────────────────────────────────────
+
+const ModelPicker: React.FC<{
+  available: HFModel[];
+  selected: string[];
+  loading: boolean;
+  onAdd: (id: string) => void;
+  onClose: () => void;
+}> = ({ available, selected, loading, onAdd, onClose }) => {
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<HFModel[]>([]);
+  const [searching, setSearching] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) { setSearchResults([]); return; }
+    const controller = new AbortController();
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const r = await fetch(`/api/models/discover?query=${encodeURIComponent(trimmed)}&limit=10`, { signal: controller.signal });
+        if (r.ok) setSearchResults((await r.json()).models ?? []);
+      } catch { /* AbortError is fine */ }
+      setSearching(false);
+    }, 300);
+    return () => { controller.abort(); clearTimeout(t); };
+  }, [query]);
+
+  const displayList = query.trim() ? searchResults : available;
+
+  return (
+    <div
+      ref={ref}
+      className="absolute top-full left-0 mt-1 w-72 z-50 bg-[#1a2228] border border-[#2a3540]
+                 rounded-lg shadow-2xl overflow-hidden"
+    >
+      <div className="p-2 border-b border-[#2a3540]">
+        <input
+          autoFocus
+          type="text"
+          placeholder="Search models…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          className="w-full text-xs bg-[#0d1116] border border-[#2a3540] rounded px-2 py-1.5
+                     text-gray-200 placeholder-gray-600 outline-none focus:border-[#e19200]"
+        />
+      </div>
+      <div className="max-h-56 overflow-y-auto">
+        {(loading || searching) && (
+          <p className="text-xs text-gray-500 p-3">Loading…</p>
+        )}
+        {!loading && !searching && displayList.length === 0 && (
+          <p className="text-xs text-gray-500 p-3">No results</p>
+        )}
+        {displayList.map(m => {
+          const alreadyAdded = selected.includes(m.model_id);
+          return (
+            <button
+              key={m.model_id}
+              onClick={() => { if (!alreadyAdded) onAdd(m.model_id); }}
+              disabled={alreadyAdded}
+              className={`w-full text-left px-3 py-2 text-xs transition ${
+                alreadyAdded
+                  ? 'text-gray-600 cursor-not-allowed'
+                  : 'text-gray-200 hover:bg-[#2a3540]'
+              }`}
+            >
+              <span className="font-mono">{m.model_id.split('/').pop()}</span>
+              <span className="text-gray-500 ml-1 text-[10px]">{m.downloads.toLocaleString()} dl</span>
+              {alreadyAdded && <span className="text-gray-600 ml-1">✓</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export const CodeGeneratorPage: React.FC = () => {
+  const [instruction, setInstruction] = useState('');
+  const [repoUrl, setRepoUrl] = useState('');
+  const [filePath, setFilePath] = useState('');
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
+  const [modelStates, setModelStates] = useState<Record<string, ModelState>>({});
+  const [availableModels, setAvailableModels] = useState<HFModel[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [showPicker, setShowPicker] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [githubUser, setGithubUser] = useState<GitHubUser | null>(null);
+
+  // Load popular models on mount
+  useEffect(() => {
+    fetch('/api/models/popular')
+      .then(r => r.ok ? r.json() : { models: [] })
+      .then(data => {
+        const models: HFModel[] = data.models ?? [];
+        setAvailableModels(models);
+        if (models.length > 0) {
+          const defaultPick = models.slice(0, 3).map((m: HFModel) => m.model_id);
+          setSelectedModels(defaultPick);
+        }
+        setModelsLoading(false);
+      })
+      .catch(() => setModelsLoading(false));
+  }, []);
+
+  // Check GitHub session
+  useEffect(() => {
+    fetch('/api/auth/github/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setGithubUser(data))
+      .catch(() => {});
+  }, []);
+
+  const setModelState = (model: string, patch: Partial<ModelState>) => {
+    setModelStates(prev => ({
+      ...prev,
+      [model]: { creatingPR: false, status: 'idle', ...prev[model], ...patch },
+    }));
+  };
+
+  const addModel = (id: string) => {
+    if (!selectedModels.includes(id)) {
+      setSelectedModels(prev => [...prev, id]);
+    }
+    setShowPicker(false);
+  };
+
+  const removeModel = (id: string) => {
+    setSelectedModels(prev => prev.filter(m => m !== id));
+    setModelStates(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const validate = (): string | null => {
+    if (!repoUrl.trim()) return 'Repository URL is required';
+    try {
+      const u = new URL(repoUrl.trim());
+      if (!u.hostname.includes('github.com')) return 'Must be a GitHub repository URL';
+    } catch {
+      return 'Must be a valid URL';
+    }
+    if (!filePath.trim()) return 'File path is required';
+    if (!instruction.trim() || instruction.trim().length < 10)
+      return 'Instruction must be at least 10 characters';
+    if (selectedModels.length === 0) return 'Select at least one model';
+    return null;
+  };
+
+  const handleGenerate = async () => {
+    const err = validate();
+    if (err) { setFormError(err); return; }
+    setFormError(null);
+    setIsGenerating(true);
+
+    // Set all columns to generating
+    selectedModels.forEach(m => setModelState(m, { status: 'generating' }));
+
+    try {
+      const resp = await fetch('/api/generate/code-parallel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: repoUrl.trim(),
+          file_path: filePath.trim(),
+          instruction: instruction.trim(),
+          github_token: '',
+          models: selectedModels,
+          provider: 'huggingface',
+        }),
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        const msg = errData.detail || `HTTP ${resp.status}`;
+        selectedModels.forEach(m => setModelState(m, { status: 'error', error: msg }));
+        return;
+      }
+
+      const data = await resp.json();
+      const results: Array<{
+        model: string;
+        original_code: string;
+        modified_code: string;
+        diff: string;
+        tokens_used?: number;
+        error?: string;
+      }> = data.results ?? [];
+
+      results.forEach(r => {
+        if (r.error) {
+          setModelState(r.model, { status: 'error', error: r.error });
+        } else {
+          setModelState(r.model, {
+            status: 'done',
+            originalCode: r.original_code,
+            modifiedCode: r.modified_code,
+            diff: r.diff,
+            tokensUsed: r.tokens_used,
+          });
+        }
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      selectedModels.forEach(m => setModelState(m, { status: 'error', error: msg }));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleApplyPR = async (model: string) => {
+    const state = modelStates[model];
+    if (!state?.modifiedCode) return;
+    setModelState(model, { creatingPR: true });
+
+    try {
+      const resp = await fetch('/api/generate/create-pr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: repoUrl.trim(),
+          file_path: filePath.trim(),
+          modified_code: state.modifiedCode,
+          title: `DevForge: ${instruction.substring(0, 50)}`,
+          description: `AI-generated modification\n\n**Instruction:** ${instruction}\n**Model:** ${model}\n**Provider:** huggingface`,
+          branch_name: `devforge/${model.split('/').pop()}-${Date.now()}`,
+        }),
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.detail || `HTTP ${resp.status}`);
+      }
+
+      const pr = await resp.json();
+      setModelState(model, { creatingPR: false, prUrl: pr.pr_url, prNumber: pr.pr_number });
+    } catch (e) {
+      setModelState(model, { creatingPR: false, error: e instanceof Error ? e.message : 'PR creation failed' });
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-[#0d1116]">
+
+      {/* ── Top input bar ─────────────────────────────────────────────────── */}
+      <div className="shrink-0 px-4 pt-4 pb-3 bg-[#131920] border-b border-[#1a2228] space-y-3">
+
+        {/* Instruction */}
+        <textarea
+          value={instruction}
+          onChange={e => { setInstruction(e.target.value); setFormError(null); }}
+          placeholder="Describe what you want the AI to do… (e.g. Add type hints to all functions)"
+          rows={2}
+          className="w-full text-sm bg-[#0d1116] border border-[#1a2228] rounded-lg px-3 py-2
+                     text-gray-200 placeholder-gray-600 outline-none resize-none
+                     focus:border-[#e19200] transition"
+        />
+
+        {/* Repo + File + Models + Run */}
+        <div className="flex flex-wrap gap-2 items-end">
+          {/* Repo URL */}
+          <div className="flex flex-col gap-1 flex-1 min-w-48">
+            <label className="text-[10px] text-gray-500 uppercase tracking-wider">Repository</label>
+            <input
+              type="text"
+              value={repoUrl}
+              onChange={e => { setRepoUrl(e.target.value); setFormError(null); }}
+              placeholder="https://github.com/owner/repo"
+              className="text-xs bg-[#0d1116] border border-[#1a2228] rounded px-2 py-1.5
+                         text-gray-200 placeholder-gray-600 outline-none
+                         focus:border-[#e19200] transition"
+            />
+          </div>
+
+          {/* File path */}
+          <div className="flex flex-col gap-1 w-48">
+            <label className="text-[10px] text-gray-500 uppercase tracking-wider">File path</label>
+            <input
+              type="text"
+              value={filePath}
+              onChange={e => { setFilePath(e.target.value); setFormError(null); }}
+              placeholder="src/routes.py"
+              className="text-xs bg-[#0d1116] border border-[#1a2228] rounded px-2 py-1.5
+                         text-gray-200 placeholder-gray-600 outline-none
+                         focus:border-[#e19200] transition"
+            />
+          </div>
+
+          {/* Model chips + picker */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-gray-500 uppercase tracking-wider">Models</label>
+            <div className="flex flex-wrap gap-1 items-center relative">
+              {selectedModels.map(m => (
+                <span
+                  key={m}
+                  className="flex items-center gap-1 text-xs bg-[#1a2228] border border-[#2a3540]
+                             text-gray-300 rounded px-2 py-0.5"
+                >
+                  <span className="font-mono">{m.split('/').pop()}</span>
+                  <button
+                    onClick={() => removeModel(m)}
+                    disabled={selectedModels.length <= 1}
+                    className="text-gray-600 hover:text-gray-300 disabled:opacity-30 text-[10px] ml-0.5"
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+              <div className="relative">
+                <button
+                  onClick={() => setShowPicker(!showPicker)}
+                  className="text-xs px-2 py-0.5 rounded border border-dashed border-[#2a3540]
+                             text-gray-500 hover:text-gray-300 hover:border-gray-500 transition"
+                >
+                  + add
+                </button>
+                {showPicker && (
+                  <ModelPicker
+                    available={availableModels}
+                    selected={selectedModels}
+                    loading={modelsLoading}
+                    onAdd={addModel}
+                    onClose={() => setShowPicker(false)}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Run button */}
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            className="self-end px-5 py-1.5 text-sm font-semibold rounded-lg transition
+                       bg-[#e19200] text-black hover:bg-[#f0a500]
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isGenerating ? 'Running…' : 'Run'}
+          </button>
+        </div>
+
+        {/* Error + GitHub status */}
+        <div className="flex items-center justify-between">
+          {formError ? (
+            <p className="text-red-400 text-xs">{formError}</p>
+          ) : (
+            <span />
+          )}
+          {!githubUser ? (
+            <a
+              href="/api/auth/github/login"
+              className="text-xs text-gray-500 hover:text-gray-300 transition"
+            >
+              Sign in with GitHub to create PRs →
+            </a>
+          ) : (
+            <span className="text-xs text-gray-500">
+              GitHub: <span className="text-gray-300">{githubUser.username}</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ── 3-column results area ──────────────────────────────────────────── */}
+      {selectedModels.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-gray-600 text-sm">Add a model to get started</p>
+        </div>
+      ) : (
+        <div className="flex-1 flex overflow-hidden">
+          {selectedModels.map(model => (
+            <ModelColumn
+              key={model}
+              model={model}
+              state={modelStates[model] ?? { status: 'idle', creatingPR: false }}
+              filePath={filePath}
+              onApplyPR={() => handleApplyPR(model)}
+              onRemove={() => removeModel(model)}
+              isOnlyColumn={selectedModels.length === 1}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

@@ -84,7 +84,7 @@ class CreatePRRequest(BaseModel):
     modified_code: str
     title: str
     description: str
-    github_token: str
+    github_token: Optional[str] = None
     branch_name: Optional[str] = None
 
 
@@ -400,12 +400,16 @@ Modified code:"""
 
 
 @router.post("/create-pr", response_model=CreatePRResponse)
-async def create_pr(request: CreatePRRequest) -> CreatePRResponse:
+async def create_pr(
+    request: CreatePRRequest,
+    session_token: Optional[str] = Cookie(None),
+) -> CreatePRResponse:
     """
     Create a GitHub PR with the modified code
 
     Args:
         request: PR creation request with repo URL, file path, and modified code
+        session_token: Optional session cookie with GitHub token
 
     Returns:
         PR URL, number, and branch name
@@ -416,12 +420,24 @@ async def create_pr(request: CreatePRRequest) -> CreatePRResponse:
         owner = parts[-2]
         repo = parts[-1]
 
+        # Resolve GitHub token: session cookie → request body
+        github_token = None
+        if session_token:
+            github_token = auth_service.get_github_token_from_session(session_token)
+        github_token = github_token or request.github_token
+
+        if not github_token:
+            raise HTTPException(
+                status_code=401,
+                detail="GitHub token required. Sign in with GitHub or provide token.",
+            )
+
         # Generate branch name if not provided
         branch_name = request.branch_name or f"devforge/modify-{request.file_path.replace('/', '-')}"
 
         # Create PR using GitHub service
         pr = await github_service.create_pull_request(
-            token=request.github_token,
+            token=github_token,
             owner=owner,
             repo=repo,
             title=request.title,
