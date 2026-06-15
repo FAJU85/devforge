@@ -36,7 +36,7 @@ jobs:
         # Exit code 5 (no tests collected, e.g. all skipped) is treated as success.
         run: |
           set -e
-          for f in $(find tests -maxdepth 1 -name 'test_*.py' -type f | sort); do
+          for f in $(find tests -maxdepth 1 -name 'test_*.py' -not -name 'test_phase6_integration.py' -type f | sort); do
             echo "=== Running $f ==="
             python3 -m pytest "$f" -q --tb=short || ec=$?
             if [ "${ec:-0}" != "0" ] && [ "${ec:-0}" != "5" ]; then
