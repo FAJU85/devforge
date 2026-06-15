@@ -30,11 +30,17 @@ jobs:
         # leaks state and breaks otherwise-passing tests). Skip
         # test_phase6_integration.py — its models don't match the current
         # db/models.py schema and need a separate rewrite.
+        # Exit code 5 (no tests collected, e.g. all skipped) is treated as success.
         run: |
           set -e
           for f in tests/test_apis.py tests/test_agents.py tests/test_api_v2.py tests/test_main.py; do
             echo "=== Running $f ==="
-            python3 -m pytest "$f" -q --tb=short
+            python3 -m pytest "$f" -q --tb=short || ec=$?
+            if [ "${ec:-0}" != "0" ] && [ "${ec:-0}" != "5" ]; then
+              echo "Test file $f failed with exit code $ec"
+              exit "$ec"
+            fi
+            unset ec
           done
 
   sync-to-hf:
