@@ -280,6 +280,7 @@ async def generate_code_parallel(
 
     Args:
         request: Request with repo URL, file path, instruction, and list of models
+        session_token: Optional session cookie with GitHub token
 
     Returns:
         Results from all models with original code and diffs
@@ -293,9 +294,21 @@ async def generate_code_parallel(
         owner = parts[-2]
         repo = parts[-1]
 
+        # Use GitHub token from session if available, fall back to request
+        github_token = None
+        if session_token:
+            github_token = auth_service.get_github_token_from_session(session_token)
+        github_token = github_token or request.github_token
+
+        if not github_token:
+            raise HTTPException(
+                status_code=401,
+                detail="GitHub token required. Sign in with GitHub or provide token."
+            )
+
         # Get file content from GitHub
         file_response = await github_service.get_file_content(
-            token=request.github_token,
+            token=github_token,
             owner=owner,
             repo=repo,
             path=request.file_path

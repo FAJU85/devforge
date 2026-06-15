@@ -2,6 +2,7 @@
 
 import { type Dispatch, type SetStateAction } from 'react';
 import HFLoginButton from '@/components/HFLoginButton';
+import GitHubLoginButton from '@/components/GitHubLoginButton';
 
 interface HeaderProps {
   isDark: boolean;
@@ -19,7 +20,8 @@ export default function Header({ isDark, onThemeToggle, setActiveTab }: HeaderPr
         </span>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        <GitHubLoginButton />
         <HFLoginButton />
         <button
           onClick={onThemeToggle}
