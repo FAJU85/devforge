@@ -16,17 +16,17 @@ COPY . .
 RUN npm run build
 
 # Install Python dependencies for API services
-RUN apk add --no-cache python3 py3-pip && \
-    pip install --no-cache-dir -r requirements.txt || true && \
-    pip install --no-cache-dir playwright==1.60.0 && \
-    python -m playwright install chromium || true
+RUN apk add --no-cache python3 py3-pip bash curl && \
+    pip install --no-cache-dir --break-system-packages -r requirements.txt || true
 
-# Expose port for HF Spaces (default: 7860)
-EXPOSE 7860 3000 8001 8002 8003
-
-# Set environment
+# HF Spaces routes traffic to PORT env (default 7860)
 ENV NODE_ENV=production
 ENV PYTHONUNBUFFERED=1
+ENV PORT=7860
+ENV HOSTNAME=0.0.0.0
 
-# Start Next.js production server
-CMD ["npm", "start"]
+EXPOSE 7860
+
+# Start backend (port 8000) + frontend (port 7860) together.
+# The frontend proxies /api/* to the backend via next.config.js rewrites.
+CMD ["sh", "-c", "python3 -m uvicorn main:app --host 127.0.0.1 --port 8000 & npx next start -p 7860 -H 0.0.0.0"]
