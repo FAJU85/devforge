@@ -105,7 +105,7 @@ jobs:
               if stage == "RUNNING":
                   print("✅ HF Space is RUNNING — deployment successful!")
                   break
-              elif stage in ("ERROR", "CONFIG_ERROR", "RUNTIME_ERROR"):
+              elif stage in ("ERROR", "CONFIG_ERROR", "RUNTIME_ERROR", "BUILD_ERROR"):
                   print(f"❌ HF Space build failed: stage={stage}")
                   if error_msg:
                       print(f"   Error: {error_msg[:400]}")
