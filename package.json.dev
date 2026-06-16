@@ -1,0 +1,24 @@
+{
+  "name": "devforge-dev",
+  "version": "1.0.0",
+  "description": "DevForge Development Environment",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint src --ext .ts,.tsx",
+    "format": "prettier --write .",
+    "type-check": "tsc --noEmit",
+    "test": "playwright test",
+    "test:unit": "npm run test:unit:run",
+    "test:coverage": "pytest --cov=. --cov-report=html",
+    "health-check": "node scripts/health-check.js",
+    "metrics": "node scripts/metrics.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "typescript": "^5.0.0",
+    "prettier": "^3.0.0"
+  }
+}

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse, RedirectResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -8,6 +8,18 @@ import ast as _ast
 import json, os, requests, base64, re, asyncio, threading, secrets, time
 from urllib.parse import quote as _urlquote
 from concurrent.futures import ThreadPoolExecutor, as_completed as _futs_done
+
+# SRE / Observability
+try:
+    from api.middleware.observability import (
+        HTTPLoggingMiddleware,
+        metrics,
+        generate_prometheus_metrics,
+    )
+    _OBSERVABILITY_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARN] Observability middleware unavailable: {e}")
+    _OBSERVABILITY_AVAILABLE = False
 
 # Load .env file when running locally (no-op if file doesn't exist)
 try:
@@ -118,6 +130,11 @@ except Exception as e:
 
 app = FastAPI(title="DevForge")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# Register observability middleware
+if _OBSERVABILITY_AVAILABLE:
+    app.add_middleware(HTTPLoggingMiddleware)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include v2 API router (database-backed endpoints)
@@ -2958,3 +2975,69 @@ async def admin_status():
             "github_oauth": bool(GITHUB_CLIENT_ID),
         },
     }
+
+
+# --- Health Check Endpoints (SRE/Observability) ---
+
+@app.get("/health")
+async def health_check():
+    """Full health check including dependency status."""
+    if _OBSERVABILITY_AVAILABLE:
+        return JSONResponse(metrics.get_health_status(), status_code=200)
+    return JSONResponse(
+        {
+            "status": "healthy",
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        },
+        status_code=200,
+    )
+
+
+@app.get("/health/live")
+async def health_live():
+    """Liveness probe — is the process alive?"""
+    return JSONResponse(
+        {
+            "status": "alive",
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "uptime_seconds": round(time.time() - app.state.start_time)
+            if hasattr(app.state, "start_time")
+            else None,
+        },
+        status_code=200,
+    )
+
+
+@app.get("/health/ready")
+async def health_ready():
+    """Readiness probe — can the service handle traffic?"""
+    checks = {
+        "auth_available": bool(GITHUB_CLIENT_ID),
+        "hf_token_available": bool(os.environ.get("HF_TOKEN")),
+        "dashboard_routes": _DASHBOARD_ROUTES_AVAILABLE,
+    }
+
+    is_ready = all(checks.values())
+    status_code = 200 if is_ready else 503
+
+    return JSONResponse(
+        {
+            "ready": is_ready,
+            "status": "ready" if is_ready else "not_ready",
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "checks": checks,
+        },
+        status_code=status_code,
+    )
+
+
+@app.get("/metrics")
+async def metrics_endpoint():
+    """Prometheus metrics in exposition format."""
+    if _OBSERVABILITY_AVAILABLE:
+        return PlainTextResponse(generate_prometheus_metrics(), status_code=200)
+    return PlainTextResponse("# No metrics available\n", status_code=503)
+
+
+# Initialize app state
+app.state.start_time = time.time()
