@@ -415,6 +415,9 @@ export const CodeGeneratorPage: React.FC = () => {
   } | null>(null);
   const [comparisonMode, setComparisonMode] = useState(false);
   const [comparisonModels, setComparisonModels] = useState<[string, string] | null>(null);
+  const [currentSessionName, setCurrentSessionName] = useState('');
+  const [savedSessions, setSavedSessions] = useState<string[]>([]);
+  const [showSessionMenu, setShowSessionMenu] = useState(false);
 
   // Load popular models on mount
   useEffect(() => {
@@ -439,6 +442,26 @@ export const CodeGeneratorPage: React.FC = () => {
       .then(data => setGithubUser(data))
       .catch(() => {});
   }, []);
+
+  // Load saved sessions on mount
+  useEffect(() => {
+    const sessions = JSON.parse(localStorage.getItem('devforge_sessions') || '[]');
+    setSavedSessions(sessions);
+  }, []);
+
+  // Auto-save current state to localStorage
+  useEffect(() => {
+    if (!repoUrl.trim() || !filePath.trim()) return;
+    const state = {
+      repoUrl,
+      filePath,
+      instruction,
+      selectedModels,
+      modelStates,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem('devforge_current_session', JSON.stringify(state));
+  }, [repoUrl, filePath, instruction, selectedModels, modelStates]);
 
   const setModelState = (model: string, patch: Partial<ModelState>) => {
     setModelStates(prev => ({
@@ -695,6 +718,48 @@ export const CodeGeneratorPage: React.FC = () => {
     }
   };
 
+  const handleSaveSession = () => {
+    if (!currentSessionName.trim()) return;
+    const state = {
+      repoUrl,
+      filePath,
+      instruction,
+      selectedModels,
+      modelStates,
+      timestamp: Date.now(),
+    };
+    const sessions = JSON.parse(localStorage.getItem('devforge_sessions') || '[]');
+    const idx = sessions.indexOf(currentSessionName);
+    if (idx >= 0) {
+      sessions[idx] = currentSessionName;
+    } else {
+      sessions.push(currentSessionName);
+    }
+    localStorage.setItem('devforge_sessions', JSON.stringify(sessions));
+    localStorage.setItem(`devforge_session_${currentSessionName}`, JSON.stringify(state));
+    setSavedSessions(sessions);
+  };
+
+  const handleLoadSession = (name: string) => {
+    const state = JSON.parse(localStorage.getItem(`devforge_session_${name}`) || '{}');
+    setRepoUrl(state.repoUrl || '');
+    setFilePath(state.filePath || '');
+    setInstruction(state.instruction || '');
+    setSelectedModels(state.selectedModels || []);
+    setModelStates(state.modelStates || {});
+    setCurrentSessionName(name);
+    setShowSessionMenu(false);
+  };
+
+  const handleDeleteSession = (name: string) => {
+    localStorage.removeItem(`devforge_session_${name}`);
+    const sessions = JSON.parse(localStorage.getItem('devforge_sessions') || '[]');
+    const newSessions = sessions.filter((s: string) => s !== name);
+    localStorage.setItem('devforge_sessions', JSON.stringify(newSessions));
+    setSavedSessions(newSessions);
+    if (currentSessionName === name) setCurrentSessionName('');
+  };
+
   const handleCompare = (model: string) => {
     if (!comparisonModels) {
       setComparisonModels([model, '']);
@@ -795,16 +860,76 @@ export const CodeGeneratorPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Run button */}
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="self-end px-5 py-1.5 text-sm font-semibold rounded-lg transition
-                       bg-[#e19200] text-black hover:bg-[#f0a500]
-                       disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isGenerating ? 'Running…' : 'Run'}
-          </button>
+          {/* Session + Run buttons */}
+          <div className="flex gap-2 items-end">
+            {/* Session menu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSessionMenu(!showSessionMenu)}
+                className="text-xs px-3 py-1.5 rounded transition
+                           bg-gray-900/40 text-gray-300 hover:bg-gray-900/60
+                           border border-gray-700"
+              >
+                💾 {currentSessionName || 'Sessions'}
+              </button>
+              {showSessionMenu && (
+                <div className="absolute bottom-full left-0 mb-2 w-48 bg-[#1a2228] border border-[#2a3540] rounded-lg shadow-lg z-40">
+                  <div className="p-2 space-y-2">
+                    {/* Save current */}
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        value={currentSessionName}
+                        onChange={(e) => setCurrentSessionName(e.target.value)}
+                        placeholder="Session name…"
+                        className="flex-1 text-xs bg-[#0d1116] border border-[#2a3540] rounded px-2 py-1 text-gray-200"
+                      />
+                      <button
+                        onClick={handleSaveSession}
+                        className="px-2 py-1 text-xs bg-green-900/40 text-green-300 hover:bg-green-900/60 rounded"
+                      >
+                        Save
+                      </button>
+                    </div>
+                    {/* Load previous */}
+                    {savedSessions.length > 0 && (
+                      <>
+                        <div className="border-t border-[#2a3540]" />
+                        <div className="text-[10px] text-gray-500 px-2">Recent sessions</div>
+                        {savedSessions.map((name) => (
+                          <div key={name} className="flex items-center gap-2 px-2 py-1 hover:bg-[#2a3540] rounded">
+                            <button
+                              onClick={() => handleLoadSession(name)}
+                              className="flex-1 text-left text-xs text-gray-300 hover:text-gray-100"
+                            >
+                              {name}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSession(name)}
+                              className="text-gray-600 hover:text-red-400 text-xs"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Run button */}
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              className="self-end px-5 py-1.5 text-sm font-semibold rounded-lg transition
+                         bg-[#e19200] text-black hover:bg-[#f0a500]
+                         disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? 'Running…' : 'Run'}
+            </button>
+          </div>
         </div>
 
         {/* Error + GitHub status */}
