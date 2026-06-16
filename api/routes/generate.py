@@ -4,7 +4,7 @@ Code Generation Routes
 Handles AI-powered code generation and modification
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Cookie
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import json
@@ -14,6 +14,7 @@ import os
 import logging
 from api.services.github_service import github_service
 from api.services.providers import ProviderFactory
+from api.services.auth_service import auth_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/generate", tags=["generate"])
@@ -22,14 +23,28 @@ router = APIRouter(prefix="/api/generate", tags=["generate"])
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 
 
-def get_api_key_for_provider(provider: str) -> str:
-    """Return the API key configured for the given provider.
+def get_api_key_for_provider(provider: str, session_token: Optional[str] = None) -> str:
+    """Return the API key for the given provider.
 
-    Maps provider name → env var (huggingface→HF_TOKEN, anthropic→ANTHROPIC_API_KEY,
-    groq→GROQ_API_KEY). Raises ValueError if no key is configured.
+    For huggingface: prefers the user's own token from their HF OAuth session,
+    then falls back to the Space-level HF_TOKEN env var.
+    For other providers: reads from env vars.
     """
+    if provider.lower() == "huggingface":
+        # 1. User's own token from HF OAuth session
+        if session_token:
+            user_token = auth_service.get_hf_token_from_session(session_token)
+            if user_token:
+                return user_token
+        # 2. Fall back to Space-level token
+        key = os.environ.get("HF_TOKEN", "")
+        if key:
+            return key
+        raise ValueError(
+            "No HF token available. Sign in with Hugging Face or set HF_TOKEN."
+        )
+
     env_map = {
-        "huggingface": "HF_TOKEN",
         "anthropic": "ANTHROPIC_API_KEY",
         "groq": "GROQ_API_KEY",
     }
@@ -69,7 +84,7 @@ class CreatePRRequest(BaseModel):
     modified_code: str
     title: str
     description: str
-    github_token: str
+    github_token: Optional[str] = None
     branch_name: Optional[str] = None
 
 
@@ -128,11 +143,11 @@ async def generate_code_with_model(
     provider: str,
     model: str,
     prompt: str,
+    session_token: Optional[str] = None,
 ) -> tuple[str, Optional[int]]:
     """Generate code using a specific model, return code and token count"""
     try:
-        # Select the right API key for the provider (HF_TOKEN, ANTHROPIC_API_KEY, GROQ_API_KEY)
-        api_key = get_api_key_for_provider(provider)
+        api_key = get_api_key_for_provider(provider, session_token)
 
         provider_instance = provider_factory.create_provider(provider, api_key)
 
@@ -256,12 +271,16 @@ Modified code:"""
 
 
 @router.post("/code-parallel", response_model=MultiModelCodeGenerationResponse)
-async def generate_code_parallel(request: MultiModelCodeGenerationRequest) -> MultiModelCodeGenerationResponse:
+async def generate_code_parallel(
+    request: MultiModelCodeGenerationRequest,
+    session_token: Optional[str] = Cookie(None),
+) -> MultiModelCodeGenerationResponse:
     """
     Generate/modify code using multiple models in parallel
 
     Args:
         request: Request with repo URL, file path, instruction, and list of models
+        session_token: Optional session cookie with GitHub token
 
     Returns:
         Results from all models with original code and diffs
@@ -275,9 +294,21 @@ async def generate_code_parallel(request: MultiModelCodeGenerationRequest) -> Mu
         owner = parts[-2]
         repo = parts[-1]
 
+        # Use GitHub token from session if available, fall back to request
+        github_token = None
+        if session_token:
+            github_token = auth_service.get_github_token_from_session(session_token)
+        github_token = github_token or request.github_token
+
+        if not github_token:
+            raise HTTPException(
+                status_code=401,
+                detail="GitHub token required. Sign in with GitHub or provide token."
+            )
+
         # Get file content from GitHub
         file_response = await github_service.get_file_content(
-            token=request.github_token,
+            token=github_token,
             owner=owner,
             repo=repo,
             path=request.file_path
@@ -303,7 +334,7 @@ Modified code:"""
 
         # Validate provider API key is configured before launching tasks
         try:
-            get_api_key_for_provider(request.provider)
+            get_api_key_for_provider(request.provider, session_token)
         except ValueError as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -317,6 +348,7 @@ Modified code:"""
                 request.provider,
                 model,
                 prompt,
+                session_token,
             )
             model_tasks.append((model, task))
 
@@ -368,12 +400,16 @@ Modified code:"""
 
 
 @router.post("/create-pr", response_model=CreatePRResponse)
-async def create_pr(request: CreatePRRequest) -> CreatePRResponse:
+async def create_pr(
+    request: CreatePRRequest,
+    session_token: Optional[str] = Cookie(None),
+) -> CreatePRResponse:
     """
     Create a GitHub PR with the modified code
 
     Args:
         request: PR creation request with repo URL, file path, and modified code
+        session_token: Optional session cookie with GitHub token
 
     Returns:
         PR URL, number, and branch name
@@ -384,12 +420,24 @@ async def create_pr(request: CreatePRRequest) -> CreatePRResponse:
         owner = parts[-2]
         repo = parts[-1]
 
+        # Resolve GitHub token: session cookie → request body
+        github_token = None
+        if session_token:
+            github_token = auth_service.get_github_token_from_session(session_token)
+        github_token = github_token or request.github_token
+
+        if not github_token:
+            raise HTTPException(
+                status_code=401,
+                detail="GitHub token required. Sign in with GitHub or provide token.",
+            )
+
         # Generate branch name if not provided
         branch_name = request.branch_name or f"devforge/modify-{request.file_path.replace('/', '-')}"
 
         # Create PR using GitHub service
         pr = await github_service.create_pull_request(
-            token=request.github_token,
+            token=github_token,
             owner=owner,
             repo=repo,
             title=request.title,

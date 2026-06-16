@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import ChatTab from '@/components/tabs/ChatTab';
 import RepositoryTab from '@/components/tabs/RepositoryTab';
@@ -39,36 +38,30 @@ export default function Home() {
   ];
 
   return (
-    <div className="flex h-screen bg-white dark:bg-[#0d1116]">
-      {/* Sidebar */}
-      <Sidebar />
+    <div className="flex flex-col h-screen bg-white dark:bg-[#0d1116]">
+      {/* Header */}
+      <Header isDark={isDark} onThemeToggle={toggleTheme} activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* Main Content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Header */}
-        <Header isDark={isDark} onThemeToggle={toggleTheme} activeTab={activeTab} setActiveTab={setActiveTab} />
+      {/* Tab Navigation */}
+      <div className="flex gap-8 border-b border-gray-200 dark:border-[#1a2228] bg-white dark:bg-[#0d1116] px-6 py-3 overflow-x-auto">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`dev-tab ${activeTab === tab.id ? 'active' : ''}`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-        {/* Tab Navigation */}
-        <div className="flex gap-8 border-b border-gray-200 dark:border-[#1a2228] bg-white dark:bg-[#0d1116] px-6 py-3 overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`dev-tab ${activeTab === tab.id ? 'active' : ''}`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab Content */}
-        <div className="flex-1 overflow-hidden">
-          {activeTab === 'chat' && <ChatTab />}
-          {activeTab === 'generate' && <GenerateTab />}
-          {activeTab === 'repo' && <RepositoryTab />}
-          {activeTab === 'config' && <ConfigurationTab />}
-          {activeTab === 'debug' && <DebugTab />}
-        </div>
+      {/* Tab Content */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'chat' && <ChatTab />}
+        {activeTab === 'generate' && <GenerateTab />}
+        {activeTab === 'repo' && <RepositoryTab />}
+        {activeTab === 'config' && <ConfigurationTab />}
+        {activeTab === 'debug' && <DebugTab />}
       </div>
     </div>
   );

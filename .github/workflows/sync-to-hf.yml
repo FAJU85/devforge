@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -33,7 +36,7 @@ jobs:
         # Exit code 5 (no tests collected, e.g. all skipped) is treated as success.
         run: |
           set -e
-          for f in tests/test_apis.py tests/test_agents.py tests/test_api_v2.py tests/test_main.py tests/test_multi_model_endpoint.py; do
+          for f in $(find tests -maxdepth 1 -name 'test_*.py' -not -name 'test_phase6_integration.py' -type f | sort); do
             echo "=== Running $f ==="
             python3 -m pytest "$f" -q --tb=short || ec=$?
             if [ "${ec:-0}" != "0" ] && [ "${ec:-0}" != "5" ]; then

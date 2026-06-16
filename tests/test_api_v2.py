@@ -631,7 +631,7 @@ class TestAuthentication:
 class TestRowLevelSecurity:
     """Test that users can only access their own data."""
 
-    def test_user_cannot_access_other_user_conversation(self, client, db: Session):
+    def test_user_cannot_access_other_user_conversation(self, client, db: Session, monkeypatch):
         """User A cannot access User B's conversation."""
         user_a = User(github_id=1001, github_login="usera")
         user_b = User(github_id=1002, github_login="userb")
@@ -655,8 +655,6 @@ class TestRowLevelSecurity:
             return MockResponse()
 
         import requests
-        import pytest
-        monkeypatch = pytest.MonkeyPatch()
         monkeypatch.setattr(requests, "get", mock_github_api_a)
 
         # User A tries to access User B's conversation
