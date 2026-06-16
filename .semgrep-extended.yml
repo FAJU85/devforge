@@ -1,0 +1,395 @@
+rules:
+  # ============================================================================
+  # Extended Rules: Based on previous session patterns (streaming, async, state)
+  # ============================================================================
+
+  - id: async-without-await
+    pattern-either:
+      - pattern: |
+          async def $FUNC(...):
+              ...
+              $CALL()
+              ...
+          where $CALL matches regex asyncio\.gather
+      - pattern: |
+          async def $FUNC(...):
+              ...
+              await $X
+              ...
+              $Y = $AWAITED_RESULT
+              ...
+          where $AWAITED_RESULT is undefined
+    message: |
+      Async function without proper await. Per streaming patterns:
+      - All async calls must be awaited: await asyncio.gather(...)
+      - Tasks must be tracked before accessing results
+      - Use asyncio.wait(FIRST_COMPLETED) for progressive results
+
+      Bad: asyncio.gather(tasks)  # Fire and forget
+      Good: results = await asyncio.gather(*tasks)
+    languages: [python]
+    severity: ERROR
+
+  - id: unhandled-asyncio-task
+    pattern-either:
+      - pattern: |
+          asyncio.create_task($CORO)
+          ...
+      - pattern: |
+          task = asyncio.create_task($CORO)
+          ...
+          # No exception handling or await for this task
+    message: |
+      Task created but never awaited or monitored. Per streaming patterns:
+      - All created tasks must be awaited or tracked in a list
+      - Use asyncio.wait() to monitor task completion
+      - Handle exceptions for each task individually
+
+      Pattern:
+        tasks = []
+        tasks.append(asyncio.create_task(my_coro()))
+        for done, pending in asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED):
+            # Process results as they complete
+    languages: [python]
+    severity: ERROR
+
+  - id: react-state-not-cleared
+    pattern: |
+      useState($INITIAL)
+      ...
+      render() {
+          // Uses state but never calls setState() to reset
+          return <div>{state}</div>
+      }
+    message: |
+      React component state not cleared on re-render. Per state management patterns:
+      - Clear state when component re-enters (e.g., user starts new generation)
+      - Use useEffect cleanup to reset dependent state
+      - Initialize state based on props/events, not just initial value
+
+      Pattern:
+        const [status, setStatus] = useState(null);
+
+        const handleStart = () => {
+            setStatus("generating");  // Clear old state
+            // ... do work
+        };
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  - id: localstorage-without-try-catch
+    pattern: |
+      localStorage.setItem($KEY, $VALUE)
+    message: |
+      localStorage access without error handling. Per session persistence patterns:
+      - localStorage can fail (quota exceeded, private mode, etc.)
+      - Wrap all access in try/catch
+      - Provide fallback behavior
+
+      Pattern:
+        try {
+            localStorage.setItem('key', JSON.stringify(data));
+        } catch (e) {
+            console.warn('Storage quota exceeded:', e);
+            // Use in-memory state only
+        }
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  - id: streaming-without-buffering
+    pattern: |
+      const reader = response.body.getReader();
+      while (true) {
+          const { done, value } = await reader.read();
+          // Process value directly without buffering
+          const line = decoder.decode(value);
+      }
+    message: |
+      Streaming without line buffering. Per NDJSON patterns:
+      - Chunks may split JSON lines in half
+      - Must maintain a buffer and split on newlines
+      - Only parse complete lines
+
+      Pattern:
+        let buffer = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';  // Keep incomplete line
+            for (const line of lines) {
+                const event = JSON.parse(line);
+                // Process event
+            }
+        }
+    languages: [typescript, javascript]
+    severity: ERROR
+
+  - id: error-in-promise-not-caught
+    pattern-either:
+      - patterns:
+          - pattern: |
+              promise
+                  .then(...)
+                  .then(...)
+              // No .catch() or try/catch
+          - pattern-not: |
+              promise
+                  .then(...)
+                  .catch(...)
+    message: |
+      Promise chain without error handler. Per error recovery patterns:
+      - Every promise chain needs a .catch()
+      - Or use try/await/catch
+      - Handle each error appropriately
+
+      Bad:
+        fetch(url).then(r => r.json()).then(data => setState(data))
+
+      Good:
+        try {
+            const r = await fetch(url);
+            const data = await r.json();
+            setState(data);
+        } catch (e) {
+            setError(`Failed to fetch: ${e.message}`);
+        }
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  - id: retry-without-exponential-backoff
+    pattern-either:
+      - pattern: |
+          for (let i = 0; i < $MAX; i++) {
+              await sleep($FIXED_TIME);
+              // retry
+          }
+      - pattern: |
+          // Hardcoded retry count without delay increase
+          await operation();
+          // on fail: await operation();
+    message: |
+      Retry logic without exponential backoff. Per error recovery patterns:
+      - Use exponential backoff: delay = baseDelay * (2 ** attempt)
+      - Example: 1s, 2s, 4s, 8s, 16s
+      - Never retry synchronously or with fixed delays
+
+      Pattern:
+        async function retryWithBackoff(fn, maxAttempts = 3) {
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                try {
+                    return await fn();
+                } catch (e) {
+                    if (attempt === maxAttempts - 1) throw e;
+                    const delay = 1000 * (2 ** attempt);
+                    await new Promise(r => setTimeout(r, delay));
+                }
+            }
+        }
+    languages: [javascript, typescript, python]
+    severity: WARNING
+
+  - id: event-emitter-not-unsubscribed
+    pattern-either:
+      - pattern: |
+          addEventListener($EVENT, $HANDLER)
+          // No removeEventListener
+      - pattern: |
+          .on($EVENT, $HANDLER)
+          // No .off() or .removeListener()
+    message: |
+      Event listener without cleanup. Per cleanup patterns:
+      - All event listeners must be removed when component unmounts
+      - React: use useEffect cleanup function
+      - Prevents memory leaks
+
+      React pattern:
+        useEffect(() => {
+            const handler = (e) => { /* ... */ };
+            element.addEventListener('change', handler);
+            return () => element.removeEventListener('change', handler);
+        }, [dependency]);
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  - id: conditional-async-call
+    pattern: |
+      if ($CONDITION) {
+          const result = await asyncFunction();
+      } else {
+          // result used outside if block
+      }
+    message: |
+      Conditional async call with usage outside scope. Per async patterns:
+      - Declare variables before the conditional
+      - Initialize them in both branches
+      - Or use ternary with proper scoping
+
+      Bad:
+        if (needsData) {
+            const data = await fetch(url);
+        }
+        return data;  // Error: data not defined
+
+      Good:
+        let data;
+        if (needsData) {
+            data = await fetch(url).then(r => r.json());
+        } else {
+            data = defaultData;
+        }
+        return data;
+    languages: [javascript, typescript, python]
+    severity: ERROR
+
+  - id: missing-batch-selection-state
+    pattern: |
+      render() {
+          return (
+              <div>
+                  {items.map(item => (
+                      <input
+                          type="checkbox"
+                          onChange={() => { /* but no selected Set */ }}
+                      />
+                  ))}
+              </div>
+          )
+      }
+    message: |
+      Batch checkbox without Set-based selection tracking. Per UI patterns:
+      - Use Set<string> for tracking selected items
+      - Prevents duplicates and enables fast lookups
+      - Much cleaner than array filtering
+
+      Pattern:
+        const [selected, setSelected] = useState(new Set());
+
+        const toggleSelect = (id) => {
+            const newSelected = new Set(selected);
+            if (newSelected.has(id)) newSelected.delete(id);
+            else newSelected.add(id);
+            setSelected(newSelected);
+        };
+    languages: [javascript, typescript]
+    severity: INFO
+
+  - id: modal-state-not-isolated
+    pattern: |
+      const [showModal, setShowModal] = useState(false);
+      const [data, setData] = useState(null);
+      // Modal uses same state as parent
+      return (
+          <>
+              <Parent data={data} />
+              {showModal && <Modal data={data} />}
+          </>
+      )
+    message: |
+      Modal state sharing with parent. Per modal patterns:
+      - Modals should have isolated state (their own data)
+      - Parent can pass initial data, but modal manages its own state
+      - Prevents race conditions and state confusion
+
+      Pattern:
+        const [showModal, setShowModal] = useState(false);
+        const [selectedItems, setSelectedItems] = useState(new Set());
+
+        const handleOpenModal = () => {
+            // Modal gets its own copy/reference
+            setShowModal(true);
+        };
+    languages: [javascript, typescript]
+    severity: INFO
+
+  - id: diff-view-without-syntax-highlighting
+    pattern: |
+      <div>
+          {diff}
+      </div>
+    message: |
+      Diff display without proper formatting. Per comparison view patterns:
+      - Diffs should be in <pre> or code block
+      - Preserve whitespace and formatting
+      - Use monospace font
+      - Optionally: syntax highlighting per language
+
+      Pattern:
+        <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+            {diff}
+        </div>
+    languages: [javascript, typescript]
+    severity: INFO
+
+  - id: github-pr-api-without-auth
+    pattern: |
+      fetch('https://api.github.com/repos/$OWNER/$REPO/pulls', {
+          method: 'POST',
+          body: JSON.stringify(prData)
+      })
+    message: |
+      GitHub API call without authentication. Per GitHub integration patterns:
+      - GitHub API requires Authorization header for mutation
+      - Use: Authorization: token <github_token>
+      - Rate limits are much higher for authenticated requests
+
+      Pattern:
+        const response = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/pulls`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `token ${githubToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(prData)
+            }
+        );
+    languages: [javascript, typescript, python]
+    severity: ERROR
+
+  - id: oauth-token-stored-in-state
+    pattern: |
+      const [authToken, setAuthToken] = useState(tokenFromUrl);
+    message: |
+      OAuth token stored in React state. Per OAuth patterns:
+      - Tokens should be stored securely (httpOnly cookies or secure storage)
+      - Never pass in URL unless it's a short-lived code
+      - Use code → token exchange server-side
+
+      Pattern:
+        // Bad: token in URL
+        window.location = `...?token=${token}`
+
+        // Good: code in URL, exchange on backend
+        window.location = `...?code=${code}`
+        // Then: POST /api/auth/callback with code
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  - id: generation-time-not-measured
+    pattern: |
+      const result = await generateCode(params);
+      return {
+          code: result,
+          // Missing timing information
+      };
+    message: |
+      Code generation result without timing measurement. Per metrics patterns:
+      - Measure generation time for each model
+      - Track: startTime, endTime, duration_ms
+      - Include in response for display/comparison
+
+      Pattern:
+        const startTime = Date.now();
+        const result = await generateCode(params);
+        const duration_ms = Date.now() - startTime;
+
+        return {
+            code: result,
+            generation_time_ms: duration_ms,
+            timestamp: new Date().toISOString()
+        };
+    languages: [javascript, typescript, python]
+    severity: INFO
