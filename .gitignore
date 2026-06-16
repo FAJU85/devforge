@@ -35,7 +35,7 @@ uiux-reports/
 # Installation directories
 venv/
 tools/
-.next/dev/
+.next/
 
 # Claude Code worktrees (temporary agent workspaces)
 .claude/worktrees/
