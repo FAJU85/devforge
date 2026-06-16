@@ -59,7 +59,9 @@ const ModelColumn: React.FC<{
   onApplyPR: () => void;
   onRemove: () => void;
   isOnlyColumn: boolean;
-}> = ({ model, state, filePath, onApplyPR, onRemove, isOnlyColumn }) => {
+  selectedForPR?: boolean;
+  onTogglePRSelection?: () => void;
+}> = ({ model, state, filePath, onApplyPR, onRemove, isOnlyColumn, selectedForPR, onTogglePRSelection }) => {
   const [viewMode, setViewMode] = useState<'diff' | 'modified'>('diff');
 
   const shortName = model.split('/').pop() ?? model;
@@ -155,7 +157,7 @@ const ModelColumn: React.FC<{
 
       {/* Apply PR footer */}
       {state.status === 'done' && (
-        <div className="shrink-0 border-t border-[#1a2228] p-2 bg-[#131920]">
+        <div className="shrink-0 border-t border-[#1a2228] p-2 bg-[#131920] space-y-2">
           {state.prUrl ? (
             <a
               href={state.prUrl}
@@ -167,15 +169,28 @@ const ModelColumn: React.FC<{
               PR #{state.prNumber} →
             </a>
           ) : (
-            <button
-              onClick={onApplyPR}
-              disabled={state.creatingPR}
-              className="w-full text-xs font-medium py-1.5 px-3 rounded transition
-                         bg-[#e19200]/10 text-[#e19200] hover:bg-[#e19200]/20
-                         disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {state.creatingPR ? 'Creating PR…' : 'Apply as PR'}
-            </button>
+            <>
+              <button
+                onClick={onApplyPR}
+                disabled={state.creatingPR}
+                className="w-full text-xs font-medium py-1.5 px-3 rounded transition
+                           bg-[#e19200]/10 text-[#e19200] hover:bg-[#e19200]/20
+                           disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {state.creatingPR ? 'Creating PR…' : 'Apply as PR'}
+              </button>
+              {onTogglePRSelection && (
+                <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer hover:text-gray-300 transition">
+                  <input
+                    type="checkbox"
+                    checked={selectedForPR ?? false}
+                    onChange={onTogglePRSelection}
+                    className="w-3 h-3 rounded cursor-pointer"
+                  />
+                  Select for batch
+                </label>
+              )}
+            </>
           )}
         </div>
       )}
@@ -284,6 +299,8 @@ export const CodeGeneratorPage: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [githubUser, setGithubUser] = useState<GitHubUser | null>(null);
+  const [selectedForPR, setSelectedForPR] = useState<Set<string>>(new Set());
+  const [batchCreatingPRs, setBatchCreatingPRs] = useState(false);
 
   // Load popular models on mount
   useEffect(() => {
@@ -474,6 +491,50 @@ export const CodeGeneratorPage: React.FC = () => {
     }
   };
 
+  const handleBatchCreatePRs = async () => {
+    if (selectedForPR.size === 0) return;
+    setBatchCreatingPRs(true);
+
+    for (const model of selectedForPR) {
+      const state = modelStates[model];
+      if (!state?.modifiedCode || state.prUrl) continue;
+
+      setModelState(model, { creatingPR: true });
+
+      try {
+        const resp = await fetch('/api/generate/create-pr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            repo_url: repoUrl.trim(),
+            file_path: filePath.trim(),
+            modified_code: state.modifiedCode,
+            title: `DevForge: ${instruction.substring(0, 50)}`,
+            description: `AI-generated modification\n\n**Instruction:** ${instruction}\n**Model:** ${model}\n**Provider:** huggingface`,
+            branch_name: `devforge/${model.split('/').pop()}-${Date.now()}`,
+          }),
+        });
+
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => ({}));
+          throw new Error(errData.detail || `HTTP ${resp.status}`);
+        }
+
+        const pr = await resp.json();
+        setModelState(model, { creatingPR: false, prUrl: pr.pr_url, prNumber: pr.pr_number });
+      } catch (e) {
+        setModelState(model, {
+          status: 'error',
+          creatingPR: false,
+          error: e instanceof Error ? e.message : 'PR creation failed',
+        });
+      }
+    }
+
+    setSelectedForPR(new Set());
+    setBatchCreatingPRs(false);
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#0d1116]">
 
@@ -602,18 +663,47 @@ export const CodeGeneratorPage: React.FC = () => {
           <p className="text-gray-600 text-sm">Add a model to get started</p>
         </div>
       ) : (
-        <div className="flex-1 flex overflow-hidden">
-          {selectedModels.map(model => (
-            <ModelColumn
-              key={model}
-              model={model}
-              state={modelStates[model] ?? { status: 'idle', creatingPR: false }}
-              filePath={filePath}
-              onApplyPR={() => handleApplyPR(model)}
-              onRemove={() => removeModel(model)}
-              isOnlyColumn={selectedModels.length === 1}
-            />
-          ))}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Batch PR button (when models are done and some are selected) */}
+          {selectedForPR.size > 0 && (
+            <div className="shrink-0 px-4 py-2 bg-[#131920] border-b border-[#1a2228] flex items-center justify-between">
+              <span className="text-xs text-gray-400">
+                {selectedForPR.size} selected for PR
+              </span>
+              <button
+                onClick={handleBatchCreatePRs}
+                disabled={batchCreatingPRs}
+                className="text-xs font-medium px-3 py-1 rounded transition
+                           bg-[#e19200]/20 text-[#e19200] hover:bg-[#e19200]/30
+                           disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {batchCreatingPRs ? 'Creating…' : `Create ${selectedForPR.size} PR${selectedForPR.size > 1 ? 's' : ''}`}
+              </button>
+            </div>
+          )}
+          <div className="flex-1 flex overflow-hidden">
+            {selectedModels.map(model => (
+              <ModelColumn
+                key={model}
+                model={model}
+                state={modelStates[model] ?? { status: 'idle', creatingPR: false }}
+                filePath={filePath}
+                onApplyPR={() => handleApplyPR(model)}
+                onRemove={() => removeModel(model)}
+                isOnlyColumn={selectedModels.length === 1}
+                selectedForPR={selectedForPR.has(model)}
+                onTogglePRSelection={() => {
+                  const next = new Set(selectedForPR);
+                  if (next.has(model)) {
+                    next.delete(model);
+                  } else {
+                    next.add(model);
+                  }
+                  setSelectedForPR(next);
+                }}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
