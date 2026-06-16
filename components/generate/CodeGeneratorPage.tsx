@@ -363,7 +363,7 @@ export const CodeGeneratorPage: React.FC = () => {
     }));
 
     try {
-      const resp = await fetch('/api/generate/code-parallel', {
+      const resp = await fetch('/api/generate/code-parallel-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -383,30 +383,54 @@ export const CodeGeneratorPage: React.FC = () => {
         return;
       }
 
-      const data = await resp.json();
-      const results: Array<{
-        model: string;
-        original_code: string;
-        modified_code: string;
-        diff: string;
-        tokens_used?: number;
-        error?: string;
-      }> = data.results ?? [];
+      if (!resp.body) {
+        throw new Error('No response body');
+      }
 
-      results.forEach(r => {
-        if (r.error) {
-          setModelState(r.model, { status: 'error', error: r.error });
-        } else {
-          setModelState(r.model, {
-            status: 'done',
-            originalCode: r.original_code,
-            modifiedCode: r.modified_code,
-            diff: r.diff,
-            tokensUsed: r.tokens_used,
-            error: undefined,
-          });
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          try {
+            const event = JSON.parse(line);
+
+            if (event.type === 'init') {
+              // Initial metadata, already set up
+            } else if (event.type === 'result') {
+              const model = event.model;
+              if (event.error) {
+                setModelState(model, { status: 'error', error: event.error });
+              } else {
+                setModelState(model, {
+                  status: 'done',
+                  originalCode: event.original_code,
+                  modifiedCode: event.modified_code,
+                  diff: event.diff,
+                  tokensUsed: event.tokens_used,
+                  error: undefined,
+                });
+              }
+            } else if (event.type === 'error') {
+              const msg = event.detail || 'Stream error';
+              selectedModels.forEach(m => setModelState(m, { status: 'error', error: msg }));
+              break;
+            }
+          } catch (e) {
+            console.error('Failed to parse stream event:', e);
+          }
         }
-      });
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       selectedModels.forEach(m => setModelState(m, { status: 'error', error: msg }));
