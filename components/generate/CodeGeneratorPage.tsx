@@ -61,7 +61,8 @@ const ModelColumn: React.FC<{
   isOnlyColumn: boolean;
   selectedForPR?: boolean;
   onTogglePRSelection?: () => void;
-}> = ({ model, state, filePath, onApplyPR, onRemove, isOnlyColumn, selectedForPR, onTogglePRSelection }) => {
+  onRetry?: () => void;
+}> = ({ model, state, filePath, onApplyPR, onRemove, isOnlyColumn, selectedForPR, onTogglePRSelection, onRetry }) => {
   const [viewMode, setViewMode] = useState<'diff' | 'modified'>('diff');
 
   const shortName = model.split('/').pop() ?? model;
@@ -149,8 +150,18 @@ const ModelColumn: React.FC<{
         )}
 
         {state.status === 'error' && (
-          <div className="p-4">
+          <div className="p-4 flex flex-col gap-3">
             <p className="text-red-400 text-xs">{state.error}</p>
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="text-xs font-medium px-3 py-1.5 rounded transition
+                           bg-yellow-900/20 text-yellow-300 hover:bg-yellow-900/30
+                           border border-yellow-900/50"
+              >
+                Retry
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -301,6 +312,10 @@ export const CodeGeneratorPage: React.FC = () => {
   const [githubUser, setGithubUser] = useState<GitHubUser | null>(null);
   const [selectedForPR, setSelectedForPR] = useState<Set<string>>(new Set());
   const [batchCreatingPRs, setBatchCreatingPRs] = useState(false);
+  const [generationState, setGenerationState] = useState<{
+    fileContent: string;
+    originalCode: string;
+  } | null>(null);
 
   // Load popular models on mount
   useEffect(() => {
@@ -535,6 +550,47 @@ export const CodeGeneratorPage: React.FC = () => {
     setBatchCreatingPRs(false);
   };
 
+  const handleRetry = async (model: string) => {
+    setModelState(model, {
+      status: 'generating',
+      error: undefined,
+    });
+
+    try {
+      const resp = await fetch('/api/generate/code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: repoUrl.trim(),
+          file_path: filePath.trim(),
+          instruction: instruction.trim(),
+          github_token: '',
+          model: model,
+          provider: 'huggingface',
+        }),
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        const msg = errData.detail || `HTTP ${resp.status}`;
+        setModelState(model, { status: 'error', error: msg });
+        return;
+      }
+
+      const data = await resp.json();
+      setModelState(model, {
+        status: 'done',
+        originalCode: data.original_code,
+        modifiedCode: data.modified_code,
+        diff: data.diff,
+        error: undefined,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      setModelState(model, { status: 'error', error: msg });
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#0d1116]">
 
@@ -701,6 +757,7 @@ export const CodeGeneratorPage: React.FC = () => {
                   }
                   setSelectedForPR(next);
                 }}
+                onRetry={() => handleRetry(model)}
               />
             ))}
           </div>
