@@ -1,0 +1,266 @@
+rules:
+  # ============================================================================
+  # Anti-Pattern Rules: Based on CLAUDE.md hard rules and recurring corrections
+  # ============================================================================
+
+  - id: no-orphaned-imports
+    pattern-either:
+      - patterns:
+          - pattern: from $MODULE import ...
+          - metavariable-pattern:
+              metavariable: $MODULE
+              pattern-either:
+                - pattern: api\..*
+                - pattern: services\..*
+          - pattern-not: from $MODULE import ...
+      - patterns:
+          - pattern: |
+              try:
+                  from $MODULE import ...
+                  _$VAR_AVAILABLE = True
+              except (ImportError, Exception) as e:
+                  _$VAR_AVAILABLE = False
+          - metavariable-pattern:
+              metavariable: $MODULE
+              pattern-either:
+                - pattern: api\..*
+                - pattern: services\..*
+    message: |
+      Lazy imports detected. When making new imports:
+      1. Verify the module path exists in the codebase
+      2. Use try/except to handle ImportError gracefully (✓ already done)
+      3. Ensure the imported code is actually used in the running app
+      4. Do not create orphaned files in api/ that nothing imports
+    languages: [python]
+    severity: INFO
+
+  - id: avoid-fake-metrics
+    pattern-either:
+      - pattern: |
+          print("...$NUMBER...")
+          ...
+          report = {...$NUMBER...}
+      - pattern: |
+          return {...$NUMBER...}
+    message: |
+      Potential hardcoded metric found. Per CLAUDE.md rule 1:
+      - Never invent metrics (latency, percentages, cache hit rates)
+      - Only report numbers from actually executed commands in this session
+      - Show the command that produced the number
+      - If not measured, say "not measured"
+    languages: [python, javascript, typescript]
+    severity: WARNING
+
+  - id: verify-before-claiming-complete
+    pattern-either:
+      - pattern: |
+          print("✅ $MSG complete")
+          ...
+          return
+      - pattern: |
+          return {"status": "complete", ...}
+    message: |
+      Completion claim detected. Per CLAUDE.md rule 2:
+      Before claiming a feature is done, verify:
+      1. python -c "import main" runs with zero errors
+      2. Code is wired (grep main.py for the import)
+      3. Tests pass and output is shown
+      4. You observed the feature working, not just that it exists
+    languages: [python, javascript]
+    severity: WARNING
+
+  - id: distinguish-states
+    pattern-either:
+      - pattern: |
+          ...
+          print("$MSG done")
+          ...
+      - pattern: |
+          print("Feature: $FEATURE")
+          ...
+          return True
+    message: |
+      State terminology matters (CLAUDE.md rule 3). Use these precise terms:
+      - "written" = code exists on disk
+      - "wired" = code is imported/reachable in the app (verify with: grep main.py)
+      - "verified" = observed working / tests pass (show test output)
+
+      Status reports should always distinguish these three states.
+    languages: [python]
+    severity: INFO
+
+  - id: no-placeholder-docs
+    pattern-either:
+      - pattern: |
+          # File: $FILENAME
+      - pattern: |
+          --- $VERSION_PHASE_COMPLETE.md
+    message: |
+      Placeholder documentation detected (CLAUDE.md rule 5).
+      Do not create PHASE_X_COMPLETE.md or similar files.
+      The repo already has 300+ documentation files describing work, not doing it.
+      Documentation should describe verified behavior only.
+    languages: [text, markdown]
+    severity: WARNING
+    paths:
+      include:
+        - "*.md"
+        - "*.txt"
+
+  - id: test-coverage-for-new-code
+    pattern-either:
+      - patterns:
+          - pattern-inside: |
+              def $FUNC(...):
+                  ...
+          - pattern-not-inside: |
+              @pytest.fixture
+              def ...(...):
+                  ...
+          - pattern-not: |
+              def $FUNC(...):
+                  return ...
+          - metavariable-pattern:
+              metavariable: $FUNC
+              pattern-either:
+                - pattern: test_.*
+                - pattern: .*_test
+    message: |
+      New function without test coverage. For new features:
+      1. Write tests that exercise the code
+      2. Run tests locally: show the output
+      3. Verify tests actually pass (not just "no crash")
+      4. New code must have a corresponding test
+    languages: [python]
+    severity: INFO
+
+  - id: import-error-must-be-handled
+    pattern: |
+      from $MODULE import ...
+    message: |
+      Direct import without error handling. Per best practices:
+      - If this is optional (for optional features), wrap in try/except
+      - If this is core, ensure the module exists before importing
+      - If it might fail in some environments, provide a fallback
+
+      Pattern:
+        try:
+            from $MODULE import ...
+            _FEATURE_AVAILABLE = True
+        except ImportError:
+            _FEATURE_AVAILABLE = False
+            print(f"[WARN] Feature unavailable: {e}")
+    languages: [python]
+    severity: INFO
+
+  - id: no-silent-failures
+    pattern-either:
+      - pattern: |
+          try:
+              ...
+          except Exception:
+              pass
+      - pattern: |
+          try:
+              ...
+          except Exception:
+              continue
+    message: |
+      Silent exception catch detected. Never silently swallow errors.
+      - At minimum, log the error: print(f"[ERROR] {e}")
+      - Set a flag so the app knows it failed
+      - Return an error response to the client
+      - Do not claim success when something failed
+    languages: [python, javascript]
+    severity: WARNING
+
+  - id: no-unverified-subagent-claims
+    pattern: |
+      agent_result = ...
+      print("✅ " + agent_result["status"])
+    message: |
+      Relaying subagent result as fact (CLAUDE.md rule 6).
+      After delegating to a subagent:
+      1. Do NOT relay their summary as fact
+      2. You must verify independently in this session:
+         - python -c "import main" (zero errors)
+         - grep main.py for the import (is it wired?)
+         - Run the relevant tests (show output)
+      3. Only then report the result as verified
+    languages: [python]
+    severity: WARNING
+
+  # ============================================================================
+  # Code Style Rules (from observed patterns in commits)
+  # ============================================================================
+
+  - id: avoid-emoji-in-output
+    pattern-either:
+      - pattern: print("✅ $MSG")
+      - pattern: print("❌ $MSG")
+      - pattern: print("🔄 $MSG")
+      - pattern: return {"emoji": "✅", ...}
+    message: |
+      Emoji-laden output detected (CLAUDE.md: "No emoji-laden victory tables").
+      Use plain, professional output:
+      - "✅ Feature working" → "feature working (verified)"
+      - "❌ Failed" → "failed: [reason]"
+      - "🔄 Running" → "running..."
+
+      Reserve emoji for: status indicators in Markdown tables only.
+    languages: [python, javascript]
+    severity: INFO
+
+  - id: explicit-error-messages
+    pattern: |
+      raise Exception("$MSG")
+    message: |
+      Generic exception with message. Be more specific:
+      - Use: ValueError, KeyError, ImportError, etc.
+      - Include context: what failed and why
+      - Example: raise ValueError(f"Model {model_id} not found in registry")
+    languages: [python]
+    severity: INFO
+
+  - id: no-commented-code
+    pattern: |
+      # $VAR = ...
+    message: |
+      Commented-out code detected. Either:
+      - Delete it (git history preserves it)
+      - If needed, add a comment explaining why it's disabled
+      - Example: # TODO: re-enable after auth refactor
+    languages: [python, javascript, typescript]
+    severity: INFO
+
+  - id: verify-claims-with-commands
+    pattern: |
+      print("... $FEATURE working ...")
+    message: |
+      Claiming something works. Always verify with a command:
+      - If it's Python: python -c "import X"
+      - If it's a test: pytest tests/test_X.py (show output)
+      - If it's an endpoint: curl http://localhost/endpoint
+
+      Show the command AND its output to prove the claim.
+    languages: [python]
+    severity: INFO
+
+  - id: distinguish-import-vs-wired
+    pattern-either:
+      - pattern: |
+          # Feature added to api/features/X.py
+          ...
+          return True
+      - pattern: |
+          print("Feature added")
+          ...
+          return
+    message: |
+      Conflating "file exists" with "wired". Per CLAUDE.md:
+      - "written" = file exists (api/features/X.py is on disk)
+      - "wired" = code is reachable (verify: grep main.py for import)
+
+      These are NOT the same. Always verify the import is actually in main.py.
+    languages: [python, javascript]
+    severity: WARNING
