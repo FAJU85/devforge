@@ -46,28 +46,6 @@ class AuthService:
         """Initialize auth service"""
         self.sessions: Dict[str, Dict[str, Any]] = {}
 
-    def get_github_auth_url(self, state: Optional[str] = None) -> str:
-        """
-        Generate GitHub OAuth authorization URL
-
-        Args:
-            state: Optional state token for CSRF protection
-
-        Returns:
-            Authorization URL for GitHub OAuth flow
-        """
-        if not state:
-            state = secrets.token_urlsafe(32)
-
-        params = {
-            "client_id": GITHUB_CLIENT_ID,
-            "redirect_uri": GITHUB_REDIRECT_URI,
-            "scope": "repo,user,read:user",
-            "state": state,
-        }
-
-        return f"{GITHUB_AUTH_URL}?{urlencode(params)}"
-
     async def exchange_code_for_token(self, code: str) -> Optional[Dict[str, Any]]:
         """
         Exchange GitHub authorization code for access token

@@ -336,7 +336,8 @@ export const CodeGeneratorPage: React.FC = () => {
     if (!repoUrl.trim()) return 'Repository URL is required';
     try {
       const u = new URL(repoUrl.trim());
-      if (!u.hostname.includes('github.com')) return 'Must be a GitHub repository URL';
+      const host = u.hostname.toLowerCase();
+      if (!/^(www\.)?github\.com$/.test(host)) return 'Must be a GitHub repository URL';
     } catch {
       return 'Must be a valid URL';
     }
@@ -353,8 +354,13 @@ export const CodeGeneratorPage: React.FC = () => {
     setFormError(null);
     setIsGenerating(true);
 
-    // Set all columns to generating
-    selectedModels.forEach(m => setModelState(m, { status: 'generating' }));
+    // Set all columns to generating with clean state
+    selectedModels.forEach(m => setModelState(m, {
+      status: 'generating',
+      error: undefined,
+      prUrl: undefined,
+      prNumber: undefined,
+    }));
 
     try {
       const resp = await fetch('/api/generate/code-parallel', {
@@ -397,6 +403,7 @@ export const CodeGeneratorPage: React.FC = () => {
             modifiedCode: r.modified_code,
             diff: r.diff,
             tokensUsed: r.tokens_used,
+            error: undefined,
           });
         }
       });
@@ -435,7 +442,11 @@ export const CodeGeneratorPage: React.FC = () => {
       const pr = await resp.json();
       setModelState(model, { creatingPR: false, prUrl: pr.pr_url, prNumber: pr.pr_number });
     } catch (e) {
-      setModelState(model, { creatingPR: false, error: e instanceof Error ? e.message : 'PR creation failed' });
+      setModelState(model, {
+        status: 'error',
+        creatingPR: false,
+        error: e instanceof Error ? e.message : 'PR creation failed',
+      });
     }
   };
 

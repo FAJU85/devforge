@@ -173,12 +173,16 @@ async def generate_code_with_model(
 
 
 @router.post("/code", response_model=CodeGenerationResponse)
-async def generate_code(request: CodeGenerationRequest) -> CodeGenerationResponse:
+async def generate_code(
+    request: CodeGenerationRequest,
+    session_token: Optional[str] = Cookie(None),
+) -> CodeGenerationResponse:
     """
     Generate or modify code using a Hugging Face model
 
     Args:
         request: Code generation request with repo URL, file path, instruction, and model
+        session_token: Optional session cookie with HF token
 
     Returns:
         Original code, modified code, and diff
@@ -222,7 +226,7 @@ Modified code:"""
 
         # Generate modified code using the provider with provider-specific API key
         try:
-            api_key = get_api_key_for_provider(request.provider)
+            api_key = get_api_key_for_provider(request.provider, session_token)
         except ValueError as e:
             raise HTTPException(status_code=500, detail=str(e))
 
