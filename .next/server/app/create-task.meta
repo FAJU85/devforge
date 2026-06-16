@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/create-task/layout,_N_T_/create-task/page,_N_T_/create-task"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/create-task/__PAGE__",
+    "/create-task",
+    "/_index",
+    "/_head"
+  ]
+}

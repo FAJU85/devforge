@@ -43,7 +43,6 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [showTokenInput, setShowTokenInput] = useState(false);
 
   // Fetch models from API on component mount
   useEffect(() => {
@@ -353,35 +352,30 @@ export const CodeGeneratorForm: React.FC<CodeGeneratorFormProps> = ({
 
         {/* GitHub Token */}
         <div>
-          <button
-            type="button"
-            onClick={() => setShowTokenInput(!showTokenInput)}
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium mb-2 flex items-center gap-1"
-          >
-            {showTokenInput ? '✕' : '+'} GitHub Token
-          </button>
-
-          {showTokenInput && (
-            <div>
-              <input
-                type="password"
-                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                value={formData.githubToken}
-                onChange={(e) => handleInputChange('githubToken', e.target.value)}
-                disabled={isLoading}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition ${
-                  errors.githubToken ? 'border-red-500' : 'border-gray-300'
-                } disabled:bg-gray-100 disabled:cursor-not-allowed`}
-              />
-              <p className="text-gray-500 text-xs mt-1">
-                Create at: github.com/settings/tokens (needs repo access)
-              </p>
-              {errors.githubToken && (
-                <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
-                      {errors.githubToken}
-                </p>
-              )}
-            </div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            GitHub Personal Access Token <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="password"
+            placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+            value={formData.githubToken}
+            onChange={(e) => handleInputChange('githubToken', e.target.value)}
+            disabled={isLoading}
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition ${
+              errors.githubToken ? 'border-red-500' : 'border-gray-300'
+            } disabled:bg-gray-100 disabled:cursor-not-allowed`}
+          />
+          <p className="text-gray-500 text-xs mt-1">
+            Required to read your repo and create PRs. Generate at{' '}
+            <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+              github.com/settings/tokens
+            </a>{' '}
+            (needs <code>repo</code> scope).
+          </p>
+          {errors.githubToken && (
+            <p className="text-red-500 text-sm mt-1">
+              {errors.githubToken}
+            </p>
           )}
         </div>
 
