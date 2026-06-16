@@ -13,6 +13,7 @@ import difflib
 import asyncio
 import os
 import logging
+import time
 from api.services.github_service import github_service
 from api.services.providers import ProviderFactory
 from api.services.auth_service import auth_service
@@ -475,9 +476,10 @@ Modified code:"""
                 yield json.dumps({"type": "error", "detail": str(e)}) + "\n"
                 return
 
-            # Create all tasks and map them to model names
+            # Create all tasks and map them to model names with timing
             provider_factory = ProviderFactory()
             model_tasks = {}
+            model_start_times = {}
             for model in request.models:
                 task = asyncio.create_task(
                     generate_code_with_model(
@@ -489,6 +491,7 @@ Modified code:"""
                     )
                 )
                 model_tasks[task] = model
+                model_start_times[task] = time.time()
 
             # Emit original code once
             yield json.dumps({
@@ -506,6 +509,7 @@ Modified code:"""
 
                 for task in done:
                     model = model_tasks[task]
+                    elapsed_ms = int((time.time() - model_start_times[task]) * 1000)
                     try:
                         modified_code, tokens_used = task.result()
                         diff = generate_diff(file_content, modified_code, request.file_path)
@@ -517,6 +521,7 @@ Modified code:"""
                             "modified_code": modified_code,
                             "diff": diff,
                             "tokens_used": tokens_used,
+                            "generation_time_ms": elapsed_ms,
                         }) + "\n"
                     except Exception as e:
                         logger.error(f"Error with model {model}: {str(e)}")
@@ -526,6 +531,7 @@ Modified code:"""
                             "original_code": file_content,
                             "modified_code": "",
                             "diff": "",
+                            "generation_time_ms": elapsed_ms,
                             "error": str(e),
                         }) + "\n"
 
