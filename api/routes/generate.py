@@ -5,6 +5,7 @@ Handles AI-powered code generation and modification
 """
 
 from fastapi import APIRouter, HTTPException, Cookie
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import json
@@ -173,12 +174,16 @@ async def generate_code_with_model(
 
 
 @router.post("/code", response_model=CodeGenerationResponse)
-async def generate_code(request: CodeGenerationRequest) -> CodeGenerationResponse:
+async def generate_code(
+    request: CodeGenerationRequest,
+    session_token: Optional[str] = Cookie(None),
+) -> CodeGenerationResponse:
     """
     Generate or modify code using a Hugging Face model
 
     Args:
         request: Code generation request with repo URL, file path, instruction, and model
+        session_token: Optional session cookie with HF token
 
     Returns:
         Original code, modified code, and diff
@@ -222,7 +227,7 @@ Modified code:"""
 
         # Generate modified code using the provider with provider-specific API key
         try:
-            api_key = get_api_key_for_provider(request.provider)
+            api_key = get_api_key_for_provider(request.provider, session_token)
         except ValueError as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -397,6 +402,144 @@ Modified code:"""
             status_code=500,
             detail=f"Multi-model generation failed: {str(e)}"
         )
+
+
+@router.post("/code-parallel-stream")
+async def generate_code_parallel_stream(
+    request: MultiModelCodeGenerationRequest,
+    session_token: Optional[str] = Cookie(None),
+):
+    """
+    Generate/modify code using multiple models with Server-Sent Events streaming.
+    Returns progress as each model completes.
+
+    Args:
+        request: Request with repo URL, file path, instruction, and list of models
+        session_token: Optional session cookie with GitHub token
+
+    Returns:
+        SSE stream with results for each model as it completes
+    """
+    async def event_generator():
+        try:
+            # Extract repo owner/name from URL
+            if "github.com" not in request.repo_url:
+                yield json.dumps({"type": "error", "detail": "Invalid GitHub URL"}) + "\n"
+                return
+
+            parts = request.repo_url.replace(".git", "").split("/")
+            owner = parts[-2]
+            repo = parts[-1]
+
+            # Use GitHub token from session if available, fall back to request
+            github_token = None
+            if session_token:
+                github_token = auth_service.get_github_token_from_session(session_token)
+            github_token = github_token or request.github_token
+
+            if not github_token:
+                yield json.dumps({"type": "error", "detail": "GitHub token required"}) + "\n"
+                return
+
+            # Get file content from GitHub
+            file_response = await github_service.get_file_content(
+                token=github_token,
+                owner=owner,
+                repo=repo,
+                path=request.file_path
+            )
+            file_content = file_response.get("content", "")
+
+            if not file_content:
+                yield json.dumps({"type": "error", "detail": f"File not found: {request.file_path}"}) + "\n"
+                return
+
+            # Create prompt for the models
+            prompt = f"""You are a code modification assistant. You will receive code and an instruction,
+and you should return ONLY the modified code without any explanation or markdown formatting.
+
+File: {request.file_path}
+Instruction: {request.instruction}
+
+Original code:
+```
+{file_content}
+```
+
+Modified code:"""
+
+            # Validate provider API key is configured before launching tasks
+            try:
+                get_api_key_for_provider(request.provider, session_token)
+            except ValueError as e:
+                yield json.dumps({"type": "error", "detail": str(e)}) + "\n"
+                return
+
+            # Create all tasks and map them to model names
+            provider_factory = ProviderFactory()
+            model_tasks = {}
+            for model in request.models:
+                task = asyncio.create_task(
+                    generate_code_with_model(
+                        provider_factory,
+                        request.provider,
+                        model,
+                        prompt,
+                        session_token,
+                    )
+                )
+                model_tasks[task] = model
+
+            # Emit original code once
+            yield json.dumps({
+                "type": "init",
+                "original_code": file_content,
+                "instruction": request.instruction,
+                "models": request.models,
+                "provider": request.provider,
+            }) + "\n"
+
+            # Wait for tasks to complete and stream results as they arrive
+            pending = set(model_tasks.keys())
+            while pending:
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+
+                for task in done:
+                    model = model_tasks[task]
+                    try:
+                        modified_code, tokens_used = task.result()
+                        diff = generate_diff(file_content, modified_code, request.file_path)
+
+                        yield json.dumps({
+                            "type": "result",
+                            "model": model,
+                            "original_code": file_content,
+                            "modified_code": modified_code,
+                            "diff": diff,
+                            "tokens_used": tokens_used,
+                        }) + "\n"
+                    except Exception as e:
+                        logger.error(f"Error with model {model}: {str(e)}")
+                        yield json.dumps({
+                            "type": "result",
+                            "model": model,
+                            "original_code": file_content,
+                            "modified_code": "",
+                            "diff": "",
+                            "error": str(e),
+                        }) + "\n"
+
+            yield json.dumps({"type": "done"}) + "\n"
+
+        except Exception as e:
+            logger.error(f"Stream error: {str(e)}")
+            yield json.dumps({"type": "error", "detail": str(e)}) + "\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @router.post("/create-pr", response_model=CreatePRResponse)

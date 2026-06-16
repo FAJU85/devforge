@@ -166,3 +166,83 @@ def test_one_model_error_is_isolated(client):
     assert by_model["bad-model"]["diff"] == ""
     assert by_model["good-model"]["error"] is None
     assert by_model["good-model"]["diff"].startswith("--- a/README.md")
+
+
+# --- Streaming endpoint tests -----
+
+
+def test_streaming_returns_ndjson_events(client):
+    """Stream endpoint returns newline-delimited JSON with proper event types."""
+    _configure_fakes({})  # all defaults
+
+    resp = client.post("/api/generate/code-parallel-stream", json={
+        "repo_url": "https://github.com/octocat/Hello-World",
+        "file_path": "README.md",
+        "instruction": "rewrite the function to return 2",
+        "github_token": "fake-github-token",
+        "models": ["model-a", "model-b"],
+        "provider": "huggingface",
+    })
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/x-ndjson"
+
+    # Parse NDJSON response
+    events = []
+    for line in resp.text.strip().split('\n'):
+        if line:
+            import json
+            events.append(json.loads(line))
+
+    # Verify event sequence
+    assert len(events) > 0
+    assert events[0]["type"] == "init"
+    assert events[0]["original_code"] == "def hello():\n    return 1\n"
+    assert events[0]["instruction"] == "rewrite the function to return 2"
+    assert events[0]["models"] == ["model-a", "model-b"]
+
+    # Check result events
+    result_events = [e for e in events if e["type"] == "result"]
+    assert len(result_events) == 2
+    for event in result_events:
+        assert event["model"] in ("model-a", "model-b")
+        assert event["modified_code"].startswith("# modified by")
+        assert event["diff"].startswith("--- a/README.md")
+        assert event.get("error") is None
+
+    # Final event should be done
+    assert events[-1]["type"] == "done"
+
+
+def test_streaming_with_error_in_one_model(client):
+    """Streaming endpoint handles errors in individual models gracefully."""
+    _configure_fakes({
+        "bad-model": {"raise": "simulated HF 503"},
+        "good-model": {},
+    })
+
+    resp = client.post("/api/generate/code-parallel-stream", json={
+        "repo_url": "https://github.com/octocat/Hello-World",
+        "file_path": "README.md",
+        "instruction": "x",
+        "github_token": "fake",
+        "models": ["bad-model", "good-model"],
+        "provider": "huggingface",
+    })
+
+    assert resp.status_code == 200
+
+    # Parse NDJSON response
+    events = []
+    for line in resp.text.strip().split('\n'):
+        if line:
+            import json
+            events.append(json.loads(line))
+
+    # Check results
+    result_events = [e for e in events if e["type"] == "result"]
+    by_model = {r["model"]: r for r in result_events}
+
+    assert "simulated HF 503" in by_model["bad-model"]["error"]
+    assert by_model["good-model"].get("error") is None
+    assert by_model["good-model"]["diff"].startswith("--- a/README.md")
