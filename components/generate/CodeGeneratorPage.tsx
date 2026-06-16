@@ -19,6 +19,7 @@ interface ModelState {
   modifiedCode?: string;
   diff?: string;
   tokensUsed?: number;
+  generationTimeMs?: number;
   error?: string;
   creatingPR: boolean;
   prUrl?: string;
@@ -88,6 +89,11 @@ const ModelColumn: React.FC<{
           {statusBadge()}
           {state.tokensUsed !== undefined && (
             <span className="text-xs text-gray-500 hidden lg:inline">{state.tokensUsed} tok</span>
+          )}
+          {state.generationTimeMs !== undefined && (
+            <span className="text-xs text-gray-500 hidden lg:inline">
+              {state.generationTimeMs < 1000 ? `${state.generationTimeMs}ms` : `${(state.generationTimeMs / 1000).toFixed(1)}s`}
+            </span>
           )}
         </div>
         <button
@@ -442,7 +448,11 @@ export const CodeGeneratorPage: React.FC = () => {
             } else if (event.type === 'result') {
               const model = event.model;
               if (event.error) {
-                setModelState(model, { status: 'error', error: event.error });
+                setModelState(model, {
+                  status: 'error',
+                  error: event.error,
+                  generationTimeMs: event.generation_time_ms,
+                });
               } else {
                 setModelState(model, {
                   status: 'done',
@@ -450,6 +460,7 @@ export const CodeGeneratorPage: React.FC = () => {
                   modifiedCode: event.modified_code,
                   diff: event.diff,
                   tokensUsed: event.tokens_used,
+                  generationTimeMs: event.generation_time_ms,
                   error: undefined,
                 });
               }
