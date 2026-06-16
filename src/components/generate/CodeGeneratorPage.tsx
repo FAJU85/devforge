@@ -6,8 +6,8 @@ import { CodeDiffViewer } from './CodeDiffViewer';
 import { MultiModelResults } from './MultiModelResults';
 
 interface GenerationResult {
-  originalCode: string;
-  modifiedCode: string;
+  original_code: string;
+  modified_code: string;
   diff: string;
   instruction: string;
   model: string;
@@ -20,6 +20,7 @@ interface MultiModelResult {
   modified_code: string;
   diff: string;
   tokens_used?: number;
+  generation_time_ms?: number;
   error?: string;
 }
 
@@ -56,6 +57,7 @@ export const CodeGeneratorPage: React.FC = () => {
   const [currentGitHubToken, setCurrentGitHubToken] = useState('');
   const [currentModifiedCode, setCurrentModifiedCode] = useState('');
   const [currentModel, setCurrentModel] = useState('');
+  const [generatingModels, setGeneratingModels] = useState<string[]>([]);
 
   const handleGenerateCode = async (formData: GeneratorFormData) => {
     setState('generating');
@@ -65,10 +67,21 @@ export const CodeGeneratorPage: React.FC = () => {
 
     const useMultiModel = formData.useMultiModel && formData.models && formData.models.length > 0;
 
+    if (formData.useMultiModel && formData.models) {
+      setGeneratingModels(formData.models);
+    } else {
+      setGeneratingModels([formData.model || ''].filter(Boolean));
+    }
+
+    setCurrentFilePath(formData.filePath);
+    setCurrentRepoUrl(formData.repoUrl);
+    setCurrentInstruction(formData.instruction);
+    setCurrentGitHubToken(formData.githubToken);
+
     try {
       if (useMultiModel) {
-        // Multi-model flow
-        const response = await fetch('/api/generate/code-parallel', {
+        // Multi-model streaming flow
+        const response = await fetch('/api/generate/code-parallel-stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -86,13 +99,54 @@ export const CodeGeneratorPage: React.FC = () => {
           throw new Error(errorData.detail || 'Failed to generate code');
         }
 
-        const data = await response.json();
-        setMultiResult(data);
-        setCurrentFilePath(formData.filePath);
-        setCurrentRepoUrl(formData.repoUrl);
-        setCurrentInstruction(formData.instruction);
-        setCurrentGitHubToken(formData.githubToken);
-        setState('multi-result');
+        if (!response.body) throw new Error('No response body');
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let initData: { original_code: string; instruction: string; models: string[]; provider: string } | null = null;
+        const streamedResults: MultiModelResult[] = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            let event;
+            try {
+              event = JSON.parse(line);
+            } catch {
+              continue;
+            }
+            if (event.type === 'error') {
+              throw new Error(event.detail || 'Stream error');
+            } else if (event.type === 'init') {
+              initData = event;
+            } else if (event.type === 'result' && initData) {
+              streamedResults.push({
+                model: event.model,
+                original_code: event.original_code,
+                modified_code: event.modified_code,
+                diff: event.diff,
+                tokens_used: event.tokens_used,
+                generation_time_ms: event.generation_time_ms,
+                error: event.error,
+              });
+              setMultiResult({
+                original_code: initData.original_code,
+                instruction: initData.instruction,
+                results: [...streamedResults],
+                models: initData.models,
+                provider: initData.provider,
+              });
+              setState('multi-result');
+            }
+          }
+        }
       } else {
         // Single-model flow
         const response = await fetch('/api/generate/code', {
@@ -115,10 +169,6 @@ export const CodeGeneratorPage: React.FC = () => {
 
         const data = await response.json();
         setResult(data);
-        setCurrentFilePath(formData.filePath);
-        setCurrentRepoUrl(formData.repoUrl);
-        setCurrentInstruction(formData.instruction);
-        setCurrentGitHubToken(formData.githubToken);
         setCurrentModifiedCode(data.modified_code);
         setCurrentModel(data.model);
         setState('result');
@@ -204,13 +254,27 @@ export const CodeGeneratorPage: React.FC = () => {
         {/* State: Generating */}
         {state === 'generating' && (
           <div className="bg-white rounded-lg shadow-lg p-12 text-center">
-            <div className="inline-block animate-spin mb-4">
-              <div className="text-4xl">⏳</div>
+            <div className="flex justify-center mb-6">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Generating Code...</h3>
-            <p className="text-gray-600">
-              This may take a moment while the AI model processes your request
-            </p>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              {generatingModels.length > 1 ? `Running ${generatingModels.length} models in parallel...` : 'Generating Code...'}
+            </h3>
+            {generatingModels.length > 1 ? (
+              <div className="mt-4 space-y-2">
+                {generatingModels.map(m => (
+                  <div key={m} className="inline-flex items-center gap-2 bg-blue-50 text-blue-800 text-sm px-3 py-1 rounded-full mr-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                    {m.split('/').pop()}
+                  </div>
+                ))}
+                <p className="text-gray-500 text-sm mt-4">Results will appear as each model completes</p>
+              </div>
+            ) : (
+              <p className="text-gray-600">
+                {generatingModels[0] ? `Model: ${generatingModels[0].split('/').pop()}` : 'Processing your request...'}
+              </p>
+            )}
           </div>
         )}
 
@@ -224,7 +288,7 @@ export const CodeGeneratorPage: React.FC = () => {
               filePath={currentFilePath}
               instruction={currentInstruction}
               onApprove={handleCreatePR}
-              isCreatingPR={false}
+              isCreatingPR={state === 'creating-pr'}
             />
             <div className="mt-6 text-center">
               <button
@@ -247,12 +311,13 @@ export const CodeGeneratorPage: React.FC = () => {
                 modifiedCode: r.modified_code,
                 diff: r.diff,
                 tokensUsed: r.tokens_used,
+                generationTimeMs: r.generation_time_ms,
                 error: r.error,
               }))}
               instruction={currentInstruction}
               filePath={currentFilePath}
               onSelectModel={handleCreatePR}
-              isCreatingPR={false}
+              isCreatingPR={state === 'creating-pr'}
             />
             <div className="mt-6 text-center">
               <button

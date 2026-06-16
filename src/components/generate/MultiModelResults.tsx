@@ -6,6 +6,7 @@ interface ModelResult {
   modifiedCode: string;
   diff: string;
   tokensUsed?: number;
+  generationTimeMs?: number;
   error?: string;
 }
 
@@ -92,7 +93,12 @@ export const MultiModelResults: React.FC<MultiModelResultsProps> = ({
               <div className="font-medium text-sm text-gray-900">{result.model}</div>
               {result.tokensUsed && (
                 <div className="text-xs text-gray-500 mt-1">
-                  {result.tokensUsed} tokens
+                  {result.tokensUsed.toLocaleString()} tokens
+                </div>
+              )}
+              {result.generationTimeMs && (
+                <div className="text-xs text-gray-500 mt-1">
+                  {(result.generationTimeMs / 1000).toFixed(1)}s
                 </div>
               )}
               {selectedModel === result.model && (

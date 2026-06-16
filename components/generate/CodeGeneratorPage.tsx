@@ -335,7 +335,7 @@ const ModelPicker: React.FC<{
     const t = setTimeout(async () => {
       setSearching(true);
       try {
-        const r = await fetch(`/api/models/discover?query=${encodeURIComponent(trimmed)}&limit=10`, { signal: controller.signal });
+        const r = await fetch(`/api/models/discover?search=${encodeURIComponent(trimmed)}&limit=10`, { signal: controller.signal });
         if (r.ok) setSearchResults((await r.json()).models ?? []);
       } catch { /* AbortError is fine */ }
       setSearching(false);
@@ -399,6 +399,7 @@ export const CodeGeneratorPage: React.FC = () => {
   const [instruction, setInstruction] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
   const [filePath, setFilePath] = useState('');
+  const [githubToken, setGithubToken] = useState('');
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [modelStates, setModelStates] = useState<Record<string, ModelState>>({});
   const [availableModels, setAvailableModels] = useState<HFModel[]>([]);
@@ -443,11 +444,20 @@ export const CodeGeneratorPage: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  // Load saved sessions on mount
+  // Load saved sessions and token on mount
   useEffect(() => {
     const sessions = JSON.parse(localStorage.getItem('devforge_sessions') || '[]');
     setSavedSessions(sessions);
+    const savedToken = localStorage.getItem('devforge_github_token') || '';
+    if (savedToken) setGithubToken(savedToken);
   }, []);
+
+  // Persist token (without exposing it in session state)
+  useEffect(() => {
+    if (githubToken.trim()) {
+      try { localStorage.setItem('devforge_github_token', githubToken.trim()); } catch { /* quota */ }
+    }
+  }, [githubToken]);
 
   // Auto-save current state to localStorage
   useEffect(() => {
@@ -499,6 +509,8 @@ export const CodeGeneratorPage: React.FC = () => {
     if (!instruction.trim() || instruction.trim().length < 10)
       return 'Instruction must be at least 10 characters';
     if (selectedModels.length === 0) return 'Select at least one model';
+    if (!githubUser && !githubToken.trim())
+      return 'GitHub token required — sign in above or paste your token';
     return null;
   };
 
@@ -524,7 +536,7 @@ export const CodeGeneratorPage: React.FC = () => {
           repo_url: repoUrl.trim(),
           file_path: filePath.trim(),
           instruction: instruction.trim(),
-          github_token: '',
+          github_token: githubToken.trim(),
           models: selectedModels,
           provider: 'huggingface',
         }),
@@ -613,6 +625,7 @@ export const CodeGeneratorPage: React.FC = () => {
           modified_code: state.modifiedCode,
           title: `DevForge: ${instruction.substring(0, 50)}`,
           description: `AI-generated modification\n\n**Instruction:** ${instruction}\n**Model:** ${model}\n**Provider:** huggingface`,
+          github_token: githubToken.trim(),
           branch_name: `devforge/${model.split('/').pop()}-${Date.now()}`,
         }),
       });
@@ -653,6 +666,7 @@ export const CodeGeneratorPage: React.FC = () => {
             modified_code: state.modifiedCode,
             title: `DevForge: ${instruction.substring(0, 50)}`,
             description: `AI-generated modification\n\n**Instruction:** ${instruction}\n**Model:** ${model}\n**Provider:** huggingface`,
+            github_token: githubToken.trim(),
             branch_name: `devforge/${model.split('/').pop()}-${Date.now()}`,
           }),
         });
@@ -691,7 +705,7 @@ export const CodeGeneratorPage: React.FC = () => {
           repo_url: repoUrl.trim(),
           file_path: filePath.trim(),
           instruction: instruction.trim(),
-          github_token: '',
+          github_token: githubToken.trim(),
           model: model,
           provider: 'huggingface',
         }),
@@ -818,6 +832,24 @@ export const CodeGeneratorPage: React.FC = () => {
                          focus:border-[#e19200] transition"
             />
           </div>
+
+          {/* GitHub token (only when not signed in via OAuth) */}
+          {!githubUser && (
+            <div className="flex flex-col gap-1 w-56">
+              <label className="text-[10px] text-gray-500 uppercase tracking-wider">
+                GitHub Token <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="password"
+                value={githubToken}
+                onChange={e => { setGithubToken(e.target.value); setFormError(null); }}
+                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                className="text-xs bg-[#0d1116] border border-[#1a2228] rounded px-2 py-1.5
+                           text-gray-200 placeholder-gray-600 outline-none
+                           focus:border-[#e19200] transition"
+              />
+            </div>
+          )}
 
           {/* Model chips + picker */}
           <div className="flex flex-col gap-1">
