@@ -51,6 +51,84 @@ const DiffView: React.FC<{ diff: string }> = ({ diff }) => {
   );
 };
 
+// ─── Comparison view ──────────────────────────────────────────────────────────
+
+const ComparisonView: React.FC<{
+  model1: string;
+  model2: string;
+  state1: ModelState;
+  state2: ModelState;
+  onClose: () => void;
+}> = ({ model1, model2, state1, state2, onClose }) => {
+  const short1 = model1.split('/').pop() ?? model1;
+  const short2 = model2.split('/').pop() ?? model2;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-[#0d1116] rounded-lg w-full max-w-6xl h-[90vh] flex flex-col border border-[#1a2228]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a2228] bg-[#131920] shrink-0">
+          <h2 className="text-sm font-semibold text-gray-200">
+            Compare: <span className="font-mono text-[#e19200]">{short1}</span> vs{' '}
+            <span className="font-mono text-[#e19200]">{short2}</span>
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-300 text-xl px-2"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Side-by-side diffs */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left */}
+          <div className="flex-1 flex flex-col border-r border-[#1a2228] min-w-0">
+            <div className="shrink-0 px-3 py-2 bg-[#131920] border-b border-[#1a2228]">
+              <div className="text-xs text-gray-400">
+                {short1}
+                {state1.generationTimeMs !== undefined && (
+                  <span className="ml-2 text-gray-600">
+                    ({state1.generationTimeMs < 1000 ? `${state1.generationTimeMs}ms` : `${(state1.generationTimeMs / 1000).toFixed(1)}s`})
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto">
+              {state1.diff ? (
+                <DiffView diff={state1.diff} />
+              ) : (
+                <p className="text-gray-500 text-xs p-4">No diff available</p>
+              )}
+            </div>
+          </div>
+
+          {/* Right */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="shrink-0 px-3 py-2 bg-[#131920] border-b border-[#1a2228]">
+              <div className="text-xs text-gray-400">
+                {short2}
+                {state2.generationTimeMs !== undefined && (
+                  <span className="ml-2 text-gray-600">
+                    ({state2.generationTimeMs < 1000 ? `${state2.generationTimeMs}ms` : `${(state2.generationTimeMs / 1000).toFixed(1)}s`})
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto">
+              {state2.diff ? (
+                <DiffView diff={state2.diff} />
+              ) : (
+                <p className="text-gray-500 text-xs p-4">No diff available</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Single model column ──────────────────────────────────────────────────────
 
 const ModelColumn: React.FC<{
@@ -63,7 +141,8 @@ const ModelColumn: React.FC<{
   selectedForPR?: boolean;
   onTogglePRSelection?: () => void;
   onRetry?: () => void;
-}> = ({ model, state, filePath, onApplyPR, onRemove, isOnlyColumn, selectedForPR, onTogglePRSelection, onRetry }) => {
+  onCompare?: () => void;
+}> = ({ model, state, filePath, onApplyPR, onRemove, isOnlyColumn, selectedForPR, onTogglePRSelection, onRetry, onCompare }) => {
   const [viewMode, setViewMode] = useState<'diff' | 'modified'>('diff');
 
   const shortName = model.split('/').pop() ?? model;
@@ -196,17 +275,29 @@ const ModelColumn: React.FC<{
               >
                 {state.creatingPR ? 'Creating PR…' : 'Apply as PR'}
               </button>
-              {onTogglePRSelection && (
-                <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer hover:text-gray-300 transition">
-                  <input
-                    type="checkbox"
-                    checked={selectedForPR ?? false}
-                    onChange={onTogglePRSelection}
-                    className="w-3 h-3 rounded cursor-pointer"
-                  />
-                  Select for batch
-                </label>
-              )}
+              <div className="flex gap-2">
+                {onTogglePRSelection && (
+                  <label className="flex-1 flex items-center gap-2 text-xs text-gray-400 cursor-pointer hover:text-gray-300 transition">
+                    <input
+                      type="checkbox"
+                      checked={selectedForPR ?? false}
+                      onChange={onTogglePRSelection}
+                      className="w-3 h-3 rounded cursor-pointer"
+                    />
+                    <span className="truncate">Select</span>
+                  </label>
+                )}
+                {onCompare && (
+                  <button
+                    onClick={onCompare}
+                    className="flex-1 text-xs font-medium px-2 py-1 rounded transition
+                               bg-blue-900/20 text-blue-300 hover:bg-blue-900/30
+                               border border-blue-900/50"
+                  >
+                    Compare
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -322,6 +413,8 @@ export const CodeGeneratorPage: React.FC = () => {
     fileContent: string;
     originalCode: string;
   } | null>(null);
+  const [comparisonMode, setComparisonMode] = useState(false);
+  const [comparisonModels, setComparisonModels] = useState<[string, string] | null>(null);
 
   // Load popular models on mount
   useEffect(() => {
@@ -602,6 +695,18 @@ export const CodeGeneratorPage: React.FC = () => {
     }
   };
 
+  const handleCompare = (model: string) => {
+    if (!comparisonModels) {
+      setComparisonModels([model, '']);
+    } else if (!comparisonModels[1]) {
+      setComparisonModels([comparisonModels[0], model]);
+    } else if (model === comparisonModels[0]) {
+      setComparisonModels(null);
+    } else {
+      setComparisonModels([comparisonModels[0], model]);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#0d1116]">
 
@@ -769,10 +874,22 @@ export const CodeGeneratorPage: React.FC = () => {
                   setSelectedForPR(next);
                 }}
                 onRetry={() => handleRetry(model)}
+                onCompare={() => handleCompare(model)}
               />
             ))}
           </div>
         </div>
+      )}
+
+      {/* Comparison view modal */}
+      {comparisonModels && comparisonModels[0] && comparisonModels[1] && (
+        <ComparisonView
+          model1={comparisonModels[0]}
+          model2={comparisonModels[1]}
+          state1={modelStates[comparisonModels[0]] ?? { status: 'idle', creatingPR: false }}
+          state2={modelStates[comparisonModels[1]] ?? { status: 'idle', creatingPR: false }}
+          onClose={() => setComparisonModels(null)}
+        />
       )}
     </div>
   );
