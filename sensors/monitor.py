@@ -205,7 +205,7 @@ class DevForgeSensingSystem:
         # Check key components exist in codebase
         component_checks = {
             "CodeGeneratorPage": self.repo_root / "components/generate/CodeGeneratorPage.tsx",
-            "GenerateTab": self.repo_root / "components" / "layout" / "GenerateTab.tsx",
+            "GenerateTab": self.repo_root / "components/tabs/GenerateTab.tsx",
             "GitHub Token Input": None,  # Checked via code inspection
         }
 
