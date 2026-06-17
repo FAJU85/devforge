@@ -1,0 +1,89 @@
+{
+  "timestamp": "2026-06-17T11:27:44.395831",
+  "overall_status": "critical",
+  "summary": {
+    "healthy": 1,
+    "warning": 2,
+    "critical": 3,
+    "total": 6
+  },
+  "readings": [
+    {
+      "sensor_name": "Backend Sensor",
+      "status": "critical",
+      "timestamp": "2026-06-17T11:27:39.312864",
+      "message": "Backend API not running on port 8000",
+      "details": {
+        "expected_url": "http://localhost:8000"
+      },
+      "auto_fix_attempted": false,
+      "fix_status": ""
+    },
+    {
+      "sensor_name": "Workflow Sensor",
+      "status": "warning",
+      "timestamp": "2026-06-17T11:27:41.318396",
+      "message": "Auth workflow has 2 issues",
+      "details": {
+        "issues": [
+          "Cannot reach GitHub auth endpoint",
+          "Cannot reach HF auth endpoint"
+        ]
+      },
+      "auto_fix_attempted": false,
+      "fix_status": ""
+    },
+    {
+      "sensor_name": "Frontend Components Sensor",
+      "status": "critical",
+      "timestamp": "2026-06-17T11:27:41.319590",
+      "message": "Frontend not running on port 3000",
+      "details": {
+        "expected_url": "http://localhost:3000"
+      },
+      "auto_fix_attempted": false,
+      "fix_status": ""
+    },
+    {
+      "sensor_name": "User Journey Sensor",
+      "status": "critical",
+      "timestamp": "2026-06-17T11:27:41.323267",
+      "message": "End-to-end workflow blocked: 3 endpoints have issues",
+      "details": {
+        "blocked_endpoints": [
+          "Cannot reach /api/models/discover (backend down)",
+          "Cannot reach /api/generate/code-parallel-stream (backend down)",
+          "Cannot reach /api/apply-pr (backend down)"
+        ]
+      },
+      "auto_fix_attempted": false,
+      "fix_status": ""
+    },
+    {
+      "sensor_name": "Deployment Sensor",
+      "status": "healthy",
+      "timestamp": "2026-06-17T11:27:41.327108",
+      "message": "HF Space deployment pipeline operational",
+      "details": {
+        "sync_workflow": "sync-to-hf.yml present",
+        "git_history": "Accessible",
+        "deployment_url": "https://huggingface.co/spaces/vooom/devforge"
+      },
+      "auto_fix_attempted": false,
+      "fix_status": ""
+    },
+    {
+      "sensor_name": "Project Components Sensor",
+      "status": "warning",
+      "timestamp": "2026-06-17T11:27:44.395596",
+      "message": "Project setup has 1 issues",
+      "details": {
+        "issues": [
+          "Python main.py takes too long to import"
+        ]
+      },
+      "auto_fix_attempted": false,
+      "fix_status": ""
+    }
+  ]
+}
